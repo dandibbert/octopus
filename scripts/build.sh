@@ -14,11 +14,14 @@ trap 'handle_error $? $LINENO' ERR
 readonly APP_NAME="octopus"
 readonly MAIN_DIR="./"
 readonly OUTPUT_DIR="build"
+readonly REPO_URL="https://github.com/dandibbert/octopus"
 
 # Build metadata
 readonly BUILD_TIME="$(TZ='Asia/Shanghai' date +'%F %T %z')"
-readonly GIT_AUTHOR="hureru"
-readonly GIT_VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')"
+readonly GIT_AUTHOR="dandibbert"
+readonly EXACT_TAG="$(git describe --tags --exact-match 2>/dev/null || true)"
+readonly FILE_VERSION="$(cat VERSION 2>/dev/null || true)"
+readonly GIT_VERSION="${EXACT_TAG:-${FILE_VERSION:-v0.8.41}}"
 readonly COMMIT_ID="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 
 # Build flags
@@ -223,7 +226,7 @@ build_frontend() {
 
     # Build the project
     log_info "Building frontend project..."
-    if ! NEXT_PUBLIC_APP_VERSION="$GIT_VERSION" pnpm run build; then
+    if ! NEXT_PUBLIC_APP_VERSION="$GIT_VERSION" NEXT_PUBLIC_GITHUB_REPO="$REPO_URL" pnpm run build; then
         log_error "Failed to build frontend project"
         cd ..
         return 1

@@ -27,6 +27,8 @@ export enum AutoGroupType {
 }
 
 export type ChannelWSMode = 'inherit' | 'off' | 'passthrough' | 'transform';
+export type BillingBasis = 'actual' | 'requested' | 'routed' | 'fixed_sku';
+export type UnknownPricePolicy = 'reject' | 'mark_unknown' | 'use_routed' | 'use_actual';
 
 export type BaseUrl = {
     url: string;
@@ -72,6 +74,12 @@ export type Channel = {
     proxy_config_id?: number | null;
     auto_sync: boolean;
     auto_group: AutoGroupType;
+    provider?: string;
+    model_wrappers?: string[];
+    billing_basis: BillingBasis;
+    billing_class_id?: string | null;
+    billing_unknown_policy: UnknownPricePolicy;
+    provider_unknown_policy: UnknownPricePolicy;
     custom_header: CustomHeader[];
     ws_mode: ChannelWSMode;
     param_override?: string | null;
@@ -97,6 +105,12 @@ export type CreateChannelRequest = {
     enabled?: boolean;
     base_urls: BaseUrl[];
     keys: Array<Pick<ChannelKey, 'enabled' | 'channel_key' | 'remark'>>;
+    provider?: string;
+    model_wrappers?: string[];
+    billing_basis?: BillingBasis;
+    billing_class_id?: string | null;
+    billing_unknown_policy?: UnknownPricePolicy;
+    provider_unknown_policy?: UnknownPricePolicy;
     model: string;
     custom_model?: string;
     proxy_mode?: Exclude<ProxyMode, 'inherit'>;
@@ -128,6 +142,12 @@ export type UpdateChannelRequest = {
     ws_mode?: ChannelWSMode;
     param_override?: string | null;
     match_regex?: string | null;
+    provider?: string;
+    model_wrappers?: string[];
+    billing_basis?: BillingBasis;
+    billing_class_id?: string | null;
+    billing_unknown_policy?: UnknownPricePolicy;
+    provider_unknown_policy?: UnknownPricePolicy;
     // keys diff
     keys_to_add?: Array<Pick<ChannelKey, 'enabled' | 'channel_key' | 'remark'>>;
     keys_to_update?: Array<{ id: number; enabled?: boolean; channel_key?: string; remark?: string }>;
@@ -172,6 +192,12 @@ export function useChannelList() {
                 keys: item.keys ?? [],
                 proxy_mode: item.proxy_mode ?? 'direct',
                 proxy_config_id: item.proxy_config_id ?? null,
+                provider: item.provider ?? '',
+                model_wrappers: item.model_wrappers ?? [],
+                billing_basis: item.billing_basis ?? 'actual',
+                billing_class_id: item.billing_class_id ?? null,
+                billing_unknown_policy: item.billing_unknown_policy ?? 'use_routed',
+                provider_unknown_policy: item.provider_unknown_policy ?? 'use_routed',
             }) satisfies Channel,
             formatted: {
                 input_token: formatCount(item.stats.input_token),

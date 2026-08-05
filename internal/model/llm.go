@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type LLMPrice struct {
 	Input      float64 `json:"input"`
 	Output     float64 `json:"output"`
@@ -8,7 +10,25 @@ type LLMPrice struct {
 }
 
 type LLMInfo struct {
-	Name string `json:"name" gorm:"primaryKey;not null"`
+	Name                  string    `json:"name" gorm:"primaryKey;not null"`
+	Provider              string    `json:"provider,omitempty" gorm:"size:64;index"`
+	CanonicalModelID      string    `json:"canonical_model_id,omitempty" gorm:"size:255;index"`
+	BillingClassID        string    `json:"billing_class_id,omitempty" gorm:"size:255;index"`
+	PriceMode             PriceMode `json:"price_mode" gorm:"size:32;not null;default:'unknown';index"`
+	PriceSource           string    `json:"price_source,omitempty" gorm:"size:32;not null;default:'user'"`
+	PriceVersion          string    `json:"price_version,omitempty" gorm:"size:128"`
+	AutoDiscovered        bool      `json:"auto_discovered" gorm:"not null;default:false;index"`
+	NeedsReview           bool      `json:"needs_review" gorm:"not null;default:false;index"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+	EffectivePrice        *LLMPrice `json:"effective_price,omitempty" gorm:"-"`
+	EffectivePriceSource  string    `json:"effective_price_source,omitempty" gorm:"-"`
+	EffectivePriceVersion string    `json:"effective_price_version,omitempty" gorm:"-"`
+	ResolutionStatus      string    `json:"resolution_status,omitempty" gorm:"-"`
+	ResolutionMethod      string    `json:"resolution_method,omitempty" gorm:"-"`
+	ModelType             string    `json:"model_type,omitempty" gorm:"-"`
+	InheritedFrom         string    `json:"inherited_from,omitempty" gorm:"-"`
+	CatalogOnly           bool      `json:"catalog_only,omitempty" gorm:"-"`
 	LLMPrice
 }
 

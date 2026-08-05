@@ -55,6 +55,9 @@ export function PresetEditorContent({ preset }: PresetEditorContentProps) {
                     channel_id: item.channel_id,
                     channel_name: mc?.channel_name ?? `Channel ${item.channel_id}`,
                     weight: item.weight,
+                    billing_basis: item.billing_basis,
+                    billing_class_id: item.billing_class_id,
+                    billing_unknown_policy: item.billing_unknown_policy,
                 };
             });
     }, [preset.items, modelChannelByKey]);
@@ -65,6 +68,9 @@ export function PresetEditorContent({ preset }: PresetEditorContentProps) {
             model_name: m.name,
             priority: idx + 1,
             weight: m.weight ?? 1,
+            billing_basis: m.billing_basis,
+            billing_class_id: m.billing_class_id,
+            billing_unknown_policy: m.billing_unknown_policy,
         }));
         updatePreset.mutate(
             {

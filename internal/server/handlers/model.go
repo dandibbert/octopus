@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bestruirui/octopus/internal/helper"
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/price"
@@ -113,12 +114,12 @@ func getModelList(c *gin.Context) {
 }
 
 func listLLM(c *gin.Context) {
-	models, err := op.LLMList(c.Request.Context())
+	storedModels, err := op.LLMList(c.Request.Context())
 	if err != nil {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	resp.Success(c, models)
+	resp.Success(c, price.MergeCatalogLLMInfo(storedModels))
 }
 
 func listLLMByChannel(c *gin.Context) {
@@ -175,6 +176,10 @@ func updateLLMPrice(c *gin.Context) {
 	err := price.UpdateLLMPrice(c.Request.Context())
 	if err != nil {
 		resp.ErrorWithAppError(c, http.StatusInternalServerError, modelError(codeModelPriceUpdateFailed, "model price update failed", err))
+		return
+	}
+	if err := helper.ReconcileAutoDiscoveredModelIdentities(c.Request.Context()); err != nil {
+		resp.ErrorWithAppError(c, http.StatusInternalServerError, modelError(codeModelPriceUpdateFailed, "model identity reconcile failed", err))
 		return
 	}
 	resp.Success(c, nil)

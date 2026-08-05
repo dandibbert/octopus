@@ -62,6 +62,12 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
         auto_sync: channel.auto_sync,
         auto_group: channel.auto_group,
         match_regex: channel.match_regex ?? '',
+        provider: channel.provider ?? '',
+        model_wrappers: (channel.model_wrappers ?? []).join(', '),
+        billing_basis: channel.billing_basis ?? 'actual',
+        billing_class_id: channel.billing_class_id ?? '',
+        billing_unknown_policy: channel.billing_unknown_policy ?? 'use_routed',
+        provider_unknown_policy: channel.provider_unknown_policy ?? 'use_routed',
     });
     const t = useTranslations('channel.detail');
     const tProxy = useTranslations('proxyPool');
@@ -99,6 +105,13 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
         }
         if (formData.auto_sync !== channel.auto_sync) req.auto_sync = formData.auto_sync;
         if (formData.auto_group !== channel.auto_group) req.auto_group = formData.auto_group;
+        if (formData.provider.trim() !== (channel.provider ?? '')) req.provider = formData.provider.trim();
+        const nextWrappers = formData.model_wrappers.split(',').map((value) => value.trim()).filter(Boolean);
+        if (JSON.stringify(nextWrappers) !== JSON.stringify(channel.model_wrappers ?? [])) req.model_wrappers = nextWrappers;
+        if (formData.billing_basis !== (channel.billing_basis ?? 'actual')) req.billing_basis = formData.billing_basis;
+        if (formData.billing_class_id.trim() !== (channel.billing_class_id ?? '')) req.billing_class_id = formData.billing_class_id.trim() || null;
+        if (formData.billing_unknown_policy !== (channel.billing_unknown_policy ?? 'use_routed')) req.billing_unknown_policy = formData.billing_unknown_policy;
+        if (formData.provider_unknown_policy !== (channel.provider_unknown_policy ?? 'use_routed')) req.provider_unknown_policy = formData.provider_unknown_policy;
         if ((formData.ws_mode ?? 'inherit') !== (channel.ws_mode ?? 'inherit')) req.ws_mode = formData.ws_mode;
 
         if (!headersEqual(formData.custom_header, channel.custom_header)) {

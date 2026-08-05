@@ -45,6 +45,9 @@ export function CreateDialogContent() {
                             model_name: member.name,
                             priority: index + 1,
                             weight: member.weight ?? 1,
+                            billing_basis: member.billing_basis,
+                            billing_class_id: member.billing_class_id,
+                            billing_unknown_policy: member.billing_unknown_policy,
                         }));
 
                         createGroup.mutate(

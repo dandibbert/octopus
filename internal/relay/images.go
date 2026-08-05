@@ -121,6 +121,7 @@ func ImagesHandler(endpoint string, c *gin.Context) {
 
 	// 初始化 Metrics（Images 独立，避免 b64_json 内存膨胀）
 	metrics := newImagesRelayMetrics(apiKeyID, requestModel)
+	requireKnownBilling := c.GetBool("billing_require_known")
 	metrics.RequestContent = buildImagesRequestContentForLog(isMultipart, bc, jsonPayload)
 
 	// === 早期心跳 ===
@@ -158,6 +159,11 @@ func ImagesHandler(endpoint string, c *gin.Context) {
 		// channel.Type 限制：仅 OpenAI Chat/Responses
 		if channel.Type != outbound.OutboundTypeOpenAIChat && channel.Type != outbound.OutboundTypeOpenAIResponse {
 			iter.Skip(channel.ID, 0, channel.Name, fmt.Sprintf("unsupported channel type: %d", channel.Type))
+			continue
+		}
+		if err := metrics.SetBillingRoute(*channel, item, requireKnownBilling); err != nil {
+			iter.Skip(channel.ID, 0, channel.Name, err.Error())
+			lastErr = err
 			continue
 		}
 
@@ -252,7 +258,13 @@ type imagesRelayMetrics struct {
 	StartTime    time.Time
 	FirstToken   time.Time
 
-	Stats model.StatsMetrics
+	Stats            model.StatsMetrics
+	BillingPlan      *model.BillingPlan
+	ActualResolution model.ModelResolution
+	BilledPrice      model.PriceResolution
+	ProviderPrice    model.PriceResolution
+	PriceEstimated   bool
+	ModelMismatch    bool
 
 	RequestContent  string
 	ResponseContent string
@@ -272,18 +284,41 @@ func (m *imagesRelayMetrics) SetFirstTokenTime(t time.Time) {
 	}
 }
 
+func (m *imagesRelayMetrics) SetBillingRoute(channel model.Channel, item model.GroupItem, requireKnown bool) error {
+	plan, err := price.BuildBillingPlan(m.RequestModel, channel, item, requireKnown)
+	m.BillingPlan = &plan
+	return err
+}
+
 func (m *imagesRelayMetrics) SetUsageFromImages(actualModel string, u imagesUsage) {
 	m.ActualModel = actualModel
 	m.Stats.InputToken = int64(u.InputTokens)
 	m.Stats.OutputToken = int64(u.OutputTokens)
-
-	modelPrice := price.GetLLMPrice(actualModel)
-	if modelPrice == nil {
-		return
+	if m.BillingPlan != nil {
+		m.ActualResolution, m.ProviderPrice, m.BilledPrice, m.ModelMismatch = price.ResolveFinalBilling(*m.BillingPlan, actualModel)
+	} else {
+		m.ActualResolution = price.ResolveModelIdentity(model.ModelResolveContext{RawModel: actualModel, Purpose: "actual"})
+		m.ProviderPrice = price.ResolvePrice(m.ActualResolution)
+		m.BilledPrice = m.ProviderPrice
 	}
-
-	m.Stats.InputCost = float64(u.InputTokens) * modelPrice.Input * 1e-6
-	m.Stats.OutputCost = float64(u.OutputTokens) * modelPrice.Output * 1e-6
+	billed := price.CalculateCost(int64(u.InputTokens), 0, 0, int64(u.OutputTokens), m.BilledPrice)
+	provider := price.CalculateCost(int64(u.InputTokens), 0, 0, int64(u.OutputTokens), m.ProviderPrice)
+	m.Stats.InputCost = billed.Input
+	m.Stats.OutputCost = billed.Output
+	m.Stats.ProviderInputCost = provider.Input
+	m.Stats.ProviderOutputCost = provider.Output
+	m.PriceEstimated = m.BilledPrice.Estimated || m.ProviderPrice.Estimated || m.ActualResolution.Estimated
+	if m.BilledPrice.Status == model.BillingStatusUnknown {
+		m.Stats.UnknownPriceRequests = 1
+		m.Stats.UnknownPriceInputTokens = m.Stats.InputToken
+		m.Stats.UnknownPriceOutputTokens = m.Stats.OutputToken
+	}
+	if m.BilledPrice.Method == "route_fallback" || m.ProviderPrice.Method == "route_fallback" {
+		m.Stats.RouteFallbackRequests = 1
+	}
+	if m.ModelMismatch {
+		m.Stats.ModelMismatchRequests = 1
+	}
 }
 
 func (m *imagesRelayMetrics) Save(ctx context.Context, success bool, err error, attempts []model.ChannelAttempt) {
@@ -293,13 +328,8 @@ func (m *imagesRelayMetrics) Save(ctx context.Context, success bool, err error, 
 func (m *imagesRelayMetrics) SaveWithChannelStats(ctx context.Context, success bool, err error, attempts []model.ChannelAttempt, updateChannelStats bool) {
 	duration := time.Since(m.StartTime)
 
-	globalStats := model.StatsMetrics{
-		WaitTime:    duration.Milliseconds(),
-		InputToken:  m.Stats.InputToken,
-		OutputToken: m.Stats.OutputToken,
-		InputCost:   m.Stats.InputCost,
-		OutputCost:  m.Stats.OutputCost,
-	}
+	globalStats := m.Stats
+	globalStats.WaitTime = duration.Milliseconds()
 	if success {
 		globalStats.RequestSuccess = 1
 	} else {
@@ -331,6 +361,9 @@ func (m *imagesRelayMetrics) SaveWithChannelStats(ctx context.Context, success b
 			"input_cost", m.Stats.InputCost,
 			"output_cost", m.Stats.OutputCost,
 			"total_cost", m.Stats.InputCost + m.Stats.OutputCost,
+			"provider_cost", m.Stats.ProviderInputCost + m.Stats.ProviderOutputCost,
+			"billing_status", m.BilledPrice.Status,
+			"provider_cost_status", m.ProviderPrice.Status,
 			"attempts", len(attempts),
 		}
 		if success {
@@ -350,17 +383,37 @@ func (m *imagesRelayMetrics) saveLog(ctx context.Context, success bool, err erro
 	}
 
 	relayLog := model.RelayLog{
-		Time:             m.StartTime.Unix(),
-		RequestModelName: m.RequestModel,
-		ChannelName:      channelName,
-		ChannelId:        channelID,
-		ActualModelName:  actualModel,
-		UseTime:          int(duration.Milliseconds()),
-		Attempts:         attempts,
-		TotalAttempts:    len(attempts),
-		RequestContent:   m.RequestContent,
-		ResponseContent:  m.ResponseContent,
+		Time:              m.StartTime.Unix(),
+		RequestModelName:  m.RequestModel,
+		ChannelName:       channelName,
+		ChannelId:         channelID,
+		ActualModelName:   actualModel,
+		ActualCanonicalID: m.ActualResolution.CanonicalModelID,
+		UseTime:           int(duration.Milliseconds()),
+		Attempts:          attempts,
+		TotalAttempts:     len(attempts),
+		RequestContent:    m.RequestContent,
+		ResponseContent:   m.ResponseContent,
 	}
+	if m.BillingPlan != nil {
+		relayLog.RoutedModelName = m.BillingPlan.RoutedModel
+		relayLog.RequestedCanonicalID = m.BillingPlan.RequestedResolution.CanonicalModelID
+		relayLog.RoutedCanonicalID = m.BillingPlan.RoutedResolution.CanonicalModelID
+		relayLog.BillingBasis = m.BillingPlan.Basis
+	}
+	relayLog.BillingClassID = m.BilledPrice.BillingClassID
+	relayLog.BillingResolutionMethod = m.BilledPrice.Method
+	relayLog.BillingPriceSource = m.BilledPrice.PriceSource
+	relayLog.BillingPriceVersion = m.BilledPrice.PriceVersion
+	relayLog.BillingPriceMode = m.BilledPrice.PriceMode
+	relayLog.BillingCostStatus = m.BilledPrice.Status
+	relayLog.ProviderBillingClassID = m.ProviderPrice.BillingClassID
+	relayLog.ProviderResolutionMethod = m.ProviderPrice.Method
+	relayLog.ProviderPriceSource = m.ProviderPrice.PriceSource
+	relayLog.ProviderPriceVersion = m.ProviderPrice.PriceVersion
+	relayLog.ProviderCostStatus = m.ProviderPrice.Status
+	relayLog.PriceEstimated = m.PriceEstimated
+	relayLog.ModelMismatch = m.ModelMismatch
 
 	if apiKey, getErr := op.APIKeyGet(m.APIKeyID, ctx); getErr == nil {
 		relayLog.RequestAPIKeyName = apiKey.Name
@@ -376,6 +429,11 @@ func (m *imagesRelayMetrics) saveLog(ctx context.Context, success bool, err erro
 		relayLog.InputTokens = int(m.Stats.InputToken)
 		relayLog.OutputTokens = int(m.Stats.OutputToken)
 		relayLog.Cost = m.Stats.InputCost + m.Stats.OutputCost
+		relayLog.InputCost = m.Stats.InputCost
+		relayLog.OutputCost = m.Stats.OutputCost
+		relayLog.ProviderInputCost = m.Stats.ProviderInputCost
+		relayLog.ProviderOutputCost = m.Stats.ProviderOutputCost
+		relayLog.ProviderCost = m.Stats.ProviderInputCost + m.Stats.ProviderOutputCost
 	}
 
 	if err != nil {

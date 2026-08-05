@@ -10,6 +10,13 @@ interface StatsMetrics {
     output_token: number;
     input_cost: number;
     output_cost: number;
+    provider_input_cost?: number;
+    provider_output_cost?: number;
+    unknown_price_requests?: number;
+    unknown_price_input_tokens?: number;
+    unknown_price_output_tokens?: number;
+    route_fallback_requests?: number;
+    model_mismatch_requests?: number;
     wait_time: number;
     request_success: number;
     request_failed: number;
@@ -20,6 +27,10 @@ export interface StatsMetricsFormatted {
     output_token: ReturnType<typeof formatCount>;
     input_cost: ReturnType<typeof formatMoney>;
     output_cost: ReturnType<typeof formatMoney>;
+    provider_cost: ReturnType<typeof formatMoney>;
+    unknown_price_requests: ReturnType<typeof formatCount>;
+    route_fallback_requests: ReturnType<typeof formatCount>;
+    model_mismatch_requests: ReturnType<typeof formatCount>;
     wait_time: ReturnType<typeof formatTime>;
     request_success: ReturnType<typeof formatCount>;
     request_failed: ReturnType<typeof formatCount>;
@@ -92,6 +103,10 @@ export function useStatsDaily() {
             input_cost: formatMoney(item.input_cost),
             output_cost: formatMoney(item.output_cost),
             total_cost: formatMoney(item.input_cost + item.output_cost),
+            provider_cost: formatMoney((item.provider_input_cost ?? 0) + (item.provider_output_cost ?? 0)),
+            unknown_price_requests: formatCount(item.unknown_price_requests ?? 0),
+            route_fallback_requests: formatCount(item.route_fallback_requests ?? 0),
+            model_mismatch_requests: formatCount(item.model_mismatch_requests ?? 0),
             wait_time: formatTime(item.wait_time),
             request_success: formatCount(item.request_success),
             request_failed: formatCount(item.request_failed),
@@ -119,6 +134,10 @@ export function useStatsHourly() {
             input_cost: formatMoney(item.input_cost),
             output_cost: formatMoney(item.output_cost),
             total_cost: formatMoney(item.input_cost + item.output_cost),
+            provider_cost: formatMoney((item.provider_input_cost ?? 0) + (item.provider_output_cost ?? 0)),
+            unknown_price_requests: formatCount(item.unknown_price_requests ?? 0),
+            route_fallback_requests: formatCount(item.route_fallback_requests ?? 0),
+            model_mismatch_requests: formatCount(item.model_mismatch_requests ?? 0),
             wait_time: formatTime(item.wait_time),
             request_success: formatCount(item.request_success),
             request_failed: formatCount(item.request_failed),
@@ -141,6 +160,10 @@ export function useStatsTotal() {
             input_cost: formatMoney(data.input_cost),
             output_cost: formatMoney(data.output_cost),
             total_cost: formatMoney(data.input_cost + data.output_cost),
+            provider_cost: formatMoney((data.provider_input_cost ?? 0) + (data.provider_output_cost ?? 0)),
+            unknown_price_requests: formatCount(data.unknown_price_requests ?? 0),
+            route_fallback_requests: formatCount(data.route_fallback_requests ?? 0),
+            model_mismatch_requests: formatCount(data.model_mismatch_requests ?? 0),
             wait_time: formatTime(data.wait_time),
             request_success: formatCount(data.request_success),
             request_failed: formatCount(data.request_failed),
@@ -169,6 +192,10 @@ export function useStatsAPIKey() {
             input_cost: formatMoney(item.input_cost),
             output_cost: formatMoney(item.output_cost),
             total_cost: formatMoney(item.input_cost + item.output_cost),
+            provider_cost: formatMoney((item.provider_input_cost ?? 0) + (item.provider_output_cost ?? 0)),
+            unknown_price_requests: formatCount(item.unknown_price_requests ?? 0),
+            route_fallback_requests: formatCount(item.route_fallback_requests ?? 0),
+            model_mismatch_requests: formatCount(item.model_mismatch_requests ?? 0),
             wait_time: formatTime(item.wait_time),
             request_success: formatCount(item.request_success),
             request_failed: formatCount(item.request_failed),

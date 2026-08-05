@@ -109,6 +109,9 @@ export function GroupCard({ group }: { group: Group }) {
                     channel_name: modelChannel?.channel_name ?? `Channel ${item.channel_id}`,
                     item_id: item.id,
                     weight: item.weight,
+                    billing_basis: item.billing_basis,
+                    billing_class_id: item.billing_class_id,
+                    billing_unknown_policy: item.billing_unknown_policy,
                 };
             }),
         [group.items, modelChannelByKey]
@@ -218,12 +221,24 @@ export function GroupCard({ group }: { group: Group }) {
         if (!group.id) return;
 
         const originalItems = [...(group.items || [])].sort((a, b) => a.priority - b.priority);
-        const originalById = new Map<number, { priority: number; weight: number }>();
+        const originalById = new Map<number, {
+            priority: number;
+            weight: number;
+            billing_basis?: SelectedMember['billing_basis'];
+            billing_class_id?: string;
+            billing_unknown_policy?: SelectedMember['billing_unknown_policy'];
+        }>();
         const originalIds = new Set<number>();
         originalItems.forEach((it) => {
             if (typeof it.id === 'number') {
                 originalIds.add(it.id);
-                originalById.set(it.id, { priority: it.priority, weight: it.weight });
+                originalById.set(it.id, {
+                    priority: it.priority,
+                    weight: it.weight,
+                    billing_basis: it.billing_basis,
+                    billing_class_id: it.billing_class_id,
+                    billing_unknown_policy: it.billing_unknown_policy,
+                });
             }
         });
 
@@ -240,6 +255,9 @@ export function GroupCard({ group }: { group: Group }) {
                 model_name: m.name,
                 priority,
                 weight: m.weight ?? 1,
+                billing_basis: m.billing_basis,
+                billing_class_id: m.billing_class_id,
+                billing_unknown_policy: m.billing_unknown_policy,
             }));
 
         const items_to_update = values.members
@@ -250,10 +268,25 @@ export function GroupCard({ group }: { group: Group }) {
                 const orig = originalById.get(id);
                 const weight = m.weight ?? 1;
                 if (!orig) return null;
-                if (orig.priority === priority && orig.weight === weight) return null;
-                return { id, priority, weight };
+                const billingClassID = m.billing_class_id ?? '';
+                const originalBillingClassID = orig.billing_class_id ?? '';
+                if (
+                    orig.priority === priority &&
+                    orig.weight === weight &&
+                    orig.billing_basis === m.billing_basis &&
+                    originalBillingClassID === billingClassID &&
+                    orig.billing_unknown_policy === m.billing_unknown_policy
+                ) return null;
+                return {
+                    id,
+                    priority,
+                    weight,
+                    billing_basis: m.billing_basis,
+                    billing_class_id: billingClassID,
+                    billing_unknown_policy: m.billing_unknown_policy,
+                };
             })
-            .filter((x): x is { id: number; priority: number; weight: number } => x !== null);
+            .filter((x) => x !== null);
 
         const payload: GroupUpdateRequest = { id: group.id };
         const nextName = values.name.trim();

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,10 +19,23 @@ import (
 	"github.com/bestruirui/octopus/internal/utils/log"
 )
 
-const (
-	updateUrl    = "https://github.com/Hureru/octopus/releases/latest/download"
-	updateApiUrl = "https://api.github.com/repos/Hureru/octopus/releases/latest"
+var (
+	updateUrl    = conf.Repo + "/releases/latest/download"
+	updateApiUrl = "https://api.github.com/repos/" + conf.RepoSlug + "/releases/latest"
 )
+
+type httpStatusError struct {
+	StatusCode int
+	Status     string
+	Body       string
+}
+
+func (e *httpStatusError) Error() string {
+	if strings.TrimSpace(e.Body) == "" {
+		return fmt.Sprintf("request failed: %s", e.Status)
+	}
+	return fmt.Sprintf("request failed: %s: %s", e.Status, strings.TrimSpace(e.Body))
+}
 
 type LatestInfo struct {
 	TagName     string `json:"tag_name"`
@@ -37,6 +51,10 @@ func doRequestWithFallback(url string) ([]byte, error) {
 	data, err := doRequest(url, false)
 	if err == nil {
 		return data, nil
+	}
+	var statusErr *httpStatusError
+	if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
+		return nil, err
 	}
 	log.Warnf("direct request failed, trying with proxy: %v", err)
 	return doRequest(url, true)
@@ -73,12 +91,25 @@ func doRequest(url string, useProxy bool) ([]byte, error) {
 		log.Debugf("read body failed: %v", err)
 		return nil, err
 	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, &httpStatusError{
+			StatusCode: resp.StatusCode,
+			Status:     resp.Status,
+			Body:       string(data),
+		}
+	}
 	return data, nil
 }
 
 func GetLatestInfo() (*LatestInfo, error) {
 	body, err := doRequestWithFallback(updateApiUrl)
 	if err != nil {
+		var statusErr *httpStatusError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
+			// This fork may not have published a GitHub Release yet. Treat that as
+			// "no release available" rather than a server error or an update prompt.
+			return &LatestInfo{}, nil
+		}
 		return nil, err
 	}
 

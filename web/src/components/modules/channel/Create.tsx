@@ -29,6 +29,12 @@ export function CreateDialogContent() {
         auto_group: AutoGroupType.None,
         enabled: true,
         match_regex: '',
+        provider: '',
+        model_wrappers: '',
+        billing_basis: 'actual',
+        billing_class_id: '',
+        billing_unknown_policy: 'use_routed',
+        provider_unknown_policy: 'use_routed',
     });
     const t = useTranslations('channel.create');
     const tProxy = useTranslations('proxyPool');
@@ -64,6 +70,12 @@ export function CreateDialogContent() {
                 proxy_config_id: formData.proxy_mode === 'pool' ? formData.proxy_config_id : null,
                 auto_sync: formData.auto_sync,
                 auto_group: formData.auto_group,
+                provider: formData.provider.trim(),
+                model_wrappers: formData.model_wrappers.split(',').map((value) => value.trim()).filter(Boolean),
+                billing_basis: formData.billing_basis,
+                billing_class_id: formData.billing_class_id.trim() || null,
+                billing_unknown_policy: formData.billing_unknown_policy,
+                provider_unknown_policy: formData.provider_unknown_policy,
                 custom_header: normalizedHeaders,
                 ws_mode: formData.ws_mode,
                 param_override: paramOverride,
@@ -87,6 +99,12 @@ export function CreateDialogContent() {
                         auto_group: AutoGroupType.None,
                         enabled: true,
                         match_regex: '',
+                        provider: '',
+                        model_wrappers: '',
+                        billing_basis: 'actual',
+                        billing_class_id: '',
+                        billing_unknown_policy: 'use_routed',
+                        provider_unknown_policy: 'use_routed',
                     });
                     setIsOpen(false);
                 }

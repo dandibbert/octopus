@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { Info, Tag, Github, AlertTriangle, Download, Loader2 } from 'lucide-react';
-import { APP_VERSION, GITHUB_REPO } from '@/lib/info';
+import { APP_VERSION, GITHUB_REPO, isNewerVersion, versionsMatch } from '@/lib/info';
 import { useLatestInfo, useNowVersion, useUpdateCore } from '@/api/endpoints/update';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/common/Toast';
@@ -18,9 +18,11 @@ export function SettingInfo() {
     const latestVersion = latestInfoQuery.data?.tag_name || '';
 
     // 前端版本与后端当前版本不一致 → 浏览器缓存问题
-    const isCacheMismatch = !!backendNowVersion && backendNowVersion !== APP_VERSION;
+    const isCacheMismatch = !!backendNowVersion && !versionsMatch(backendNowVersion, APP_VERSION);
     // 最新版本与后端当前版本不一致 → 有新版本可更新
-    const hasNewVersion = latestVersion && backendNowVersion && latestVersion !== backendNowVersion;
+    const hasNewVersion = Boolean(
+        latestVersion && backendNowVersion && isNewerVersion(latestVersion, backendNowVersion)
+    );
 
     const clearCacheAndReload = async () => {
         // 通知 Service Worker 清理缓存
@@ -113,7 +115,7 @@ export function SettingInfo() {
                         <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     ) : (
                         <code className="text-sm font-mono text-muted-foreground">
-                            {latestVersion || t('info.unknown')}
+                            {latestVersion || (latestInfoQuery.data ? t('info.noRelease') : t('info.unknown'))}
                         </code>
                     )}
                 </div>

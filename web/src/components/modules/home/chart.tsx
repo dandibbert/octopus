@@ -17,6 +17,10 @@ type MetricsRow = {
     requests: Formatted;
     tokens: Formatted;
     waitTime: Formatted;
+    providerCost: Formatted;
+    unknownPrices: Formatted;
+    fallbacks: Formatted;
+    mismatches: Formatted;
 };
 
 type HeroValue = {
@@ -57,6 +61,10 @@ export function StatsChart() {
             requests: formatCount(0).formatted,
             tokens: formatCount(0).formatted,
             waitTime: formatTime(0).formatted,
+            providerCost: formatMoney(0).formatted,
+            unknownPrices: formatCount(0).formatted,
+            fallbacks: formatCount(0).formatted,
+            mismatches: formatCount(0).formatted,
         };
         const emptyHero: HeroValue = { value: undefined, unit: '' };
 
@@ -77,6 +85,10 @@ export function StatsChart() {
                         requests: statsTotal.request_count.formatted,
                         tokens: statsTotal.total_token.formatted,
                         waitTime: statsTotal.wait_time.formatted,
+                        providerCost: statsTotal.provider_cost.formatted,
+                        unknownPrices: statsTotal.unknown_price_requests.formatted,
+                        fallbacks: statsTotal.route_fallback_requests.formatted,
+                        mismatches: statsTotal.model_mismatch_requests.formatted,
                     },
                     chartData: points,
                 };
@@ -90,6 +102,10 @@ export function StatsChart() {
             const requests = sortedDaily.reduce((acc, s) => acc + s.request_count.raw, 0);
             const tokens = sortedDaily.reduce((acc, s) => acc + s.total_token.raw, 0);
             const wait = sortedDaily.reduce((acc, s) => acc + s.wait_time.raw, 0);
+            const providerCost = sortedDaily.reduce((acc, s) => acc + s.provider_cost.raw, 0);
+            const unknownPrices = sortedDaily.reduce((acc, s) => acc + s.unknown_price_requests.raw, 0);
+            const fallbacks = sortedDaily.reduce((acc, s) => acc + s.route_fallback_requests.raw, 0);
+            const mismatches = sortedDaily.reduce((acc, s) => acc + s.model_mismatch_requests.raw, 0);
             const costFmt = formatMoney(cost).formatted;
             return {
                 hero: { value: costFmt.value, unit: costFmt.unit },
@@ -97,6 +113,10 @@ export function StatsChart() {
                     requests: formatCount(requests).formatted,
                     tokens: formatCount(tokens).formatted,
                     waitTime: formatTime(wait).formatted,
+                    providerCost: formatMoney(providerCost).formatted,
+                    unknownPrices: formatCount(unknownPrices).formatted,
+                    fallbacks: formatCount(fallbacks).formatted,
+                    mismatches: formatCount(mismatches).formatted,
                 },
                 chartData: points,
             };
@@ -115,6 +135,10 @@ export function StatsChart() {
             const requests = statsHourly.reduce((acc, s) => acc + s.request_count.raw, 0);
             const tokens = statsHourly.reduce((acc, s) => acc + s.total_token.raw, 0);
             const wait = statsHourly.reduce((acc, s) => acc + s.wait_time.raw, 0);
+            const providerCost = statsHourly.reduce((acc, s) => acc + s.provider_cost.raw, 0);
+            const unknownPrices = statsHourly.reduce((acc, s) => acc + s.unknown_price_requests.raw, 0);
+            const fallbacks = statsHourly.reduce((acc, s) => acc + s.route_fallback_requests.raw, 0);
+            const mismatches = statsHourly.reduce((acc, s) => acc + s.model_mismatch_requests.raw, 0);
             const costFmt = formatMoney(cost).formatted;
             return {
                 hero: { value: costFmt.value, unit: costFmt.unit },
@@ -122,6 +146,10 @@ export function StatsChart() {
                     requests: formatCount(requests).formatted,
                     tokens: formatCount(tokens).formatted,
                     waitTime: formatTime(wait).formatted,
+                    providerCost: formatMoney(providerCost).formatted,
+                    unknownPrices: formatCount(unknownPrices).formatted,
+                    fallbacks: formatCount(fallbacks).formatted,
+                    mismatches: formatCount(mismatches).formatted,
                 },
                 chartData: points,
             };
@@ -143,6 +171,10 @@ export function StatsChart() {
         const requests = recent.reduce((acc, s) => acc + s.request_count.raw, 0);
         const tokens = recent.reduce((acc, s) => acc + s.total_token.raw, 0);
         const wait = recent.reduce((acc, s) => acc + s.wait_time.raw, 0);
+        const providerCost = recent.reduce((acc, s) => acc + s.provider_cost.raw, 0);
+        const unknownPrices = recent.reduce((acc, s) => acc + s.unknown_price_requests.raw, 0);
+        const fallbacks = recent.reduce((acc, s) => acc + s.route_fallback_requests.raw, 0);
+        const mismatches = recent.reduce((acc, s) => acc + s.model_mismatch_requests.raw, 0);
         const costFmt = formatMoney(cost).formatted;
         return {
             hero: { value: costFmt.value, unit: costFmt.unit },
@@ -150,6 +182,10 @@ export function StatsChart() {
                 requests: formatCount(requests).formatted,
                 tokens: formatCount(tokens).formatted,
                 waitTime: formatTime(wait).formatted,
+                providerCost: formatMoney(providerCost).formatted,
+                unknownPrices: formatCount(unknownPrices).formatted,
+                fallbacks: formatCount(fallbacks).formatted,
+                mismatches: formatCount(mismatches).formatted,
             },
             chartData: points,
         };
@@ -202,12 +238,14 @@ export function StatsChart() {
             </header>
 
             {/* Metrics row */}
-            <div className="mx-5 flex items-baseline gap-6 border-t border-border/60 py-3 text-sm tabular-nums">
+            <div className="mx-5 flex flex-wrap items-baseline gap-x-6 gap-y-2 border-t border-border/60 py-3 text-sm tabular-nums">
                 <StatItem label={t('metrics.requests')} value={metrics.requests} />
-                <span className="h-4 w-px bg-border/60" />
                 <StatItem label={t('metrics.tokens')} value={metrics.tokens} />
-                <span className="h-4 w-px bg-border/60" />
                 <StatItem label={t('metrics.waitTime')} value={metrics.waitTime} />
+                <StatItem label={t('metrics.providerCost')} value={metrics.providerCost} />
+                <StatItem label={t('metrics.unknownPrices')} value={metrics.unknownPrices} />
+                <StatItem label={t('metrics.fallbacks')} value={metrics.fallbacks} />
+                <StatItem label={t('metrics.mismatches')} value={metrics.mismatches} />
             </div>
 
             {/* Area chart — only total_cost */}

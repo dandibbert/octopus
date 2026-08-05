@@ -938,6 +938,33 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     </div>
                                 ) : null}
 
+                                <div className="grid shrink-0 grid-cols-1 gap-2 rounded-2xl border border-border/60 bg-muted/20 p-3 text-xs md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="min-w-0">
+                                        <div className="text-muted-foreground">{t('modelPath')}</div>
+                                        <div className="truncate font-mono text-foreground" title={`${displayLog.request_model_name} → ${displayLog.routed_model_name ?? '-'} → ${displayLog.actual_model_name}`}>
+                                            {displayLog.request_model_name} → {displayLog.routed_model_name ?? '-'} → {displayLog.actual_model_name}
+                                        </div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-muted-foreground">{t('billingPlan')}</div>
+                                        <div className="truncate text-foreground" title={displayLog.billing_class_id ?? ''}>
+                                            {displayLog.billing_basis ?? 'actual'} · {displayLog.billing_class_id || '-'} · {displayLog.billing_cost_status || 'unknown'}
+                                        </div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-muted-foreground">{t('priceResolution')}</div>
+                                        <div className="truncate text-foreground">
+                                            {displayLog.billing_resolution_method || '-'} · {displayLog.billing_price_source || '-'} · {displayLog.billing_price_mode || '-'}
+                                        </div>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-muted-foreground">{t('dualLedger')}</div>
+                                        <div className="text-foreground">
+                                            {t('billedAmount')} {Number(displayLog.cost ?? 0).toFixed(6)} · {t('providerCost')} {Number(displayLog.provider_cost ?? 0).toFixed(6)}
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="flex-1 min-h-0 overflow-hidden">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full min-h-0">
                                         <div className="flex flex-col rounded-2xl border border-border bg-muted/30 overflow-hidden min-h-0">

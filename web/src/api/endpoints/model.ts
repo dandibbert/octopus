@@ -12,11 +12,35 @@ export interface LLMPrice {
     cache_write: number;
 }
 
+export type PriceMode = 'unknown' | 'explicit' | 'free' | 'inherited';
+
 /**
  * LLM 模型信息
  */
 export interface LLMInfo extends LLMPrice {
     name: string;
+    provider?: string;
+    canonical_model_id?: string;
+    billing_class_id?: string;
+    price_mode?: PriceMode;
+    price_source?: string;
+    price_version?: string;
+    auto_discovered?: boolean;
+    needs_review?: boolean;
+    catalog_only?: boolean;
+    model_type?: string;
+}
+
+export interface ModelAlias {
+    id?: number;
+    channel_id?: number | null;
+    provider?: string;
+    alias: string;
+    canonical_model_id: string;
+    billing_class_id?: string;
+    source?: string;
+    priority?: number;
+    enabled: boolean;
 }
 
 /**
@@ -182,6 +206,7 @@ export function useUpdateModelPrice() {
         },
         onSuccess: () => {
             logger.log('模型价格更新成功');
+            queryClient.invalidateQueries({ queryKey: ['models', 'list'] });
             queryClient.invalidateQueries({ queryKey: ['models', 'last-update-time'] });
         },
         onError: (error) => {
@@ -207,5 +232,45 @@ export function useLastUpdateTime() {
             return apiClient.get<string>('/api/v1/model/last-update-time');
         },
         refetchInterval: 30000,
+    });
+}
+
+function invalidateModelIdentityQueries(queryClient: ReturnType<typeof useQueryClient>) {
+    queryClient.invalidateQueries({ queryKey: ['models', 'list'] });
+    queryClient.invalidateQueries({ queryKey: ['models', 'aliases'] });
+}
+
+export function useModelAliasList() {
+    return useQuery({
+        queryKey: ['models', 'aliases'],
+        queryFn: async () => apiClient.get<ModelAlias[]>('/api/v1/model/alias/list'),
+        refetchInterval: 30000,
+    });
+}
+
+export function useCreateModelAlias() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (data: ModelAlias) => apiClient.post<ModelAlias>('/api/v1/model/alias/create', data),
+        onSuccess: () => invalidateModelIdentityQueries(queryClient),
+        onError: (error) => logger.error('模型别名创建失败:', error),
+    });
+}
+
+export function useUpdateModelAlias() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (data: ModelAlias) => apiClient.post<ModelAlias>('/api/v1/model/alias/update', data),
+        onSuccess: () => invalidateModelIdentityQueries(queryClient),
+        onError: (error) => logger.error('模型别名更新失败:', error),
+    });
+}
+
+export function useDeleteModelAlias() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (id: number) => apiClient.delete<null>(`/api/v1/model/alias/delete/${id}`),
+        onSuccess: () => invalidateModelIdentityQueries(queryClient),
+        onError: (error) => logger.error('模型别名删除失败:', error),
     });
 }

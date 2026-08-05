@@ -31,6 +31,7 @@ func SyncModelsTask() {
 	}
 	totalNewModels := make([]string, 0, 128)
 	seenTotalNewModels := make(map[string]struct{}, 128)
+	modelChannels := make(map[string]model.Channel, 128)
 	for _, channel := range channels {
 		if !channel.AutoSync {
 			continue
@@ -49,9 +50,13 @@ func SyncModelsTask() {
 			}
 			m = strings.ToLower(m)
 			if _, ok := seenTotalNewModels[m]; ok {
+				if _, exists := modelChannels[m]; !exists {
+					modelChannels[m] = channel
+				}
 				continue
 			}
 			seenTotalNewModels[m] = struct{}{}
+			modelChannels[m] = channel
 			totalNewModels = append(totalNewModels, m)
 		}
 		deletedModels, addedModels := diff.Diff(oldModels, newModels)
@@ -64,6 +69,9 @@ func SyncModelsTask() {
 				log.Errorf("failed to update channel %s: %v", channel.Name, err)
 				continue
 			}
+		}
+		if err := helper.LLMPriceAddToDBForChannel(newModels, &channel, ctx); err != nil {
+			log.Errorf("failed to reconcile model prices for channel %s: %v", channel.Name, err)
 		}
 		// 批量删除消失的模型对应的 GroupItem
 		if len(deletedModels) > 0 {
@@ -99,8 +107,16 @@ func SyncModelsTask() {
 		}
 	}
 	if len(addedNorm) > 0 {
-		if err := helper.LLMPriceAddToDB(addedNorm, ctx); err != nil {
-			log.Errorf("failed to add models price: %v", err)
+		for _, modelName := range addedNorm {
+			if channel, ok := modelChannels[strings.ToLower(strings.TrimSpace(modelName))]; ok {
+				if err := helper.LLMPriceAddToDBForChannel([]string{modelName}, &channel, ctx); err != nil {
+					log.Errorf("failed to add model price for channel %s: %v", channel.Name, err)
+				}
+				continue
+			}
+			if err := helper.LLMPriceAddToDB([]string{modelName}, ctx); err != nil {
+				log.Errorf("failed to add model price: %v", err)
+			}
 		}
 	}
 	lastSyncModelsTime = time.Now()

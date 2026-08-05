@@ -46,7 +46,10 @@ jobs:
         working-directory: web
         run: |
           pnpm install --frozen-lockfile
-          NEXT_PUBLIC_APP_VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')" pnpm build
+          APP_VERSION="$(cat ../VERSION)"
+          NEXT_PUBLIC_APP_VERSION="${APP_VERSION}" \
+          NEXT_PUBLIC_GITHUB_REPO="https://github.com/dandibbert/octopus" \
+          pnpm build
 
       - name: Embed frontend into static
         run: |
@@ -58,11 +61,11 @@ jobs:
           set -e
           mkdir -p build/bin build/docker/linux/amd64 build/docker/linux/arm64
           BUILD_TIME="$(TZ='Asia/Shanghai' date +'%F %T %z')"
-          GIT_VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')"
+          GIT_VERSION="$(cat VERSION)"
           COMMIT_ID="$(git rev-parse --short HEAD)"
           LDFLAGS="-X 'github.com/bestruirui/octopus/internal/conf.Version=${GIT_VERSION}' \
                    -X 'github.com/bestruirui/octopus/internal/conf.BuildTime=${BUILD_TIME}' \
-                   -X 'github.com/bestruirui/octopus/internal/conf.Author=hureru' \
+                   -X 'github.com/bestruirui/octopus/internal/conf.Author=dandibbert' \
                    -X 'github.com/bestruirui/octopus/internal/conf.Commit=${COMMIT_ID}' \
                    -s -w"
 

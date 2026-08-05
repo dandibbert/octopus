@@ -141,6 +141,7 @@ func ProjectAccount(ctx context.Context, accountID int) ([]int, error) {
 				Proxy:         proxyMode != model.ProxyUsageModeDirect,
 				AutoSync:      false,
 				AutoGroup:     model.AutoGroupTypeNone,
+				Provider:      projectedChannelProvider(obType),
 				CustomHeader:  siteRecord.CustomHeader,
 			}
 
@@ -170,6 +171,9 @@ func ProjectAccount(ctx context.Context, accountID int) ([]int, error) {
 				bindingMap[bindingKey] = binding
 				bindingChannelByKey[bindingKey] = channelPayload.ID
 				managedChannelIDs = append(managedChannelIDs, channelPayload.ID)
+				if err := helper.LLMPriceAddToDBForChannel(modelNames, &channelPayload, ctx); err != nil {
+					log.Warnf("failed to reconcile managed channel model prices (channel=%d): %v", channelPayload.ID, err)
+				}
 				if effective := op.EffectiveProjectedChannelAutoGroup(channelPayload); effective != model.AutoGroupTypeNone {
 					op.ChannelAutoGroupWithMode(&channelPayload, effective, ctx)
 				}
@@ -195,13 +199,16 @@ func ProjectAccount(ctx context.Context, accountID int) ([]int, error) {
 				}
 				bindingChannelByKey[bindingKey] = channelPayload.ID
 				managedChannelIDs = append(managedChannelIDs, channelPayload.ID)
+				if err := helper.LLMPriceAddToDBForChannel(modelNames, &channelPayload, ctx); err != nil {
+					log.Warnf("failed to reconcile recreated managed channel model prices (channel=%d): %v", channelPayload.ID, err)
+				}
 				if effective := op.EffectiveProjectedChannelAutoGroup(channelPayload); effective != model.AutoGroupTypeNone {
 					op.ChannelAutoGroupWithMode(&channelPayload, effective, ctx)
 				}
 				continue
 			}
 
-			updateReq := &model.ChannelUpdateRequest{ID: existingChannel.ID, Name: &channelPayload.Name, Type: &channelPayload.Type, Enabled: &channelPayload.Enabled, BaseUrls: &channelPayload.BaseUrls, Model: &channelPayload.Model, CustomModel: &channelPayload.CustomModel, ProxyMode: &channelPayload.ProxyMode, ProxyConfigID: channelPayload.ProxyConfigID, AutoSync: &channelPayload.AutoSync, CustomHeader: &channelPayload.CustomHeader, BypassManagedCheck: true}
+			updateReq := &model.ChannelUpdateRequest{ID: existingChannel.ID, Name: &channelPayload.Name, Type: &channelPayload.Type, Enabled: &channelPayload.Enabled, BaseUrls: &channelPayload.BaseUrls, Model: &channelPayload.Model, CustomModel: &channelPayload.CustomModel, ProxyMode: &channelPayload.ProxyMode, ProxyConfigID: channelPayload.ProxyConfigID, AutoSync: &channelPayload.AutoSync, Provider: &channelPayload.Provider, CustomHeader: &channelPayload.CustomHeader, BypassManagedCheck: true}
 			updateReq.KeysToAdd, updateReq.KeysToUpdate, updateReq.KeysToDelete = diffManagedChannelKeys(existingChannel.Keys, channelPayload.Keys)
 			if _, err := op.ChannelUpdate(updateReq, ctx); err != nil {
 				return nil, fmt.Errorf("failed to update managed channel: %w", err)
@@ -220,6 +227,9 @@ func ProjectAccount(ctx context.Context, accountID int) ([]int, error) {
 			updatedChannel, err := op.ChannelGet(existingChannel.ID, ctx)
 			if err != nil {
 				return nil, err
+			}
+			if err := helper.LLMPriceAddToDBForChannel(modelNames, updatedChannel, ctx); err != nil {
+				log.Warnf("failed to reconcile updated managed channel model prices (channel=%d): %v", updatedChannel.ID, err)
 			}
 			if effective := op.EffectiveProjectedChannelAutoGroup(*updatedChannel); effective != model.AutoGroupTypeNone {
 				op.ChannelAutoGroupWithMode(updatedChannel, effective, ctx)
@@ -534,6 +544,19 @@ func platformOutboundType(site *model.Site) outbound.OutboundType {
 		}
 	}
 	return outbound.OutboundTypeOpenAIChat
+}
+
+func projectedChannelProvider(outboundType outbound.OutboundType) string {
+	switch outboundType {
+	case outbound.OutboundTypeAnthropic:
+		return "anthropic"
+	case outbound.OutboundTypeGemini:
+		return "google"
+	case outbound.OutboundTypeVolcengine:
+		return "volcengine"
+	default:
+		return ""
+	}
 }
 
 // shouldSplitByOutboundType 判断是否需要按模型端点格式拆分 Channel

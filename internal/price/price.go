@@ -11,7 +11,6 @@ import (
 
 	"github.com/bestruirui/octopus/internal/client"
 	"github.com/bestruirui/octopus/internal/model"
-	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/utils/log"
 )
 
@@ -28,6 +27,7 @@ var Provider = []string{
 	"minimax",    // MiniMax 系列
 	"moonshotai", // Kimi/Moonshot
 	"v0",         // v0 系列
+	"volcengine", // 火山引擎系列
 }
 
 var lastUpdateTime time.Time
@@ -68,14 +68,16 @@ func UpdateLLMPrice(ctx context.Context) error {
 	if err := json.Unmarshal(body, &rawPrice); err != nil {
 		return fmt.Errorf("failed to parse LLM info: %w", err)
 	}
-	llmPriceLock.Lock()
+	remoteEntries := make(map[string]catalogEntry)
+	version := remoteCatalogVersion(time.Now())
 	for _, provider := range Provider {
-		for _, model := range rawPrice[provider].Models {
-			model.ID = strings.ToLower(model.ID)
-			llmPrice[model.ID] = model.Cost
+		for _, remoteModel := range rawPrice[provider].Models {
+			remoteModel.ID = strings.ToLower(remoteModel.ID)
+			entry := newCatalogEntry(provider, remoteModel.ID, remoteModel.Cost, "remote", version)
+			remoteEntries[entry.CanonicalModelID] = entry
 		}
 	}
-	llmPriceLock.Unlock()
+	replaceRemoteCatalog(remoteEntries)
 	lastUpdateTime = time.Now()
 	return nil
 }
@@ -85,16 +87,11 @@ func GetLastUpdateTime() time.Time {
 }
 
 func GetLLMPrice(modelName string) *model.LLMPrice {
-	modelName = strings.ToLower(modelName)
-	price, err := op.LLMGet(modelName)
-	if err == nil {
-		return &price
-	}
-	llmPriceLock.RLock()
-	defer llmPriceLock.RUnlock()
-	price, ok := llmPrice[modelName]
-	if !ok {
+	resolution := ResolveModelIdentity(model.ModelResolveContext{RawModel: modelName})
+	priceResolution := ResolvePrice(resolution)
+	if priceResolution.Status == model.BillingStatusUnknown || priceResolution.Price == nil {
 		return nil
 	}
+	price := *priceResolution.Price
 	return &price
 }

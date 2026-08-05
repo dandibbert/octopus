@@ -160,7 +160,11 @@ func enqueueRelayLogPending(relayLog model.RelayLog) bool {
 
 func relayLogApproxBytes(relayLog model.RelayLog) int64 {
 	size := 256
-	size += len(relayLog.RequestModelName) + len(relayLog.RequestAPIKeyName) + len(relayLog.ChannelName) + len(relayLog.ActualModelName)
+	size += len(relayLog.RequestModelName) + len(relayLog.RoutedModelName) + len(relayLog.ActualModelName)
+	size += len(relayLog.RequestedCanonicalID) + len(relayLog.RoutedCanonicalID) + len(relayLog.ActualCanonicalID)
+	size += len(relayLog.BillingClassID) + len(relayLog.BillingResolutionMethod) + len(relayLog.BillingPriceSource) + len(relayLog.BillingPriceVersion)
+	size += len(relayLog.ProviderBillingClassID) + len(relayLog.ProviderResolutionMethod) + len(relayLog.ProviderPriceSource) + len(relayLog.ProviderPriceVersion)
+	size += len(relayLog.RequestAPIKeyName) + len(relayLog.ChannelName)
 	size += len(relayLog.RequestContent) + len(relayLog.ResponseContent) + len(relayLog.Error)
 	for _, attempt := range relayLog.Attempts {
 		size += 96 + len(attempt.ChannelName) + len(attempt.ModelName) + len(attempt.Msg)
@@ -689,10 +693,26 @@ func selectRelayLogListFields(query *gorm.DB, includeContent bool) *gorm.DB {
 		"id",
 		"time",
 		"request_model_name",
+		"routed_model_name",
 		"request_api_key_name",
 		"channel_id",
 		"channel_name",
 		"actual_model_name",
+		"requested_canonical_id",
+		"routed_canonical_id",
+		"actual_canonical_id",
+		"billing_basis",
+		"billing_class_id",
+		"billing_resolution_method",
+		"billing_price_source",
+		"billing_price_version",
+		"billing_price_mode",
+		"billing_cost_status",
+		"provider_billing_class_id",
+		"provider_resolution_method",
+		"provider_price_source",
+		"provider_price_version",
+		"provider_cost_status",
 		"input_tokens",
 		"transport_input_tokens",
 		"bill_input_tokens",
@@ -702,6 +722,14 @@ func selectRelayLogListFields(query *gorm.DB, includeContent bool) *gorm.DB {
 		"ftut",
 		"use_time",
 		"cost",
+		"input_cost",
+		"output_cost",
+		"provider_input_cost",
+		"provider_output_cost",
+		"provider_cost",
+		"usage_estimated",
+		"price_estimated",
+		"model_mismatch",
 		"error",
 		"success",
 		"attempts",
@@ -864,21 +892,21 @@ func applyRelayLogDBFilters(query *gorm.DB, filter RelayLogListFilter) *gorm.DB 
 	switch filter.KeywordMode {
 	case RelayLogKeywordModeExact:
 		query = query.Where(
-			"LOWER(request_model_name) = ? OR LOWER(actual_model_name) = ? OR LOWER(request_api_key_name) = ? OR LOWER(channel_name) = ?",
-			keyword, keyword, keyword, keyword,
+			"LOWER(request_model_name) = ? OR LOWER(routed_model_name) = ? OR LOWER(actual_model_name) = ? OR LOWER(requested_canonical_id) = ? OR LOWER(routed_canonical_id) = ? OR LOWER(actual_canonical_id) = ? OR LOWER(billing_class_id) = ? OR LOWER(provider_billing_class_id) = ? OR LOWER(request_api_key_name) = ? OR LOWER(channel_name) = ?",
+			keyword, keyword, keyword, keyword, keyword, keyword, keyword, keyword, keyword, keyword,
 		)
 	case RelayLogKeywordModeContains:
 		escaped := escapeLikeKeyword(keyword)
 		like := "%" + escaped + "%"
 		if filter.KeywordScope == RelayLogKeywordScopeContent {
 			query = query.Where(
-				"LOWER(request_model_name) LIKE ? ESCAPE '#' OR LOWER(actual_model_name) LIKE ? ESCAPE '#' OR LOWER(request_api_key_name) LIKE ? ESCAPE '#' OR LOWER(channel_name) LIKE ? ESCAPE '#' OR LOWER(request_content) LIKE ? ESCAPE '#' OR LOWER(response_content) LIKE ? ESCAPE '#' OR LOWER(error) LIKE ? ESCAPE '#'",
-				like, like, like, like, like, like, like,
+				"LOWER(request_model_name) LIKE ? ESCAPE '#' OR LOWER(routed_model_name) LIKE ? ESCAPE '#' OR LOWER(actual_model_name) LIKE ? ESCAPE '#' OR LOWER(requested_canonical_id) LIKE ? ESCAPE '#' OR LOWER(routed_canonical_id) LIKE ? ESCAPE '#' OR LOWER(actual_canonical_id) LIKE ? ESCAPE '#' OR LOWER(billing_class_id) LIKE ? ESCAPE '#' OR LOWER(provider_billing_class_id) LIKE ? ESCAPE '#' OR LOWER(request_api_key_name) LIKE ? ESCAPE '#' OR LOWER(channel_name) LIKE ? ESCAPE '#' OR LOWER(request_content) LIKE ? ESCAPE '#' OR LOWER(response_content) LIKE ? ESCAPE '#' OR LOWER(error) LIKE ? ESCAPE '#'",
+				like, like, like, like, like, like, like, like, like, like, like, like, like,
 			)
 		} else {
 			query = query.Where(
-				"LOWER(request_model_name) LIKE ? ESCAPE '#' OR LOWER(actual_model_name) LIKE ? ESCAPE '#' OR LOWER(request_api_key_name) LIKE ? ESCAPE '#' OR LOWER(channel_name) LIKE ? ESCAPE '#' OR LOWER(error) LIKE ? ESCAPE '#'",
-				like, like, like, like, like,
+				"LOWER(request_model_name) LIKE ? ESCAPE '#' OR LOWER(routed_model_name) LIKE ? ESCAPE '#' OR LOWER(actual_model_name) LIKE ? ESCAPE '#' OR LOWER(requested_canonical_id) LIKE ? ESCAPE '#' OR LOWER(routed_canonical_id) LIKE ? ESCAPE '#' OR LOWER(actual_canonical_id) LIKE ? ESCAPE '#' OR LOWER(billing_class_id) LIKE ? ESCAPE '#' OR LOWER(provider_billing_class_id) LIKE ? ESCAPE '#' OR LOWER(request_api_key_name) LIKE ? ESCAPE '#' OR LOWER(channel_name) LIKE ? ESCAPE '#' OR LOWER(error) LIKE ? ESCAPE '#'",
+				like, like, like, like, like, like, like, like, like, like, like,
 			)
 		}
 	default:
@@ -886,8 +914,8 @@ func applyRelayLogDBFilters(query *gorm.DB, filter RelayLogListFilter) *gorm.DB 
 		// indexes where available, and avoids the worst leading-wildcard scans.
 		like := escapeLikeKeyword(keyword) + "%"
 		query = query.Where(
-			"LOWER(request_model_name) LIKE ? ESCAPE '#' OR LOWER(actual_model_name) LIKE ? ESCAPE '#' OR LOWER(request_api_key_name) LIKE ? ESCAPE '#' OR LOWER(channel_name) LIKE ? ESCAPE '#'",
-			like, like, like, like,
+			"LOWER(request_model_name) LIKE ? ESCAPE '#' OR LOWER(routed_model_name) LIKE ? ESCAPE '#' OR LOWER(actual_model_name) LIKE ? ESCAPE '#' OR LOWER(requested_canonical_id) LIKE ? ESCAPE '#' OR LOWER(routed_canonical_id) LIKE ? ESCAPE '#' OR LOWER(actual_canonical_id) LIKE ? ESCAPE '#' OR LOWER(billing_class_id) LIKE ? ESCAPE '#' OR LOWER(provider_billing_class_id) LIKE ? ESCAPE '#' OR LOWER(request_api_key_name) LIKE ? ESCAPE '#' OR LOWER(channel_name) LIKE ? ESCAPE '#'",
+			like, like, like, like, like, like, like, like, like, like,
 		)
 	}
 	return query
@@ -915,7 +943,13 @@ func logMatchesChannels(log model.RelayLog, channelSet map[int]struct{}) bool {
 func logMatchesKeyword(relayLog model.RelayLog, keyword string, scope RelayLogKeywordScope, mode RelayLogKeywordMode) bool {
 	fields := []string{
 		relayLog.RequestModelName,
+		relayLog.RoutedModelName,
 		relayLog.ActualModelName,
+		relayLog.RequestedCanonicalID,
+		relayLog.RoutedCanonicalID,
+		relayLog.ActualCanonicalID,
+		relayLog.BillingClassID,
+		relayLog.ProviderBillingClassID,
 		relayLog.RequestAPIKeyName,
 		relayLog.ChannelName,
 	}

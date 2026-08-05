@@ -427,18 +427,24 @@ func newWSRelayRequest(
 		return nil, nil, fmt.Errorf("no available channel")
 	}
 
+	requireKnownBilling := false
+	if apiKey, err := op.APIKeyGet(apiKeyID, ctx); err == nil {
+		requireKnownBilling = apiKey.MaxCost > 0
+	}
+
 	return &relayRequest{
-		c:               nil,
-		ctx:             ctx,
-		inAdapter:       inAdapter,
-		internalRequest: executionRequest,
-		metrics:         NewRelayMetrics(apiKeyID, requestModel, rawBody, metricsRequest),
-		apiKeyID:        apiKeyID,
-		requestModel:    requestModel,
-		groupID:         group.ID,
-		groupSessionTTL: group.SessionKeepTime,
-		iter:            iter,
-		streamWriter:    NewWSStreamWriter(ctx, conn),
+		c:                   nil,
+		ctx:                 ctx,
+		inAdapter:           inAdapter,
+		internalRequest:     executionRequest,
+		metrics:             NewRelayMetrics(apiKeyID, requestModel, rawBody, metricsRequest),
+		apiKeyID:            apiKeyID,
+		requestModel:        requestModel,
+		groupID:             group.ID,
+		groupSessionTTL:     group.SessionKeepTime,
+		requireKnownBilling: requireKnownBilling,
+		iter:                iter,
+		streamWriter:        NewWSStreamWriter(ctx, conn),
 	}, &group, nil
 }
 
@@ -518,6 +524,11 @@ func runWSRelay(ctx context.Context, req *relayRequest, group *dbmodel.Group) ws
 		}
 
 		req.internalRequest.Model = item.ModelName
+		if err := req.metrics.SetBillingRoute(*channel, item, req.requireKnownBilling); err != nil {
+			req.iter.Skip(channel.ID, 0, channel.Name, err.Error())
+			lastErr = err
+			continue
+		}
 
 		selectOpts := dbmodel.ChannelKeySelectOptions{
 			ExcludeKeyIDs:  make(map[int]struct{}),

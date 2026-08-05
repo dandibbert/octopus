@@ -27,12 +27,15 @@ type Group struct {
 }
 
 type GroupItem struct {
-	ID        int    `json:"id" gorm:"primaryKey"`
-	GroupID   int    `json:"group_id" gorm:"not null;index:idx_group_channel_model,unique"` // 创建时不携带此字段,更新时需要
-	ChannelID int    `json:"channel_id" gorm:"not null;index:idx_group_channel_model,unique"`
-	ModelName string `json:"model_name" gorm:"not null;index:idx_group_channel_model,unique"`
-	Priority  int    `json:"priority"`
-	Weight    int    `json:"weight"`
+	ID                   int                `json:"id" gorm:"primaryKey"`
+	GroupID              int                `json:"group_id" gorm:"not null;index:idx_group_channel_model,unique"` // 创建时不携带此字段,更新时需要
+	ChannelID            int                `json:"channel_id" gorm:"not null;index:idx_group_channel_model,unique"`
+	ModelName            string             `json:"model_name" gorm:"not null;index:idx_group_channel_model,unique"`
+	Priority             int                `json:"priority"`
+	Weight               int                `json:"weight"`
+	BillingBasis         BillingBasis       `json:"billing_basis,omitempty" gorm:"size:32"`
+	BillingClassID       string             `json:"billing_class_id,omitempty" gorm:"size:255"`
+	BillingUnknownPolicy UnknownPricePolicy `json:"billing_unknown_policy,omitempty" gorm:"size:32"`
 }
 
 // GroupPreset 分组的路由配置预设（命名快照）
@@ -55,10 +58,13 @@ type GroupPreset struct {
 // GroupPresetItem 预设中的渠道-模型条目（JSON 序列化为 Items 字段）
 // 不含 ID/GroupID，激活时重新生成
 type GroupPresetItem struct {
-	ChannelID int    `json:"channel_id"`
-	ModelName string `json:"model_name"`
-	Priority  int    `json:"priority"`
-	Weight    int    `json:"weight"`
+	ChannelID            int                `json:"channel_id"`
+	ModelName            string             `json:"model_name"`
+	Priority             int                `json:"priority"`
+	Weight               int                `json:"weight"`
+	BillingBasis         BillingBasis       `json:"billing_basis,omitempty"`
+	BillingClassID       string             `json:"billing_class_id,omitempty"`
+	BillingUnknownPolicy UnknownPricePolicy `json:"billing_unknown_policy,omitempty"`
 }
 
 // GroupUpdateRequest 分组更新请求 - 仅包含变更的数据
@@ -78,17 +84,23 @@ type GroupUpdateRequest struct {
 
 // GroupItemAddRequest 新增 item 请求
 type GroupItemAddRequest struct {
-	ChannelID int    `json:"channel_id" binding:"required"`
-	ModelName string `json:"model_name" binding:"required"`
-	Priority  int    `json:"priority,omitempty"`
-	Weight    int    `json:"weight,omitempty"`
+	ChannelID            int                `json:"channel_id" binding:"required"`
+	ModelName            string             `json:"model_name" binding:"required"`
+	Priority             int                `json:"priority,omitempty"`
+	Weight               int                `json:"weight,omitempty"`
+	BillingBasis         BillingBasis       `json:"billing_basis,omitempty"`
+	BillingClassID       string             `json:"billing_class_id,omitempty"`
+	BillingUnknownPolicy UnknownPricePolicy `json:"billing_unknown_policy,omitempty"`
 }
 
 // GroupItemUpdateRequest 更新 item 请求
 type GroupItemUpdateRequest struct {
-	ID       int `json:"id" binding:"required"`
-	Priority int `json:"priority,omitempty"`
-	Weight   int `json:"weight,omitempty"`
+	ID                   int                 `json:"id" binding:"required"`
+	Priority             int                 `json:"priority,omitempty"`
+	Weight               int                 `json:"weight,omitempty"`
+	BillingBasis         *BillingBasis       `json:"billing_basis,omitempty"`
+	BillingClassID       *string             `json:"billing_class_id,omitempty"`
+	BillingUnknownPolicy *UnknownPricePolicy `json:"billing_unknown_policy,omitempty"`
 }
 type GroupIDAndLLMName struct {
 	ChannelID int

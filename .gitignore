@@ -5,6 +5,9 @@ static/out/
 .claude/
 .codex
 .gocache/
+.tmp-go/
+.tmp-node/
+.tooling/
 .serena/
 .workflow/
 .tmp/

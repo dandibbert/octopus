@@ -4,12 +4,15 @@ import { Check, Loader, Trash2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import type { PriceMode } from '@/api/endpoints/model';
 
 type EditValues = {
     input: string;
     output: string;
     cache_read: string;
     cache_write: string;
+    price_mode: PriceMode;
 };
 
 type ModelDeleteOverlayProps = {
@@ -97,6 +100,7 @@ export function ModelEditOverlay({
                         step="any"
                         value={editValues.input}
                         onChange={(e) => onChange({ ...editValues, input: e.target.value })}
+                        disabled={editValues.price_mode === 'free'}
                         className="h-9 text-sm rounded-xl"
                     />
                 </label>
@@ -107,6 +111,7 @@ export function ModelEditOverlay({
                         step="any"
                         value={editValues.output}
                         onChange={(e) => onChange({ ...editValues, output: e.target.value })}
+                        disabled={editValues.price_mode === 'free'}
                         className="h-9 text-sm rounded-xl"
                     />
                 </label>
@@ -117,6 +122,7 @@ export function ModelEditOverlay({
                         step="any"
                         value={editValues.cache_read}
                         onChange={(e) => onChange({ ...editValues, cache_read: e.target.value })}
+                        disabled={editValues.price_mode === 'free'}
                         className="h-9 text-sm rounded-xl"
                     />
                 </label>
@@ -127,10 +133,23 @@ export function ModelEditOverlay({
                         step="any"
                         value={editValues.cache_write}
                         onChange={(e) => onChange({ ...editValues, cache_write: e.target.value })}
+                        disabled={editValues.price_mode === 'free'}
                         className="h-9 text-sm rounded-xl"
                     />
                 </label>
             </div>
+
+            <label className="mt-3 flex items-center justify-between rounded-xl border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                {t('explicitFree')}
+                <Switch
+                    checked={editValues.price_mode === 'free'}
+                    onCheckedChange={(checked) => onChange({
+                        ...editValues,
+                        price_mode: checked ? 'free' : 'explicit',
+                        ...(checked ? { input: '0', output: '0', cache_read: '0', cache_write: '0' } : {}),
+                    })}
+                />
+            </label>
 
             <div className="flex gap-2 pt-2 mt-3">
                 <button

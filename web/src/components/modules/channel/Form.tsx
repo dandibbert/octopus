@@ -1,4 +1,12 @@
-import { ChannelType, type AutoGroupType, type Channel, type ChannelWSMode, useFetchModel } from '@/api/endpoints/channel';
+import {
+    ChannelType,
+    type AutoGroupType,
+    type BillingBasis,
+    type Channel,
+    type ChannelWSMode,
+    type UnknownPricePolicy,
+    useFetchModel,
+} from '@/api/endpoints/channel';
 import { ProxySelector } from '@/components/modules/proxy-pool/ProxySelector';
 import {
     Select,
@@ -12,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/common/Toast';
+import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, X, Plus } from 'lucide-react';
@@ -42,6 +51,12 @@ export interface ChannelFormData {
     auto_sync: boolean;
     auto_group: AutoGroupType;
     match_regex: string;
+    provider: string;
+    model_wrappers: string;
+    billing_basis: BillingBasis;
+    billing_class_id: string;
+    billing_unknown_policy: UnknownPricePolicy;
+    provider_unknown_policy: UnknownPricePolicy;
 }
 
 export interface ChannelFormProps {
@@ -75,6 +90,8 @@ export function ChannelForm({
     idPrefix = 'channel',
 }: ChannelFormProps) {
     const t = useTranslations('channel.form');
+    const billingRequiresSKU = formData.billing_basis === 'requested' || formData.billing_basis === 'fixed_sku';
+    const billingSKUInvalid = billingRequiresSKU && !formData.billing_class_id.trim();
 
     // Ensure the form always shows at least 1 row for base_urls / keys / custom_header.
     // This avoids "empty list" UI and also keeps URL + APIKEY layout consistent.
@@ -499,6 +516,110 @@ export function ChannelForm({
                                 </div>
                             ) : null}
 
+                            <details className="rounded-xl border border-border/60 bg-muted/20 md:col-span-2">
+                                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-card-foreground">
+                                    <span>{t('billingSectionTitle')}</span>
+                                    <span className="ml-2 text-xs font-normal text-muted-foreground">{t('billingSectionHint')}</span>
+                                </summary>
+                                <div className="grid grid-cols-1 gap-4 border-t border-border/60 p-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <label htmlFor={`${idPrefix}-provider`} className="text-sm font-medium text-card-foreground">
+                                    {t('provider')}
+                                </label>
+                                <Input
+                                    id={`${idPrefix}-provider`}
+                                    value={formData.provider}
+                                    onChange={(event) => onFormDataChange({ ...formData, provider: event.target.value })}
+                                    placeholder={t('providerPlaceholder')}
+                                    className="rounded-xl"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label htmlFor={`${idPrefix}-model-wrappers`} className="text-sm font-medium text-card-foreground">
+                                    {t('modelWrappers')}
+                                </label>
+                                <Input
+                                    id={`${idPrefix}-model-wrappers`}
+                                    value={formData.model_wrappers}
+                                    onChange={(event) => onFormDataChange({ ...formData, model_wrappers: event.target.value })}
+                                    placeholder={t('modelWrappersPlaceholder')}
+                                    className="rounded-xl"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label htmlFor={`${idPrefix}-billing-basis`} className="text-sm font-medium text-card-foreground">
+                                    {t('billingBasis')}
+                                </label>
+                                <Select
+                                    value={formData.billing_basis}
+                                    onValueChange={(value) => onFormDataChange({ ...formData, billing_basis: value as BillingBasis })}
+                                >
+                                    <SelectTrigger id={`${idPrefix}-billing-basis`} className="rounded-xl w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                        <SelectItem className="rounded-xl" value="actual">{t('billingActual')}</SelectItem>
+                                        <SelectItem className="rounded-xl" value="requested">{t('billingRequested')}</SelectItem>
+                                        <SelectItem className="rounded-xl" value="routed">{t('billingRouted')}</SelectItem>
+                                        <SelectItem className="rounded-xl" value="fixed_sku">{t('billingFixedSku')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {(billingRequiresSKU || formData.billing_class_id) && (
+                                <div className="space-y-2">
+                                    <label htmlFor={`${idPrefix}-billing-class`} className="text-sm font-medium text-card-foreground">
+                                        {t('billingClass')}
+                                    </label>
+                                    <Input
+                                        id={`${idPrefix}-billing-class`}
+                                        value={formData.billing_class_id}
+                                        onChange={(event) => onFormDataChange({ ...formData, billing_class_id: event.target.value })}
+                                        placeholder={t('billingClassPlaceholder')}
+                                        className={cn('rounded-xl', billingSKUInvalid && 'border-destructive')}
+                                    />
+                                    {billingSKUInvalid && (
+                                        <p className="text-xs text-destructive">{t('billingClassRequired')}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <label htmlFor={`${idPrefix}-billing-unknown`} className="text-sm font-medium text-card-foreground">
+                                    {t('billingUnknownPolicy')}
+                                </label>
+                                <Select
+                                    value={formData.billing_unknown_policy}
+                                    onValueChange={(value) => onFormDataChange({ ...formData, billing_unknown_policy: value as UnknownPricePolicy })}
+                                >
+                                    <SelectTrigger id={`${idPrefix}-billing-unknown`} className="rounded-xl w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                        <SelectItem className="rounded-xl" value="reject">{t('unknownReject')}</SelectItem>
+                                        <SelectItem className="rounded-xl" value="mark_unknown">{t('unknownMark')}</SelectItem>
+                                        <SelectItem className="rounded-xl" value="use_routed">{t('unknownUseRouted')}</SelectItem>
+                                        <SelectItem className="rounded-xl" value="use_actual">{t('unknownUseActual')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label htmlFor={`${idPrefix}-provider-unknown`} className="text-sm font-medium text-card-foreground">
+                                    {t('providerUnknownPolicy')}
+                                </label>
+                                <Select
+                                    value={formData.provider_unknown_policy}
+                                    onValueChange={(value) => onFormDataChange({ ...formData, provider_unknown_policy: value as UnknownPricePolicy })}
+                                >
+                                    <SelectTrigger id={`${idPrefix}-provider-unknown`} className="rounded-xl w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                        <SelectItem className="rounded-xl" value="mark_unknown">{t('unknownMark')}</SelectItem>
+                                        <SelectItem className="rounded-xl" value="use_routed">{t('unknownUseRouted')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                                </div>
+                            </details>
+
                         </div>
 
                         <div className="space-y-2">
@@ -612,7 +733,7 @@ export function ChannelForm({
                 )}
                 <Button
                     type="submit"
-                    disabled={isPending}
+                    disabled={isPending || billingSKUInvalid}
                     className="w-full sm:flex-1 rounded-2xl h-12"
                 >
                     {isPending ? pendingText : submitText}

@@ -5,6 +5,7 @@ import { useCreateModel } from '@/api/endpoints/model';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel, FieldGroup } from '@/components/ui/field';
+import { Switch } from '@/components/ui/switch';
 import {
     MorphingDialogClose,
     MorphingDialogTitle,
@@ -24,21 +25,32 @@ export function CreateDialogContent() {
         output: '',
         cache_read: '',
         cache_write: '',
+        canonical_model_id: '',
+        billing_class_id: '',
+        free: false,
     });
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!formData.name.trim()) return;
 
+        const input = parseFloat(formData.input) || 0;
+        const output = parseFloat(formData.output) || 0;
+        const cacheRead = parseFloat(formData.cache_read) || 0;
+        const cacheWrite = parseFloat(formData.cache_write) || 0;
+        const allZero = input === 0 && output === 0 && cacheRead === 0 && cacheWrite === 0;
         createModel.mutate({
             name: formData.name.trim(),
-            input: parseFloat(formData.input) || 0,
-            output: parseFloat(formData.output) || 0,
-            cache_read: parseFloat(formData.cache_read) || 0,
-            cache_write: parseFloat(formData.cache_write) || 0,
+            input: formData.free ? 0 : input,
+            output: formData.free ? 0 : output,
+            cache_read: formData.free ? 0 : cacheRead,
+            cache_write: formData.free ? 0 : cacheWrite,
+            canonical_model_id: formData.canonical_model_id.trim() || undefined,
+            billing_class_id: formData.billing_class_id.trim() || undefined,
+            price_mode: formData.free ? 'free' : allZero ? 'unknown' : 'explicit',
         }, {
             onSuccess: () => {
-                setFormData({ name: '', input: '', output: '', cache_read: '', cache_write: '' });
+                setFormData({ name: '', input: '', output: '', cache_read: '', cache_write: '', canonical_model_id: '', billing_class_id: '', free: false });
                 setIsOpen(false);
             }
         });
@@ -48,7 +60,10 @@ export function CreateDialogContent() {
         <div className="w-screen max-w-full md:max-w-xl">
             <MorphingDialogTitle>
                 <header className="mb-5 flex items-center justify-between">
-                    <h2 className="text-2xl font-bold text-card-foreground">{t('title')}</h2>
+                    <div>
+                        <h2 className="text-2xl font-bold text-card-foreground">{t('title')}</h2>
+                        <p className="mt-1 max-w-lg text-sm font-normal text-muted-foreground">{t('description')}</p>
+                    </div>
                     <MorphingDialogClose
                         className="relative right-0 top-0"
                         variants={{
@@ -68,10 +83,14 @@ export function CreateDialogContent() {
                                 id="model-name"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                placeholder={t('namePlaceholder')}
                                 className="rounded-xl"
                             />
                         </Field>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="rounded-2xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                            {t('mappingHint')}
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <Field>
                                 <FieldLabel htmlFor="model-input">{t('input')}</FieldLabel>
                                 <Input
@@ -80,6 +99,7 @@ export function CreateDialogContent() {
                                     step="any"
                                     value={formData.input}
                                     onChange={(e) => setFormData({ ...formData, input: e.target.value })}
+                                    disabled={formData.free}
                                     className="rounded-xl"
                                 />
                             </Field>
@@ -91,6 +111,7 @@ export function CreateDialogContent() {
                                     step="any"
                                     value={formData.output}
                                     onChange={(e) => setFormData({ ...formData, output: e.target.value })}
+                                    disabled={formData.free}
                                     className="rounded-xl"
                                 />
                             </Field>
@@ -102,6 +123,7 @@ export function CreateDialogContent() {
                                     step="any"
                                     value={formData.cache_read}
                                     onChange={(e) => setFormData({ ...formData, cache_read: e.target.value })}
+                                    disabled={formData.free}
                                     className="rounded-xl"
                                 />
                             </Field>
@@ -113,10 +135,50 @@ export function CreateDialogContent() {
                                     step="any"
                                     value={formData.cache_write}
                                     onChange={(e) => setFormData({ ...formData, cache_write: e.target.value })}
+                                    disabled={formData.free}
                                     className="rounded-xl"
                                 />
                             </Field>
                         </div>
+                        <details className="rounded-2xl border bg-muted/15 px-4 py-3">
+                            <summary className="cursor-pointer select-none text-sm font-medium text-card-foreground">
+                                {t('advancedIdentity')}
+                            </summary>
+                            <p className="mt-1 text-xs text-muted-foreground">{t('advancedIdentityHint')}</p>
+                            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <Field>
+                                    <FieldLabel htmlFor="model-canonical">{t('canonicalModel')}</FieldLabel>
+                                    <Input
+                                        id="model-canonical"
+                                        value={formData.canonical_model_id}
+                                        onChange={(e) => setFormData({ ...formData, canonical_model_id: e.target.value })}
+                                        placeholder={t('canonicalPlaceholder')}
+                                        className="rounded-xl"
+                                    />
+                                </Field>
+                                <Field>
+                                    <FieldLabel htmlFor="model-billing-class">{t('billingClass')}</FieldLabel>
+                                    <Input
+                                        id="model-billing-class"
+                                        value={formData.billing_class_id}
+                                        onChange={(e) => setFormData({ ...formData, billing_class_id: e.target.value })}
+                                        placeholder={t('billingClassPlaceholder')}
+                                        className="rounded-xl"
+                                    />
+                                </Field>
+                            </div>
+                        </details>
+                        <label className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                            <span>{t('explicitFree')}</span>
+                            <Switch
+                                checked={formData.free}
+                                onCheckedChange={(free) => setFormData({
+                                    ...formData,
+                                    free,
+                                    ...(free ? { input: '0', output: '0', cache_read: '0', cache_write: '0' } : {}),
+                                })}
+                            />
+                        </label>
                         <Button
                             type="submit"
                             disabled={createModel.isPending || !formData.name.trim()}

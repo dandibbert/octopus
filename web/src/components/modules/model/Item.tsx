@@ -1,20 +1,57 @@
 'use client';
 
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { useUpdateModel, useDeleteModel, type LLMInfo } from '@/api/endpoints/model';
+import { useCreateModel, useUpdateModel, useDeleteModel, type LLMInfo, type PriceMode } from '@/api/endpoints/model';
 import { getModelIcon } from '@/lib/model-icons';
 import { toast } from '@/components/common/Toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 import { ModelDeleteOverlay, ModelEditOverlay } from './ItemOverlays';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
+import { Badge } from '@/components/ui/badge';
 
 interface ModelItemProps {
     model: LLMInfo;
     layout?: 'grid' | 'list';
+}
+
+function effectivePriceMode(model: LLMInfo): PriceMode {
+    if (model.price_mode) return model.price_mode;
+    return model.input === 0 && model.output === 0 && model.cache_read === 0 && model.cache_write === 0
+        ? 'unknown'
+        : 'explicit';
+}
+
+function canonicalBareModel(value?: string) {
+    if (!value) return '';
+    const separator = value.indexOf(':');
+    const modelID = separator >= 0 ? value.slice(separator + 1) : value;
+    return modelID.endsWith('/default') ? modelID.slice(0, -'/default'.length) : modelID;
+}
+
+function PriceMetric({
+    label,
+    value,
+    icon,
+}: {
+    label: string;
+    value: number;
+    icon: ReactNode;
+}) {
+    return (
+        <div className="min-w-0 rounded-xl bg-muted/35 px-3 py-2">
+            <div className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground">
+                {icon}
+                <span>{label}</span>
+            </div>
+            <div className="mt-1 whitespace-nowrap text-sm font-semibold tabular-nums text-card-foreground">
+                ${value.toFixed(2)}
+            </div>
+        </div>
+    );
 }
 
 export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: ModelItemProps) {
@@ -34,8 +71,10 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
         output: model.output.toString(),
         cache_read: model.cache_read.toString(),
         cache_write: model.cache_write.toString(),
+        price_mode: effectivePriceMode(model),
     }));
 
+    const createModel = useCreateModel();
     const updateModel = useUpdateModel();
     const deleteModel = useDeleteModel();
 
@@ -64,6 +103,7 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
             output: model.output.toString(),
             cache_read: model.cache_read.toString(),
             cache_write: model.cache_write.toString(),
+            price_mode: effectivePriceMode(model),
         });
         // Ensure first open already has anchor geometry so layout animation can run.
         updateOverlayRect();
@@ -75,13 +115,25 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
     };
 
     const handleSaveEdit = () => {
-        updateModel.mutate({
+        const input = parseFloat(editValues.input) || 0;
+        const output = parseFloat(editValues.output) || 0;
+        const cacheRead = parseFloat(editValues.cache_read) || 0;
+        const cacheWrite = parseFloat(editValues.cache_write) || 0;
+        const allZero = input === 0 && output === 0 && cacheRead === 0 && cacheWrite === 0;
+        const priceMode: PriceMode = editValues.price_mode === 'free' ? 'free' : allZero ? 'unknown' : 'explicit';
+        const payload: LLMInfo = {
             name: model.name,
-            input: parseFloat(editValues.input) || 0,
-            output: parseFloat(editValues.output) || 0,
-            cache_read: parseFloat(editValues.cache_read) || 0,
-            cache_write: parseFloat(editValues.cache_write) || 0,
-        }, {
+            provider: model.provider,
+            canonical_model_id: model.canonical_model_id,
+            billing_class_id: model.billing_class_id,
+            input,
+            output,
+            cache_read: cacheRead,
+            cache_write: cacheWrite,
+            price_mode: priceMode,
+        };
+        const mutation = model.catalog_only ? createModel : updateModel;
+        mutation.mutate(payload, {
             onSuccess: () => {
                 closeEdit();
                 toast.success(t('toast.updated'));
@@ -140,92 +192,123 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
     }, [isEditOpen, updateOverlayRect, closeEdit]);
 
     const shouldRenderEditPortal = isEditOpen || overlayRect !== null;
+    const priceMode = effectivePriceMode(model);
+    const modeLabel = model.catalog_only
+        ? t('mode.catalog')
+        : {
+            unknown: t('mode.unknown'),
+            explicit: t('mode.explicit'),
+            free: t('mode.free'),
+            inherited: t('mode.inherited'),
+        }[priceMode];
+    const canonicalBare = canonicalBareModel(model.canonical_model_id);
+    const isAlias = canonicalBare !== '' && canonicalBare !== model.name.toLowerCase();
+    const sourceLabel = {
+        remote: t('card.sourceRemote'),
+        builtin: t('card.sourceBuiltin'),
+        user: t('card.sourceUser'),
+        auto: t('card.sourceAuto'),
+    }[model.price_source ?? ''] ?? model.price_source;
 
     return (
         <article
             ref={cardRef}
             className={cn(
-                'group relative rounded-3xl border border-border bg-card transition-all duration-300 flex items-center gap-3 p-4',
+                'group relative flex min-w-0 flex-col gap-3 rounded-3xl border border-border bg-card p-4 transition-all duration-300',
                 (isEditOpen || confirmDelete) && 'z-50'
             )}
         >
-            <ModelAvatar size={52} />
-
-            <div className="flex-1 min-w-0 flex flex-col justify-center gap-2">
-                <Tooltip side="top" sideOffset={10} align="start">
-                    <TooltipTrigger className='text-base font-semibold text-card-foreground leading-tight truncate'>
-                        {model.name}
-                    </TooltipTrigger>
-                    <TooltipContent key={model.name}>
-                        {model.name}
-                    </TooltipContent>
-                </Tooltip>
-
-                {isListLayout ? (
-                    <p className="flex items-center gap-2 overflow-hidden text-sm text-muted-foreground whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1">
-                            <ArrowDownToLine className="size-3.5 shrink-0" style={{ color: brandColor }} />
-                            {t('card.inputCache')}
-                            <span className="tabular-nums">{model.input.toFixed(2)}/{model.cache_read.toFixed(2)}$</span>
-                        </span>
-                        <span className="text-muted-foreground/60">|</span>
-                        <span className="inline-flex items-center gap-1 overflow-hidden">
-                            <ArrowUpFromLine className="size-3.5 shrink-0" style={{ color: brandColor }} />
-                            {t('card.outputCache')}
-                            <span className="tabular-nums truncate">{model.output.toFixed(2)}/{model.cache_write.toFixed(2)}$</span>
-                        </span>
-                    </p>
-                ) : (
-                    <>
-                        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                            <ArrowDownToLine className="size-3.5" style={{ color: brandColor }} />
-                            {t('card.inputCache')}
-                            <span className="tabular-nums">{model.input.toFixed(2)}/{model.cache_read.toFixed(2)}$</span>
-                        </p>
-
-                        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                            <ArrowUpFromLine className="size-3.5" style={{ color: brandColor }} />
-                            {t('card.outputCache')}
-                            <span className="tabular-nums">{model.output.toFixed(2)}/{model.cache_write.toFixed(2)}$</span>
-                        </p>
-                    </>
-                )}
+            <div className={cn('flex min-w-0 items-start gap-3', model.catalog_only ? 'pr-12' : 'pr-20')}>
+                <div className="shrink-0 rounded-2xl border bg-background p-1.5">
+                    <ModelAvatar size={42} />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <Tooltip side="top" sideOffset={10} align="start">
+                        <TooltipTrigger className="line-clamp-2 break-words text-left text-base font-semibold leading-5 text-card-foreground">
+                            {model.name}
+                        </TooltipTrigger>
+                        <TooltipContent key={model.name}>{model.name}</TooltipContent>
+                    </Tooltip>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <Badge variant={priceMode === 'unknown' ? 'destructive' : 'secondary'}>{modeLabel}</Badge>
+                        <Badge variant="outline">{isAlias ? t('card.aliasType') : t('card.standardType')}</Badge>
+                        {sourceLabel && <Badge variant="outline">{sourceLabel}</Badge>}
+                        {model.needs_review && <Badge variant="outline">{t('card.needsReview')}</Badge>}
+                    </div>
+                </div>
             </div>
 
-            <div
-                className={cn(
-                    isListLayout
-                        ? 'shrink-0 flex items-center gap-2 self-center'
-                        : 'shrink-0 flex flex-col justify-between self-stretch',
-                    (isEditOpen || confirmDelete) && 'invisible pointer-events-none'
-                )}
-            >
+            {model.canonical_model_id && (
+                <Tooltip side="top" sideOffset={8} align="start">
+                    <TooltipTrigger className="block w-full truncate rounded-xl bg-muted/25 px-3 py-2 text-left text-xs text-muted-foreground">
+                        <span className="font-medium text-card-foreground/75">{t('card.canonical')}：</span>
+                        {model.canonical_model_id}
+                    </TooltipTrigger>
+                    <TooltipContent>{model.canonical_model_id}</TooltipContent>
+                </Tooltip>
+            )}
+
+            {priceMode === 'unknown' ? (
+                <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+                    {t('card.unknownPrice')}
+                </p>
+            ) : (
+                <div className={cn('grid gap-2', isListLayout ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2')}>
+                    <PriceMetric
+                        label={t('card.input')}
+                        value={model.input}
+                        icon={<ArrowDownToLine className="size-3.5 shrink-0" style={{ color: brandColor }} />}
+                    />
+                    <PriceMetric
+                        label={t('card.cacheRead')}
+                        value={model.cache_read}
+                        icon={<ArrowDownToLine className="size-3.5 shrink-0 opacity-60" style={{ color: brandColor }} />}
+                    />
+                    <PriceMetric
+                        label={t('card.output')}
+                        value={model.output}
+                        icon={<ArrowUpFromLine className="size-3.5 shrink-0" style={{ color: brandColor }} />}
+                    />
+                    <PriceMetric
+                        label={t('card.cacheWrite')}
+                        value={model.cache_write}
+                        icon={<ArrowUpFromLine className="size-3.5 shrink-0 opacity-60" style={{ color: brandColor }} />}
+                    />
+                </div>
+            )}
+
+            <div className={cn(
+                'absolute right-4 top-4 flex shrink-0 gap-1.5',
+                (isEditOpen || confirmDelete) && 'invisible pointer-events-none'
+            )}>
                 <motion.button
                     ref={editButtonRef}
                     layoutId={editLayoutId}
                     type="button"
                     onClick={handleEditClick}
                     disabled={isEditOpen || confirmDelete}
-                    className="h-9 w-9 flex items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                    title={t('card.edit')}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    title={model.catalog_only ? t('card.overrideCatalog') : t('card.edit')}
                 >
                     <Pencil className="size-4" />
                 </motion.button>
 
-                <motion.button
-                    layoutId={deleteLayoutId}
-                    type="button"
-                    onClick={handleDeleteClick}
-                    disabled={isEditOpen || confirmDelete}
-                    className="h-9 w-9 flex items-center justify-center rounded-lg bg-destructive/10 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50"
-                    title={t('card.delete')}
-                >
-                    <Trash2 className="size-4" />
-                </motion.button>
+                {!model.catalog_only && (
+                    <motion.button
+                        layoutId={deleteLayoutId}
+                        type="button"
+                        onClick={handleDeleteClick}
+                        disabled={isEditOpen || confirmDelete}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50"
+                        title={t('card.delete')}
+                    >
+                        <Trash2 className="size-4" />
+                    </motion.button>
+                )}
             </div>
 
             <AnimatePresence>
-                {confirmDelete && (
+                {!model.catalog_only && confirmDelete && (
                     <ModelDeleteOverlay
                         layoutId={deleteLayoutId}
                         isPending={deleteModel.isPending}
@@ -254,7 +337,7 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
                                         modelName={model.name}
                                         brandColor={brandColor}
                                         editValues={editValues}
-                                        isPending={updateModel.isPending}
+                                        isPending={updateModel.isPending || createModel.isPending}
                                         onChange={setEditValues}
                                         onCancel={handleCancelEdit}
                                         onSave={handleSaveEdit}

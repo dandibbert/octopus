@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -59,6 +60,10 @@ func createGroup(c *gin.Context) {
 		}
 	}
 	if err := op.GroupCreate(&group, c.Request.Context()); err != nil {
+		if errors.Is(err, op.ErrInvalidGroupBilling) {
+			resp.Error(c, http.StatusBadRequest, err.Error())
+			return
+		}
 		resp.ErrorWithAppError(c, http.StatusInternalServerError, groupError(codeGroupCreateFailed, "group create failed", err))
 		return
 	}
@@ -80,6 +85,10 @@ func updateGroup(c *gin.Context) {
 	}
 	group, err := op.GroupUpdate(&req, c.Request.Context())
 	if err != nil {
+		if errors.Is(err, op.ErrInvalidGroupBilling) {
+			resp.Error(c, http.StatusBadRequest, err.Error())
+			return
+		}
 		resp.ErrorWithAppError(c, http.StatusInternalServerError, groupError(codeGroupUpdateFailed, "group update failed", err))
 		return
 	}

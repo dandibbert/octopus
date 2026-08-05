@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	dbmodel "github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/outlierwindow"
+	"github.com/bestruirui/octopus/internal/price"
 	"github.com/bestruirui/octopus/internal/relay/balancer"
 	"github.com/bestruirui/octopus/internal/server/resp"
 	transformerModel "github.com/bestruirui/octopus/internal/transformer/model"
@@ -125,6 +127,11 @@ func HandleResponsesCompact(c *gin.Context) {
 			iter.Skip(channel.ID, 0, channel.Name, "channel type not compatible with responses compact")
 			continue
 		}
+		if err := metrics.SetBillingRoute(*channel, item, c.GetBool("billing_require_known")); err != nil {
+			iter.Skip(channel.ID, 0, channel.Name, err.Error())
+			lastErr = err
+			continue
+		}
 
 		selectOpts := dbmodel.ChannelKeySelectOptions{
 			ExcludeKeyIDs:  make(map[int]struct{}),
@@ -198,6 +205,10 @@ func HandleResponsesCompact(c *gin.Context) {
 	}
 
 	metrics.SaveWithChannelStats(c.Request.Context(), false, lastErr, iter.Attempts(), false)
+	if errors.Is(lastErr, price.ErrUnknownBillingPrice) {
+		resp.Error(c, http.StatusUnprocessableEntity, "billing price is unknown")
+		return
+	}
 	if lastErr == nil && lastStatusCode == 0 {
 		resp.ErrorWithCode(c, http.StatusServiceUnavailable, CodeRelayNoAvailableChannel, "no available channel")
 		return
@@ -264,7 +275,11 @@ func forwardResponsesCompact(c *gin.Context, metrics *RelayMetrics, iter *balanc
 
 	var compactResp responsesCompactResponse
 	if err := json.Unmarshal(body, &compactResp); err == nil {
-		metrics.SetInternalResponse(compactResponseToInternalResponse(&compactResp), metrics.RequestModel)
+		actualModel := metrics.RequestModel
+		if metrics.BillingPlan != nil && metrics.BillingPlan.RoutedModel != "" {
+			actualModel = metrics.BillingPlan.RoutedModel
+		}
+		metrics.SetInternalResponse(compactResponseToInternalResponse(&compactResp), actualModel)
 	}
 
 	span.End(dbmodel.AttemptSuccess, response.StatusCode, "")

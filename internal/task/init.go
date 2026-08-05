@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bestruirui/octopus/internal/helper"
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/price"
@@ -34,6 +35,10 @@ func Init() {
 	Register(string(model.SettingKeyModelInfoUpdateInterval), priceUpdateInterval, true, func() {
 		if err := price.UpdateLLMPrice(context.Background()); err != nil {
 			log.Warnf("failed to update price info: %v", err)
+			return
+		}
+		if err := helper.ReconcileAutoDiscoveredModelIdentities(context.Background()); err != nil {
+			log.Warnf("failed to reconcile auto-discovered model identities: %v", err)
 		}
 	})
 

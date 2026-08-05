@@ -1,13 +1,20 @@
 package model
 
 type StatsMetrics struct {
-	InputToken     int64   `json:"input_token" gorm:"bigint"`
-	OutputToken    int64   `json:"output_token" gorm:"bigint"`
-	InputCost      float64 `json:"input_cost" gorm:"type:real"`
-	OutputCost     float64 `json:"output_cost" gorm:"type:real"`
-	WaitTime       int64   `json:"wait_time" gorm:"bigint"`
-	RequestSuccess int64   `json:"request_success" gorm:"bigint"`
-	RequestFailed  int64   `json:"request_failed" gorm:"bigint"`
+	InputToken               int64   `json:"input_token" gorm:"bigint"`
+	OutputToken              int64   `json:"output_token" gorm:"bigint"`
+	InputCost                float64 `json:"input_cost" gorm:"type:real"`
+	OutputCost               float64 `json:"output_cost" gorm:"type:real"`
+	ProviderInputCost        float64 `json:"provider_input_cost" gorm:"type:real"`
+	ProviderOutputCost       float64 `json:"provider_output_cost" gorm:"type:real"`
+	UnknownPriceRequests     int64   `json:"unknown_price_requests" gorm:"bigint"`
+	UnknownPriceInputTokens  int64   `json:"unknown_price_input_tokens" gorm:"bigint"`
+	UnknownPriceOutputTokens int64   `json:"unknown_price_output_tokens" gorm:"bigint"`
+	RouteFallbackRequests    int64   `json:"route_fallback_requests" gorm:"bigint"`
+	ModelMismatchRequests    int64   `json:"model_mismatch_requests" gorm:"bigint"`
+	WaitTime                 int64   `json:"wait_time" gorm:"bigint"`
+	RequestSuccess           int64   `json:"request_success" gorm:"bigint"`
+	RequestFailed            int64   `json:"request_failed" gorm:"bigint"`
 }
 
 type StatsTotal struct {
@@ -61,6 +68,13 @@ func (s *StatsMetrics) Add(delta StatsMetrics) {
 	s.OutputToken += delta.OutputToken
 	s.InputCost += delta.InputCost
 	s.OutputCost += delta.OutputCost
+	s.ProviderInputCost += delta.ProviderInputCost
+	s.ProviderOutputCost += delta.ProviderOutputCost
+	s.UnknownPriceRequests += delta.UnknownPriceRequests
+	s.UnknownPriceInputTokens += delta.UnknownPriceInputTokens
+	s.UnknownPriceOutputTokens += delta.UnknownPriceOutputTokens
+	s.RouteFallbackRequests += delta.RouteFallbackRequests
+	s.ModelMismatchRequests += delta.ModelMismatchRequests
 	s.WaitTime += delta.WaitTime
 	s.RequestSuccess += delta.RequestSuccess
 	s.RequestFailed += delta.RequestFailed

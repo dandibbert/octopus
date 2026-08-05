@@ -56,10 +56,26 @@ export interface RelayLog {
     id: number;
     time: number;                // 时间戳
     request_model_name: string;  // 请求模型名称
+    routed_model_name?: string;
     request_api_key_name?: string; // 请求使用的 API Key 名称
     channel: number;             // 实际使用的渠道ID
     channel_name: string;        // 渠道名称
     actual_model_name: string;   // 实际使用模型名称
+    requested_canonical_id?: string;
+    routed_canonical_id?: string;
+    actual_canonical_id?: string;
+    billing_basis?: 'actual' | 'requested' | 'routed' | 'fixed_sku';
+    billing_class_id?: string;
+    billing_resolution_method?: string;
+    billing_price_source?: string;
+    billing_price_version?: string;
+    billing_price_mode?: 'unknown' | 'explicit' | 'free' | 'inherited';
+    billing_cost_status?: string;
+    provider_billing_class_id?: string;
+    provider_resolution_method?: string;
+    provider_price_source?: string;
+    provider_price_version?: string;
+    provider_cost_status?: string;
     input_tokens: number;        // 输入Token
     transport_input_tokens?: number | null; // 实际发送到上游请求体的 Token 估算
     bill_input_tokens?: number | null; // 按常规输入价格计费的 Token
@@ -69,6 +85,14 @@ export interface RelayLog {
     ftut: number;                // 首字时间(毫秒)
     use_time: number;            // 总用时(毫秒)
     cost: number;                // 消耗费用
+    input_cost?: number;
+    output_cost?: number;
+    provider_input_cost?: number;
+    provider_output_cost?: number;
+    provider_cost?: number;
+    usage_estimated?: boolean;
+    price_estimated?: boolean;
+    model_mismatch?: boolean;
     request_content: string;     // 请求内容
     response_content: string;    // 响应内容
     error: string;               // 错误信息

@@ -13,7 +13,7 @@ import { Accordion, AccordionContent, AccordionItem } from '@/components/ui/acco
 import { cn } from '@/lib/utils';
 import { getModelIcon } from '@/lib/model-icons';
 import type { GroupMode } from '@/api/endpoints/group';
-import type { SelectedMember } from './ItemList';
+import type { MemberBillingPatch, SelectedMember } from './ItemList';
 import { MemberList } from './ItemList';
 import { matchesGroupName, memberKey, normalizeKey, MODE_LABELS } from './utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
@@ -193,6 +193,7 @@ function SortSection({
     onReorder,
     onRemove,
     onWeightChange,
+    onBillingChange,
     removingIds,
     showWeight,
     onClear,
@@ -201,6 +202,7 @@ function SortSection({
     onReorder: (members: SelectedMember[]) => void;
     onRemove: (id: string) => void;
     onWeightChange: (id: string, weight: number) => void;
+    onBillingChange: (id: string, patch: MemberBillingPatch) => void;
     removingIds: Set<string>;
     showWeight: boolean;
     onClear: () => void;
@@ -241,8 +243,10 @@ function SortSection({
                     onReorder={onReorder}
                     onRemove={onRemove}
                     onWeightChange={onWeightChange}
+                    onBillingChange={onBillingChange}
                     removingIds={removingIds}
                     showWeight={showWeight}
+                    showBilling
                     showConfirmDelete={false}
                 />
             </div>
@@ -336,6 +340,19 @@ export function GroupEditor({
         setSelectedMembers((prev) => prev.map((m) => m.id === id ? { ...m, weight } : m));
     }, []);
 
+    const handleBillingChange = useCallback((id: string, patch: MemberBillingPatch) => {
+        setSelectedMembers((prev) => prev.map((member) => {
+            if (member.id !== id) return member;
+            const next = { ...member, ...patch };
+            if (patch.billing_class_id !== undefined) {
+                const normalized = patch.billing_class_id.trim();
+                if (normalized) next.billing_class_id = normalized;
+                else delete next.billing_class_id;
+            }
+            return next;
+        }));
+    }, []);
+
     const handleRemoveMember = useCallback((id: string) => {
         setRemovingIds((prev) => new Set(prev).add(id));
         setTimeout(() => {
@@ -349,7 +366,14 @@ export function GroupEditor({
         setRemovingIds(new Set());
     }, []);
 
-    const isValid = groupKey.length > 0 && selectedMembers.length > 0 && !regexError;
+    const invalidBillingMembers = selectedMembers.filter((member) =>
+        (member.billing_basis === 'requested' || member.billing_basis === 'fixed_sku')
+        && !member.billing_class_id?.trim(),
+    );
+    const isValid = groupKey.length > 0
+        && selectedMembers.length > 0
+        && !regexError
+        && invalidBillingMembers.length === 0;
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -543,6 +567,7 @@ export function GroupEditor({
                                 onReorder={setSelectedMembers}
                                 onRemove={handleRemoveMember}
                                 onWeightChange={handleWeightChange}
+                                onBillingChange={handleBillingChange}
                                 removingIds={removingIds}
                                 showWeight={mode === 4}
                                 onClear={handleClearMembers}
@@ -553,6 +578,11 @@ export function GroupEditor({
             </div>
 
             <div className="mt-auto shrink-0 px-1 pt-4">
+                {invalidBillingMembers.length > 0 && (
+                    <p className="mb-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                        {t('form.billingValidationError', { count: invalidBillingMembers.length })}
+                    </p>
+                )}
                 <div className="flex gap-2">
                     {onCancel && (
                         <Button type="button" variant="secondary" className="flex-1 rounded-xl h-11" onClick={onCancel}>

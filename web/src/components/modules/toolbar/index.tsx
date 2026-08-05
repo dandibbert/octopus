@@ -15,6 +15,7 @@ import {
     RefreshCw,
     Search,
     SlidersHorizontal,
+    Waypoints,
     WandSparkles,
     X
 } from 'lucide-react';
@@ -33,6 +34,7 @@ import { CreateDialogContent as ChannelCreateContent } from '@/components/module
 import { CreateDialogContent as GroupCreateContent } from '@/components/modules/group/Create';
 import { GroupAutoGroupDialogContent } from '@/components/modules/group/AutoGroupDialog';
 import { CreateDialogContent as ModelCreateContent } from '@/components/modules/model/Create';
+import { AliasDialogContent } from '@/components/modules/model/AliasManager';
 import { useSiteUIStore } from '@/components/modules/site/ui-store';
 import { useLogUIStore } from '@/components/modules/log/ui-store';
 import { LogFilterPopover } from '@/components/modules/log/FilterPopover';
@@ -93,6 +95,8 @@ function CreateDialogContent({ activeItem }: { activeItem: ToolbarPage }) {
 export function Toolbar() {
     const t = useTranslations('toolbar');
     const tProxyPool = useTranslations('proxyPool');
+    const tModelCreate = useTranslations('model.create');
+    const tModelAlias = useTranslations('model.alias');
     const { activeItem } = useNavStore();
     const toolbarItem = isToolbarPage(activeItem) ? activeItem : null;
     const searchTerm = useSearchStore((s) => (toolbarItem ? s.searchTerms[toolbarItem] || '' : ''));
@@ -129,6 +133,7 @@ export function Toolbar() {
     const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [autoGroupDialogOpen, setAutoGroupDialogOpen] = useState(false);
+    const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
 
     const searchExpanded = expandedSearchItem === toolbarItem;
 
@@ -207,13 +212,22 @@ export function Toolbar() {
 
         // 模型页面按钮
         if (toolbarItem === 'model') {
-            result.push({
-                id: 'create-model',
-                icon: <Plus className="size-4" />,
-                label: '新增模型',
-                onClick: () => setCreateDialogOpen(true),
-                priority: 'desktop',
-            });
+            result.push(
+                {
+                    id: 'model-aliases',
+                    icon: <Waypoints className="size-4" />,
+                    label: tModelAlias('toolbarButton'),
+                    onClick: () => setAliasDialogOpen(true),
+                    priority: 'large',
+                },
+                {
+                    id: 'create-model',
+                    icon: <Plus className="size-4" />,
+                    label: tModelCreate('toolbarButton'),
+                    onClick: () => setCreateDialogOpen(true),
+                    priority: 'desktop',
+                }
+            );
         }
 
         // 日志页面按钮
@@ -238,6 +252,8 @@ export function Toolbar() {
         requestOpenCreateSite,
         openCompletionDialog,
         requestLogRefresh,
+        tModelAlias,
+        tModelCreate,
         tProxyPool,
     ]);
 
@@ -555,6 +571,22 @@ export function Toolbar() {
                         <MorphingDialogContainer>
                             <MorphingDialogContent className="w-fit max-w-full bg-card text-card-foreground px-6 py-4 rounded-3xl custom-shadow max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
                                 <GroupAutoGroupDialogContent />
+                            </MorphingDialogContent>
+                        </MorphingDialogContainer>
+                    </MorphingDialog>
+                )}
+
+                {/* 模型名称映射对话框 */}
+                {toolbarItem === 'model' && (
+                    <MorphingDialog open={aliasDialogOpen} onOpenChange={setAliasDialogOpen}>
+                        <MorphingDialogTrigger>
+                            <button type="button" className="hidden">
+                                Hidden trigger
+                            </button>
+                        </MorphingDialogTrigger>
+                        <MorphingDialogContainer>
+                            <MorphingDialogContent className="w-fit max-w-full rounded-3xl bg-card px-6 py-4 text-card-foreground custom-shadow max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+                                <AliasDialogContent />
                             </MorphingDialogContent>
                         </MorphingDialogContainer>
                     </MorphingDialog>

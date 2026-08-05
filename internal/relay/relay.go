@@ -16,6 +16,7 @@ import (
 	dbmodel "github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/outlierwindow"
+	"github.com/bestruirui/octopus/internal/price"
 	"github.com/bestruirui/octopus/internal/relay/balancer"
 	"github.com/bestruirui/octopus/internal/relay/stream"
 	"github.com/bestruirui/octopus/internal/server/resp"
@@ -146,17 +147,18 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 
 	// 请求级上下文
 	req := &relayRequest{
-		c:               c,
-		inAdapter:       inAdapter,
-		internalRequest: internalRequest,
-		metrics:         metrics,
-		apiKeyID:        apiKeyID,
-		requestModel:    requestModel,
-		groupID:         group.ID,
-		groupSessionTTL: group.SessionKeepTime,
-		iter:            iter,
-		rawBody:         rawBody,
-		heartbeat:       hb,
+		c:                   c,
+		inAdapter:           inAdapter,
+		internalRequest:     internalRequest,
+		metrics:             metrics,
+		apiKeyID:            apiKeyID,
+		requestModel:        requestModel,
+		groupID:             group.ID,
+		groupSessionTTL:     group.SessionKeepTime,
+		requireKnownBilling: c.GetBool("billing_require_known"),
+		iter:                iter,
+		rawBody:             rawBody,
+		heartbeat:           hb,
 	}
 
 	var lastErr error
@@ -222,6 +224,11 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 
 		// 设置实际模型
 		internalRequest.Model = item.ModelName
+		if err := metrics.SetBillingRoute(*channel, item, req.requireKnownBilling); err != nil {
+			iter.Skip(channel.ID, 0, channel.Name, err.Error())
+			lastErr = err
+			continue
+		}
 
 		log.Debugf("request model %s, mode: %d, forwarding to channel: %s model: %s (attempt %d/%d, sticky=%t)",
 			requestModel, group.Mode, channel.Name, item.ModelName,
@@ -371,6 +378,10 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		return
 	}
 	metrics.SaveWithChannelStats(c.Request.Context(), false, lastErr, iter.Attempts(), false)
+	if errors.Is(lastErr, price.ErrUnknownBillingPrice) {
+		hb.FlushOrError(c, http.StatusUnprocessableEntity, "billing price is unknown")
+		return
+	}
 
 	// 透传 429/503 状态码和 Retry-After 头，让客户端 SDK 的重试机制接管
 	if isPassthroughStatus(lastResult.StatusCode) {

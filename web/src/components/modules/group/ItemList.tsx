@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Layers, GripVertical, X, Trash2 } from 'lucide-react';
+import { ChevronDown, Layers, GripVertical, Settings2, X, Trash2 } from 'lucide-react';
 import {
     DragDropContext,
     Draggable,
@@ -13,14 +13,30 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { getModelIcon } from '@/lib/model-icons';
 import type { LLMChannel } from '@/api/endpoints/model';
+import type {
+    BillingBasis as ChannelBillingBasis,
+    UnknownPricePolicy as ChannelUnknownPricePolicy,
+} from '@/api/endpoints/channel';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 import { useTranslations } from 'next-intl';
+
+type BillingBasis = ChannelBillingBasis | '';
+type UnknownPricePolicy = ChannelUnknownPricePolicy | '';
 
 export interface SelectedMember extends LLMChannel {
     id: string;
     item_id?: number;
     weight?: number;
+    billing_basis?: BillingBasis;
+    billing_class_id?: string;
+    billing_unknown_policy?: UnknownPricePolicy;
 }
+
+export type MemberBillingPatch = {
+    billing_basis?: BillingBasis;
+    billing_class_id?: string;
+    billing_unknown_policy?: UnknownPricePolicy;
+};
 
 function reorderList<T>(list: T[], startIndex: number, endIndex: number): T[] {
     const result = [...list];
@@ -40,9 +56,11 @@ function MemberItem({
     member,
     onRemove,
     onWeightChange,
+    onBillingChange,
     isRemoving,
     index,
     showWeight = false,
+    showBilling = false,
     showConfirmDelete = true,
     layoutScope,
     dnd,
@@ -50,20 +68,33 @@ function MemberItem({
     member: SelectedMember;
     onRemove: (id: string) => void;
     onWeightChange?: (id: string, weight: number) => void;
+    onBillingChange?: (id: string, patch: MemberBillingPatch) => void;
     isRemoving?: boolean;
     index: number;
     showWeight?: boolean;
+    showBilling?: boolean;
     showConfirmDelete?: boolean;
     layoutScope?: string;
     dnd: MemberItemDnd;
 }) {
+    const t = useTranslations('group');
     const { Avatar: ModelAvatar } = getModelIcon(member.name);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const hasBillingOverride = Boolean(
+        member.billing_basis || member.billing_class_id || member.billing_unknown_policy,
+    );
+    const [billingExpanded, setBillingExpanded] = useState(hasBillingOverride);
     const isDisabled = member.enabled === false;
     const isSiteChannel = member.site_id != null;
     const sourceLabel = [member.channel_name, isSiteChannel ? null : member.endpoint_type?.trim()]
         .filter(Boolean)
         .join(' · ');
+    const billingNeedsSKU = member.billing_basis === 'requested' || member.billing_basis === 'fixed_sku';
+    const billingSKUInvalid = billingNeedsSKU && !member.billing_class_id?.trim();
+
+    useEffect(() => {
+        if (hasBillingOverride) setBillingExpanded(true);
+    }, [hasBillingOverride]);
 
     return (
         <div
@@ -122,6 +153,95 @@ function MemberItem({
                         <TooltipContent key={member.name}>{member.name}</TooltipContent>
                     </Tooltip>
                     <span className="text-[10px] text-muted-foreground truncate leading-tight">{sourceLabel}</span>
+                    {showBilling && (
+                        <div className="mt-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setBillingExpanded((value) => !value)}
+                                className={cn(
+                                    'flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-[10px] transition-colors',
+                                    hasBillingOverride
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                                )}
+                            >
+                                <Settings2 className="size-3" />
+                                <span>{t('form.billingAdvanced')}</span>
+                                <span className="ml-1 truncate opacity-80">
+                                    {hasBillingOverride ? t('form.billingOverrideActive') : t('form.billingFollowChannel')}
+                                </span>
+                                <ChevronDown className={cn('ml-auto size-3 transition-transform', billingExpanded && 'rotate-180')} />
+                            </button>
+
+                            {billingExpanded && (
+                                <div className="mt-1.5 grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-2 text-[10px] sm:grid-cols-2">
+                                    <label className="grid gap-1 text-muted-foreground">
+                                        {t('form.billingBasisLabel')}
+                                        <select
+                                            value={member.billing_basis ?? ''}
+                                            onChange={(event) => {
+                                                const basis = event.target.value as BillingBasis;
+                                                onBillingChange?.(member.id, {
+                                                    billing_basis: basis,
+                                                    ...(!['requested', 'fixed_sku'].includes(basis)
+                                                        ? { billing_class_id: '' }
+                                                        : {}),
+                                                });
+                                            }}
+                                            className="h-7 min-w-0 rounded-md border border-border bg-background px-1.5 text-[11px] text-foreground"
+                                            aria-label={t('form.billingBasisLabel')}
+                                        >
+                                            <option value="">{t('form.billingInherit')}</option>
+                                            <option value="actual">{t('form.billingActual')}</option>
+                                            <option value="requested">{t('form.billingRequested')}</option>
+                                            <option value="routed">{t('form.billingRouted')}</option>
+                                            <option value="fixed_sku">{t('form.billingFixedSku')}</option>
+                                        </select>
+                                    </label>
+
+                                    <label className="grid gap-1 text-muted-foreground">
+                                        {t('form.billingUnknownLabel')}
+                                        <select
+                                            value={member.billing_unknown_policy ?? ''}
+                                            onChange={(event) => onBillingChange?.(member.id, {
+                                                billing_unknown_policy: event.target.value as UnknownPricePolicy,
+                                            })}
+                                            className="h-7 min-w-0 rounded-md border border-border bg-background px-1.5 text-[11px] text-foreground"
+                                            aria-label={t('form.billingUnknownLabel')}
+                                        >
+                                            <option value="">{t('form.billingPolicyInherit')}</option>
+                                            <option value="reject">{t('form.unknownReject')}</option>
+                                            <option value="mark_unknown">{t('form.unknownMark')}</option>
+                                            <option value="use_routed">{t('form.unknownUseRouted')}</option>
+                                            <option value="use_actual">{t('form.unknownUseActual')}</option>
+                                        </select>
+                                    </label>
+
+                                    {(billingNeedsSKU || member.billing_class_id) && (
+                                        <label className="grid gap-1 text-muted-foreground sm:col-span-2">
+                                            {t('form.billingClassLabel')}
+                                            <input
+                                                value={member.billing_class_id ?? ''}
+                                                onChange={(event) => onBillingChange?.(member.id, { billing_class_id: event.target.value })}
+                                                placeholder={t('form.billingClassPlaceholder')}
+                                                className={cn(
+                                                    'h-7 min-w-0 rounded-md border bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground',
+                                                    billingSKUInvalid ? 'border-destructive' : 'border-border',
+                                                )}
+                                            />
+                                            {billingSKUInvalid && (
+                                                <span className="text-destructive">{t('form.billingClassRequired')}</span>
+                                            )}
+                                        </label>
+                                    )}
+
+                                    <p className="text-muted-foreground sm:col-span-2">
+                                        {t('form.billingAdvancedHint')}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {showWeight && (
@@ -186,6 +306,7 @@ export interface MemberListProps {
     onReorder: (members: SelectedMember[]) => void;
     onRemove: (id: string) => void;
     onWeightChange?: (id: string, weight: number) => void;
+    onBillingChange?: (id: string, patch: MemberBillingPatch) => void;
     /**
      * When true, auto-scroll the list to bottom when a *new visible* member appears
      * (i.e. a new member id is added). Useful in "editor" flows. Defaults to true.
@@ -204,6 +325,7 @@ export interface MemberListProps {
     onDragFinish?: () => void;
     removingIds?: Set<string>;
     showWeight?: boolean;
+    showBilling?: boolean;
     /**
      * When true, show a confirmation overlay before removing an item.
      * When false, clicking the delete button removes the item immediately.
@@ -218,12 +340,14 @@ export function MemberList({
     onReorder,
     onRemove,
     onWeightChange,
+    onBillingChange,
     autoScrollOnAdd = true,
     onDragStart,
     onDrop,
     onDragFinish,
     removingIds = new Set(),
     showWeight = false,
+    showBilling = false,
     showConfirmDelete = true,
     layoutScope: externalLayoutScope,
 }: MemberListProps) {
@@ -324,9 +448,11 @@ export function MemberList({
                                                 member={member}
                                                 onRemove={onRemove}
                                                 onWeightChange={onWeightChange}
+                                                onBillingChange={onBillingChange}
                                                 isRemoving={removingIds.has(member.id)}
                                                 index={index}
                                                 showWeight={showWeight}
+                                                showBilling={showBilling}
                                                 showConfirmDelete={showConfirmDelete}
                                                 layoutScope={layoutScope}
                                                 dnd={{

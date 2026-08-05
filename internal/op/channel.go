@@ -43,6 +43,32 @@ func normalizeChannelProxyFields(channel *model.Channel) {
 	}
 	channel.Proxy = channel.ProxyMode != model.ProxyUsageModeDirect
 	channel.ChannelProxy = nil
+	normalizeChannelBillingFields(channel)
+}
+
+func normalizeChannelBillingFields(channel *model.Channel) {
+	if channel == nil {
+		return
+	}
+	channel.Provider = model.NormalizeModelIdentityValue(channel.Provider)
+	channel.BillingBasis = channel.BillingBasis.Normalize()
+	channel.BillingClass = model.NormalizeModelIdentityValue(channel.BillingClass)
+	channel.BillingUnknownPolicy = channel.BillingUnknownPolicy.Normalize(model.UnknownUseRouted)
+	channel.ProviderUnknownPolicy = channel.ProviderUnknownPolicy.Normalize(model.UnknownUseRouted)
+	wrappers := make([]string, 0, len(channel.ModelWrappers))
+	seen := make(map[string]struct{}, len(channel.ModelWrappers))
+	for _, wrapper := range channel.ModelWrappers {
+		wrapper = strings.TrimSpace(wrapper)
+		if wrapper == "" {
+			continue
+		}
+		if _, ok := seen[wrapper]; ok {
+			continue
+		}
+		seen[wrapper] = struct{}{}
+		wrappers = append(wrappers, wrapper)
+	}
+	channel.ModelWrappers = wrappers
 }
 
 func ChannelCreate(channel *model.Channel, ctx context.Context) error {
@@ -64,6 +90,10 @@ func ChannelCreate(channel *model.Channel, ctx context.Context) error {
 		}
 	} else {
 		channel.ProxyConfigID = nil
+	}
+	normalizeChannelBillingFields(channel)
+	if !channel.BillingBasis.Valid() || !channel.BillingUnknownPolicy.Valid() || !channel.ProviderUnknownPolicy.Valid() {
+		return fmt.Errorf("invalid billing configuration")
 	}
 	if err := db.GetDB().WithContext(ctx).Create(channel).Error; err != nil {
 		return err
@@ -257,6 +287,43 @@ func ChannelUpdate(req *model.ChannelUpdateRequest, ctx context.Context) (*model
 	if req.AutoGroup != nil {
 		selectFields = append(selectFields, "auto_group")
 		updates.AutoGroup = *req.AutoGroup
+	}
+	if req.Provider != nil {
+		selectFields = append(selectFields, "provider")
+		updates.Provider = model.NormalizeModelIdentityValue(*req.Provider)
+	}
+	if req.ModelWrappers != nil {
+		selectFields = append(selectFields, "model_wrappers")
+		updates.ModelWrappers = append([]string(nil), (*req.ModelWrappers)...)
+		normalizeChannelBillingFields(&updates)
+	}
+	if req.BillingBasis != nil {
+		if !req.BillingBasis.Valid() {
+			tx.Rollback()
+			return nil, fmt.Errorf("invalid billing basis")
+		}
+		selectFields = append(selectFields, "billing_basis")
+		updates.BillingBasis = *req.BillingBasis
+	}
+	if req.BillingClass != nil {
+		selectFields = append(selectFields, "billing_class")
+		updates.BillingClass = model.NormalizeModelIdentityValue(*req.BillingClass)
+	}
+	if req.BillingUnknownPolicy != nil {
+		if !req.BillingUnknownPolicy.Valid() {
+			tx.Rollback()
+			return nil, fmt.Errorf("invalid billing unknown policy")
+		}
+		selectFields = append(selectFields, "billing_unknown_policy")
+		updates.BillingUnknownPolicy = *req.BillingUnknownPolicy
+	}
+	if req.ProviderUnknownPolicy != nil {
+		if !req.ProviderUnknownPolicy.Valid() {
+			tx.Rollback()
+			return nil, fmt.Errorf("invalid provider unknown policy")
+		}
+		selectFields = append(selectFields, "provider_unknown_policy")
+		updates.ProviderUnknownPolicy = *req.ProviderUnknownPolicy
 	}
 	if req.CustomHeader != nil {
 		selectFields = append(selectFields, "custom_header")

@@ -43,10 +43,13 @@ func groupPresetSnapshotFromCache(groupID int) (mode model.GroupMode, matchRegex
 	items = make([]model.GroupPresetItem, 0, len(group.Items))
 	for _, it := range group.Items {
 		items = append(items, model.GroupPresetItem{
-			ChannelID: it.ChannelID,
-			ModelName: it.ModelName,
-			Priority:  it.Priority,
-			Weight:    it.Weight,
+			ChannelID:            it.ChannelID,
+			ModelName:            it.ModelName,
+			Priority:             it.Priority,
+			Weight:               it.Weight,
+			BillingBasis:         it.BillingBasis,
+			BillingClassID:       it.BillingClassID,
+			BillingUnknownPolicy: it.BillingUnknownPolicy,
 		})
 	}
 	return
@@ -213,11 +216,14 @@ func mirrorPresetToActiveGroupTx(tx *gorm.DB, preset *model.GroupPreset) (groupI
 		newItems := make([]model.GroupItem, 0, len(preset.Items))
 		for _, it := range preset.Items {
 			newItems = append(newItems, model.GroupItem{
-				GroupID:   group.ID,
-				ChannelID: it.ChannelID,
-				ModelName: it.ModelName,
-				Priority:  it.Priority,
-				Weight:    it.Weight,
+				GroupID:              group.ID,
+				ChannelID:            it.ChannelID,
+				ModelName:            it.ModelName,
+				Priority:             it.Priority,
+				Weight:               it.Weight,
+				BillingBasis:         it.BillingBasis,
+				BillingClassID:       it.BillingClassID,
+				BillingUnknownPolicy: it.BillingUnknownPolicy,
 			})
 		}
 		if err = tx.Create(&newItems).Error; err != nil {
@@ -259,10 +265,13 @@ func syncActivePresetTx(tx *gorm.DB, groupID int) error {
 	presetItems := make([]model.GroupPresetItem, 0, len(items))
 	for _, it := range items {
 		presetItems = append(presetItems, model.GroupPresetItem{
-			ChannelID: it.ChannelID,
-			ModelName: it.ModelName,
-			Priority:  it.Priority,
-			Weight:    it.Weight,
+			ChannelID:            it.ChannelID,
+			ModelName:            it.ModelName,
+			Priority:             it.Priority,
+			Weight:               it.Weight,
+			BillingBasis:         it.BillingBasis,
+			BillingClassID:       it.BillingClassID,
+			BillingUnknownPolicy: it.BillingUnknownPolicy,
 		})
 	}
 
@@ -420,11 +429,14 @@ func GroupPresetActivate(presetID int, ctx context.Context) error {
 		newItems := make([]model.GroupItem, 0, len(preset.Items))
 		for _, it := range preset.Items {
 			newItems = append(newItems, model.GroupItem{
-				GroupID:   preset.GroupID,
-				ChannelID: it.ChannelID,
-				ModelName: it.ModelName,
-				Priority:  it.Priority,
-				Weight:    it.Weight,
+				GroupID:              preset.GroupID,
+				ChannelID:            it.ChannelID,
+				ModelName:            it.ModelName,
+				Priority:             it.Priority,
+				Weight:               it.Weight,
+				BillingBasis:         it.BillingBasis,
+				BillingClassID:       it.BillingClassID,
+				BillingUnknownPolicy: it.BillingUnknownPolicy,
 			})
 		}
 		if err := tx.Create(&newItems).Error; err != nil {

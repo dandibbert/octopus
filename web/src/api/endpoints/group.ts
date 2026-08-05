@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../client';
 import { logger } from '@/lib/logger';
-import { AutoGroupType } from './channel';
+import {
+    AutoGroupType,
+    type BillingBasis as ChannelBillingBasis,
+    type UnknownPricePolicy as ChannelUnknownPricePolicy,
+} from './channel';
+
+type BillingBasis = ChannelBillingBasis | '';
+type UnknownPricePolicy = ChannelUnknownPricePolicy | '';
 
 /**
  * 分组项信息
@@ -13,6 +20,9 @@ export interface GroupItem {
     model_name: string;
     priority: number;
     weight: number;
+    billing_basis?: BillingBasis;
+    billing_class_id?: string;
+    billing_unknown_policy?: UnknownPricePolicy;
 }
 
 /**
@@ -51,6 +61,9 @@ export interface GroupPresetItem {
     model_name: string;
     priority: number;
     weight: number;
+    billing_basis?: BillingBasis;
+    billing_class_id?: string;
+    billing_unknown_policy?: UnknownPricePolicy;
 }
 
 /**
@@ -94,6 +107,9 @@ export interface GroupItemAddRequest {
     model_name: string;
     priority: number;
     weight: number;
+    billing_basis?: BillingBasis;
+    billing_class_id?: string;
+    billing_unknown_policy?: UnknownPricePolicy;
 }
 
 /**
@@ -103,6 +119,9 @@ export interface GroupItemUpdateRequest {
     id: number;
     priority: number;
     weight: number;
+    billing_basis?: BillingBasis;
+    billing_class_id?: string;
+    billing_unknown_policy?: UnknownPricePolicy;
 }
 
 /**

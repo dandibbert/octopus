@@ -2,7 +2,9 @@ package op
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bestruirui/octopus/internal/db"
 	"github.com/bestruirui/octopus/internal/model"
@@ -13,6 +15,8 @@ import (
 
 var groupCache = cache.New[int, model.Group](16)
 var groupMap = cache.New[string, model.Group](16)
+
+var ErrInvalidGroupBilling = errors.New("invalid group billing configuration")
 
 func GroupList(ctx context.Context) ([]model.Group, error) {
 	groups := make([]model.Group, 0, groupCache.Len())
@@ -61,6 +65,11 @@ func GroupGetEnabledMap(name string, ctx context.Context) (model.Group, error) {
 }
 
 func GroupCreate(group *model.Group, ctx context.Context) error {
+	for i := range group.Items {
+		if err := normalizeGroupItemBilling(&group.Items[i]); err != nil {
+			return err
+		}
+	}
 	if err := db.GetDB().WithContext(ctx).Create(group).Error; err != nil {
 		return err
 	}
@@ -157,6 +166,35 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update items: %w", err)
 		}
+		for _, item := range req.ItemsToUpdate {
+			billingUpdates := make(map[string]any)
+			if item.BillingBasis != nil {
+				if *item.BillingBasis != "" && !item.BillingBasis.Valid() {
+					tx.Rollback()
+					return nil, fmt.Errorf("invalid billing basis for group item %d", item.ID)
+				}
+				billingUpdates["billing_basis"] = *item.BillingBasis
+			}
+			if item.BillingClassID != nil {
+				billingUpdates["billing_class_id"] = model.NormalizeModelIdentityValue(*item.BillingClassID)
+			}
+			if item.BillingUnknownPolicy != nil {
+				if *item.BillingUnknownPolicy != "" && !item.BillingUnknownPolicy.Valid() {
+					tx.Rollback()
+					return nil, fmt.Errorf("invalid billing unknown policy for group item %d", item.ID)
+				}
+				billingUpdates["billing_unknown_policy"] = *item.BillingUnknownPolicy
+			}
+			if len(billingUpdates) == 0 {
+				continue
+			}
+			if err := tx.Model(&model.GroupItem{}).
+				Where("id = ? AND group_id = ?", item.ID, req.ID).
+				Updates(billingUpdates).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to update billing for group item %d: %w", item.ID, err)
+			}
+		}
 	}
 
 	// 批量新增 items
@@ -164,11 +202,18 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 		newItems := make([]model.GroupItem, len(req.ItemsToAdd))
 		for i, item := range req.ItemsToAdd {
 			newItems[i] = model.GroupItem{
-				GroupID:   req.ID,
-				ChannelID: item.ChannelID,
-				ModelName: item.ModelName,
-				Priority:  item.Priority,
-				Weight:    item.Weight,
+				GroupID:              req.ID,
+				ChannelID:            item.ChannelID,
+				ModelName:            item.ModelName,
+				Priority:             item.Priority,
+				Weight:               item.Weight,
+				BillingBasis:         item.BillingBasis,
+				BillingClassID:       item.BillingClassID,
+				BillingUnknownPolicy: item.BillingUnknownPolicy,
+			}
+			if err := normalizeGroupItemBilling(&newItems[i]); err != nil {
+				tx.Rollback()
+				return nil, err
 			}
 		}
 		if err := tx.Create(&newItems).Error; err != nil {
@@ -227,6 +272,24 @@ func groupUpdateAffectedChannelIDs(oldGroup model.Group, req *model.GroupUpdateR
 		ids = append(ids, item.ChannelID)
 	}
 	return ids
+}
+
+func normalizeGroupItemBilling(item *model.GroupItem) error {
+	if item == nil {
+		return nil
+	}
+	item.ModelName = strings.TrimSpace(item.ModelName)
+	item.BillingClassID = model.NormalizeModelIdentityValue(item.BillingClassID)
+	if item.BillingBasis != "" && !item.BillingBasis.Valid() {
+		return fmt.Errorf("%w: unsupported charging mode %q", ErrInvalidGroupBilling, item.BillingBasis)
+	}
+	if item.BillingUnknownPolicy != "" && !item.BillingUnknownPolicy.Valid() {
+		return fmt.Errorf("%w: unsupported unknown-price policy %q", ErrInvalidGroupBilling, item.BillingUnknownPolicy)
+	}
+	if (item.BillingBasis == model.BillingByRequested || item.BillingBasis == model.BillingByFixedSKU) && item.BillingClassID == "" {
+		return fmt.Errorf("%w: charging mode %q requires a billing SKU", ErrInvalidGroupBilling, item.BillingBasis)
+	}
+	return nil
 }
 
 func GroupDel(id int, ctx context.Context) error {
