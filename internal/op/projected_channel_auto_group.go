@@ -35,6 +35,35 @@ func EffectiveProjectedChannelAutoGroup(channel model.Channel) model.AutoGroupTy
 	return channel.AutoGroup
 }
 
+type groupModelMatcher func(string) (bool, error)
+
+func newGroupModelMatcher(group model.Group, autoGroup model.AutoGroupType) (groupModelMatcher, error) {
+	matchRegex := strings.TrimSpace(group.MatchRegex)
+	if matchRegex != "" {
+		re, err := regexp2.Compile(matchRegex, regexp2.ECMAScript)
+		if err != nil {
+			return nil, err
+		}
+		re.MatchTimeout = 200 * time.Millisecond
+		return re.MatchString, nil
+	}
+
+	groupName := strings.TrimSpace(group.Name)
+	switch autoGroup {
+	case model.AutoGroupTypeExact, model.AutoGroupTypeRegex:
+		return func(modelName string) (bool, error) {
+			return strings.EqualFold(modelName, groupName), nil
+		}, nil
+	case model.AutoGroupTypeFuzzy:
+		groupNameLower := strings.ToLower(groupName)
+		return func(modelName string) (bool, error) {
+			return groupNameLower != "" && strings.Contains(strings.ToLower(modelName), groupNameLower), nil
+		}, nil
+	default:
+		return func(string) (bool, error) { return false, nil }, nil
+	}
+}
+
 func ChannelAutoGroupWithMode(channel *model.Channel, autoGroup model.AutoGroupType, ctx context.Context) {
 	if channel == nil || autoGroup == model.AutoGroupTypeNone {
 		return
@@ -52,49 +81,19 @@ func ChannelAutoGroupWithMode(channel *model.Channel, autoGroup model.AutoGroupT
 
 	for _, group := range groups {
 		matchedModelNames := make([]string, 0, len(channelModelNames))
-
-		switch autoGroup {
-		case model.AutoGroupTypeExact:
-			for _, modelName := range channelModelNames {
-				if strings.EqualFold(modelName, group.Name) {
-					matchedModelNames = append(matchedModelNames, modelName)
-				}
-			}
-		case model.AutoGroupTypeFuzzy:
-			groupNameLower := strings.ToLower(strings.TrimSpace(group.Name))
-			if groupNameLower == "" {
-				continue
-			}
-			for _, modelName := range channelModelNames {
-				if strings.Contains(strings.ToLower(modelName), groupNameLower) {
-					matchedModelNames = append(matchedModelNames, modelName)
-				}
-			}
-		case model.AutoGroupTypeRegex:
-			if group.MatchRegex == "" {
-				for _, modelName := range channelModelNames {
-					if strings.EqualFold(modelName, group.Name) {
-						matchedModelNames = append(matchedModelNames, modelName)
-					}
-				}
-				break
-			}
-
-			re, err := regexp2.Compile(group.MatchRegex, regexp2.ECMAScript)
+		matcher, err := newGroupModelMatcher(group, autoGroup)
+		if err != nil {
+			log.Warnf("compile regex failed (channel=%d group=%d regex=%q): %v", channel.ID, group.ID, group.MatchRegex, err)
+			continue
+		}
+		for _, modelName := range channelModelNames {
+			matched, err := matcher(modelName)
 			if err != nil {
-				log.Warnf("compile regex failed (channel=%d group=%d regex=%q): %v", channel.ID, group.ID, group.MatchRegex, err)
+				log.Warnf("match group rule failed (channel=%d group=%d regex=%q model=%q): %v", channel.ID, group.ID, group.MatchRegex, modelName, err)
 				continue
 			}
-			re.MatchTimeout = 200 * time.Millisecond
-			for _, modelName := range channelModelNames {
-				matched, err := re.MatchString(modelName)
-				if err != nil {
-					log.Warnf("match regex failed (channel=%d group=%d regex=%q model=%q): %v", channel.ID, group.ID, group.MatchRegex, modelName, err)
-					continue
-				}
-				if matched {
-					matchedModelNames = append(matchedModelNames, modelName)
-				}
+			if matched {
+				matchedModelNames = append(matchedModelNames, modelName)
 			}
 		}
 
