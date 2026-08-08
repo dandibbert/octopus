@@ -1,4 +1,4 @@
-export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'v0.8.41';
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'v0.8.42';
 export const GITHUB_REPO = process.env.NEXT_PUBLIC_GITHUB_REPO || 'https://github.com/dandibbert/octopus';
 
 function parseVersion(value: string): number[] | null {

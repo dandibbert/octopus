@@ -84,7 +84,7 @@ function ModelPickerSection({
         .join(' / ');
 
     return (
-        <div className="rounded-xl border border-border/50 bg-muted/30 flex flex-col min-h-0">
+        <div className="flex h-full min-h-0 flex-col rounded-xl border border-border/50 bg-muted/30">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-2 border-b border-border/30 bg-muted/50">
                 <span className="min-w-0 justify-self-start text-sm font-medium text-foreground">
                     {t('form.addItem')}
@@ -210,7 +210,7 @@ function SortSection({
     const t = useTranslations('group');
 
     return (
-        <div className="rounded-xl border border-border/50 bg-muted/30 flex flex-col min-h-0">
+        <div className="flex h-full min-h-0 flex-col rounded-xl border border-border/50 bg-muted/30">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-muted/50">
                 <span className="text-sm font-medium text-foreground">
                     {t('form.items')}
@@ -392,9 +392,9 @@ export function GroupEditor({
 
 
     return (
-        <form onSubmit={handleSubmit} className="flex flex-col h-full min-h-0 ">
-            <div className="flex-1 min-h-0 overflow-hidden px-1">
-                <FieldGroup className="gap-4 flex flex-col min-h-0 h-full">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pr-2 md:overflow-hidden md:pr-1">
+                <FieldGroup className="flex min-h-0 flex-col gap-4 md:h-full">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Field>
                             <FieldLabel htmlFor="group-name">{nameLabel ?? t('form.name')}</FieldLabel>
@@ -491,8 +491,8 @@ export function GroupEditor({
                     </div>
 
                     {/* Mode + Retry Toggle */}
-                    <div className="flex items-center gap-2">
-                        <div className="flex gap-1 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="grid w-full grid-cols-2 gap-1 sm:flex sm:flex-1">
                             {([1, 2, 3, 4] as const).map((m) => (
                                 <button
                                     key={m}
@@ -553,31 +553,35 @@ export function GroupEditor({
                         )}
                     </div>
 
-                    <div className="flex-1 min-h-0">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full min-h-0">
-                            <ModelPickerSection
-                                modelChannels={modelChannels}
-                                selectedMembers={selectedMembers}
-                                onAdd={handleAddMember}
-                                onAutoAdd={handleAutoAdd}
-                                autoAddDisabled={autoAddDisabled}
-                            />
-                            <SortSection
-                                members={selectedMembers}
-                                onReorder={setSelectedMembers}
-                                onRemove={handleRemoveMember}
-                                onWeightChange={handleWeightChange}
-                                onBillingChange={handleBillingChange}
-                                removingIds={removingIds}
-                                showWeight={mode === 4}
-                                onClear={handleClearMembers}
-                            />
+                    <div className="shrink-0 md:min-h-0 md:flex-1">
+                        <div className="grid min-h-0 grid-cols-1 gap-4 md:h-full md:grid-cols-2">
+                            <div className="h-[22rem] min-h-0 md:h-full">
+                                <ModelPickerSection
+                                    modelChannels={modelChannels}
+                                    selectedMembers={selectedMembers}
+                                    onAdd={handleAddMember}
+                                    onAutoAdd={handleAutoAdd}
+                                    autoAddDisabled={autoAddDisabled}
+                                />
+                            </div>
+                            <div className="h-[22rem] min-h-0 md:h-full">
+                                <SortSection
+                                    members={selectedMembers}
+                                    onReorder={setSelectedMembers}
+                                    onRemove={handleRemoveMember}
+                                    onWeightChange={handleWeightChange}
+                                    onBillingChange={handleBillingChange}
+                                    removingIds={removingIds}
+                                    showWeight={mode === 4}
+                                    onClear={handleClearMembers}
+                                />
+                            </div>
                         </div>
                     </div>
                 </FieldGroup>
             </div>
 
-            <div className="mt-auto shrink-0 px-1 pt-4">
+            <div className="mt-3 shrink-0 border-t border-border/40 bg-card/95 px-1 pt-3 pb-[env(safe-area-inset-bottom)] md:mt-auto md:border-t-0 md:bg-transparent md:pt-4">
                 {invalidBillingMembers.length > 0 && (
                     <p className="mb-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                         {t('form.billingValidationError', { count: invalidBillingMembers.length })}
