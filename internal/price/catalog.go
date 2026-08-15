@@ -1,6 +1,7 @@
 package price
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"time"
@@ -176,6 +177,7 @@ func MergeCatalogLLMInfo(stored []model.LLMInfo) []model.LLMInfo {
 		if name == "" {
 			continue
 		}
+		info = projectAliasInheritedPrice(info)
 		seenNames[name] = struct{}{}
 		result = append(result, info)
 	}
@@ -188,6 +190,77 @@ func MergeCatalogLLMInfo(stored []model.LLMInfo) []model.LLMInfo {
 		result = append(result, info)
 	}
 	return result
+}
+
+// projectAliasInheritedPrice 把 Provider/全局 Alias 动态投影为继承价格，不复制入库。
+// 模型列表没有唯一 Channel 上下文，因此 Channel Alias 保持 unknown，避免误选作用域。
+func projectAliasInheritedPrice(info model.LLMInfo) model.LLMInfo {
+	if info.PriceMode != model.PriceUnknown && info.PriceMode != model.PriceInherited {
+		return info
+	}
+	wasInherited := info.PriceMode == model.PriceInherited
+	inheritedCanonicalID := model.NormalizeModelIdentityValue(info.CanonicalModelID)
+	inheritedBillingClassID := model.NormalizeModelIdentityValue(info.BillingClassID)
+	if info.PriceMode == model.PriceInherited {
+		// inherited 是运行时投影状态，不能把历史快照当作仍然有效的价格。
+		// 先降级，再尝试用当前 Alias/目标重新解析；任一环节消失就保持 unknown。
+		info.PriceMode = model.PriceUnknown
+		info.PriceSource = ""
+		info.PriceVersion = ""
+		info.LLMPrice = model.LLMPrice{}
+		info.EffectivePrice = nil
+		info.EffectivePriceSource = ""
+		info.EffectivePriceVersion = ""
+		info.ResolutionStatus = model.BillingStatusUnknown
+		info.ResolutionMethod = "unknown"
+		info.InheritedFrom = ""
+		info.NeedsReview = true
+	}
+	resolution := ResolveModelIdentity(model.ModelResolveContext{
+		RawModel: info.Name,
+		Provider: info.Provider,
+	})
+	resolvedPrice := model.PriceResolution{}
+	if resolution.AliasID != nil && (resolution.Method == "alias" || resolution.Method == "provider_alias") {
+		resolvedPrice = ResolvePrice(resolution)
+	} else if wasInherited {
+		// 自动发现/历史数据可能直接继承 canonical/SKU，而不经过 Alias。
+		// 必须按当前目录重算并核对配对，不能仅凭旧快照继续展示价格。
+		candidates := attachTargetCandidates(context.Background(), inheritedCanonicalID)
+		for _, candidate := range candidates {
+			if inheritedBillingClassID != "" && candidate.resolution.BillingClassID != inheritedBillingClassID {
+				continue
+			}
+			resolution = candidate.resolution
+			resolution.RawModel = info.Name
+			resolution.NormalizedModel = model.NormalizeModelIdentityValue(info.Name)
+			resolution.Method = "inherited_target"
+			resolvedPrice = candidate.price
+			resolvedPrice.Method = resolution.Method
+			break
+		}
+	} else {
+		return info
+	}
+	if !usableAttachTargetPrice(resolvedPrice) {
+		return info
+	}
+
+	info.CanonicalModelID = resolution.CanonicalModelID
+	info.BillingClassID = resolvedPrice.BillingClassID
+	info.PriceMode = model.PriceInherited
+	info.PriceSource = resolvedPrice.PriceSource
+	info.PriceVersion = resolvedPrice.PriceVersion
+	info.LLMPrice = *resolvedPrice.Price
+	priceCopy := *resolvedPrice.Price
+	info.EffectivePrice = &priceCopy
+	info.EffectivePriceSource = resolvedPrice.PriceSource
+	info.EffectivePriceVersion = resolvedPrice.PriceVersion
+	info.ResolutionStatus = resolvedPrice.Status
+	info.ResolutionMethod = resolution.Method
+	info.InheritedFrom = resolution.CanonicalModelID
+	info.NeedsReview = false
+	return info
 }
 
 func canonicalModelID(provider, modelID string) string {

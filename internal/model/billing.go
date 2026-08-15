@@ -172,6 +172,28 @@ type ModelAlias struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
+const (
+	ModelAliasConflictReject  = "reject"
+	ModelAliasConflictReplace = "replace"
+)
+
+// ModelAliasAttachRequest 将观测到的模型名原子挂靠到已有价格身份。
+// 作用域沿用现有 Alias 规则：channel_id 优先，其次 provider；两者均为空时为全局。
+type ModelAliasAttachRequest struct {
+	Alias            string `json:"alias"`
+	CanonicalModelID string `json:"canonical_model_id"`
+	BillingClassID   string `json:"billing_class_id,omitempty"`
+	Provider         string `json:"provider,omitempty"`
+	ChannelID        *int   `json:"channel_id,omitempty"`
+	ConflictPolicy   string `json:"conflict_policy,omitempty"`
+}
+
+type ModelAliasAttachResponse struct {
+	Alias           ModelAlias      `json:"alias"`
+	ModelResolution ModelResolution `json:"model_resolution"`
+	PriceResolution PriceResolution `json:"price_resolution"`
+}
+
 func NormalizeModelIdentityValue(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }

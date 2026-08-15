@@ -53,6 +53,12 @@ func LLMUpdate(info model.LLMInfo, ctx context.Context) error {
 	if err := db.GetDB().WithContext(ctx).Save(&info).Error; err != nil {
 		return err
 	}
+	oldBillingClassID := model.NormalizeModelIdentityValue(existing.BillingClassID)
+	newBillingClassID := model.NormalizeModelIdentityValue(info.BillingClassID)
+	if oldBillingClassID != "" && (oldBillingClassID != newBillingClassID ||
+		(info.PriceMode != model.PriceExplicit && info.PriceMode != model.PriceFree)) {
+		llmBillingClassCache.Del(oldBillingClassID)
+	}
 	cacheLLMInfo(info)
 	return nil
 }

@@ -302,3 +302,81 @@ func TestCatalogListAndStoredOverrideMerge(t *testing.T) {
 		t.Fatalf("expected exactly one merged row for %q, got %d", entry.ModelID, matching)
 	}
 }
+
+func TestMergeCatalogProjectsProviderAliasAsInheritedWithoutPersistingPrice(t *testing.T) {
+	ctx := setupPriceTestDB(t)
+	target := model.LLMInfo{
+		Name:             "priced-target",
+		Provider:         "fireworks",
+		CanonicalModelID: "fireworks:priced-target",
+		BillingClassID:   "product:priced-target",
+		PriceMode:        model.PriceExplicit,
+		PriceSource:      "user",
+		LLMPrice:         model.LLMPrice{Input: 2, Output: 8},
+	}
+	if err := op.LLMCreate(target, ctx); err != nil {
+		t.Fatalf("create target price: %v", err)
+	}
+	source := model.LLMInfo{
+		Name:           "accounts/fireworks/models/observed",
+		Provider:       "fireworks",
+		PriceMode:      model.PriceUnknown,
+		AutoDiscovered: true,
+		NeedsReview:    true,
+	}
+	if err := op.LLMBatchCreate([]model.LLMInfo{source}, ctx); err != nil {
+		t.Fatalf("create observed model: %v", err)
+	}
+	providerAlias := model.ModelAlias{
+		Provider:         "fireworks",
+		Alias:            source.Name,
+		CanonicalModelID: target.CanonicalModelID,
+		BillingClassID:   target.BillingClassID,
+		Enabled:          true,
+	}
+	if err := op.ModelAliasCreate(&providerAlias, ctx); err != nil {
+		t.Fatalf("create provider alias: %v", err)
+	}
+
+	merged := MergeCatalogLLMInfo([]model.LLMInfo{source})
+	if len(merged) == 0 {
+		t.Fatal("merged model list is empty")
+	}
+	got := merged[0]
+	if got.PriceMode != model.PriceInherited || got.Input != target.Input || got.Output != target.Output {
+		t.Fatalf("alias price was not projected as inherited: %+v", got)
+	}
+	if got.CanonicalModelID != target.CanonicalModelID || got.BillingClassID != target.BillingClassID || got.InheritedFrom != target.CanonicalModelID {
+		t.Fatalf("alias identity was not projected: %+v", got)
+	}
+	if got.EffectivePrice == nil || got.EffectivePrice.Input != target.Input || got.ResolutionMethod != "provider_alias" || got.NeedsReview {
+		t.Fatalf("effective alias metadata is incomplete: %+v", got)
+	}
+	persisted, err := op.LLMGetInfo(source.Name)
+	if err != nil {
+		t.Fatalf("get persisted source: %v", err)
+	}
+	if persisted.PriceMode != model.PriceUnknown || persisted.Input != 0 || persisted.CanonicalModelID == target.CanonicalModelID {
+		t.Fatalf("projection copied inherited price into storage/cache: %+v", persisted)
+	}
+}
+
+func TestMergeCatalogDoesNotProjectChannelOnlyAliasWithoutContext(t *testing.T) {
+	ctx := setupPriceTestDB(t)
+	channelID := 17
+	alias := model.ModelAlias{
+		ChannelID:        &channelID,
+		Alias:            "channel-only-observed",
+		CanonicalModelID: "product:target",
+		BillingClassID:   "product:target",
+		Enabled:          true,
+	}
+	if err := op.ModelAliasCreate(&alias, ctx); err != nil {
+		t.Fatalf("create channel alias: %v", err)
+	}
+	source := model.LLMInfo{Name: alias.Alias, PriceMode: model.PriceUnknown, NeedsReview: true}
+	merged := MergeCatalogLLMInfo([]model.LLMInfo{source})
+	if len(merged) == 0 || merged[0].PriceMode != model.PriceUnknown || !merged[0].NeedsReview {
+		t.Fatalf("channel-only alias was projected without a channel context: %+v", merged)
+	}
+}

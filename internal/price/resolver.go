@@ -44,6 +44,25 @@ func ResolveModelIdentity(ctx model.ModelResolveContext) model.ModelResolution {
 			Status:           model.BillingStatusResolved,
 		}
 	}
+	return resolveModelIdentityWithoutAlias(ctx)
+}
+
+// resolveModelIdentityWithoutAlias 仅用于判断模型自身是否已有价格身份，
+// 避免旧 Alias 掩盖源模型本身的目录价格。
+func resolveModelIdentityWithoutAlias(ctx model.ModelResolveContext) model.ModelResolution {
+	raw := strings.TrimSpace(ctx.RawModel)
+	normalized := model.NormalizeModelIdentityValue(raw)
+	provider := model.NormalizeModelIdentityValue(ctx.Provider)
+	unknown := model.ModelResolution{
+		RawModel:        raw,
+		NormalizedModel: normalized,
+		Provider:        provider,
+		Method:          "unknown",
+		Status:          model.BillingStatusUnknown,
+	}
+	if normalized == "" {
+		return unknown
+	}
 
 	if resolution, ok := resolveUserCatalogExact(raw, normalized, provider); ok {
 		return resolution

@@ -2,16 +2,25 @@ package op
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/bestruirui/octopus/internal/db"
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/utils/cache"
+	"gorm.io/gorm"
 )
 
 var modelAliasCache = cache.New[string, model.ModelAlias](16)
+var modelAliasMutationMu sync.Mutex
+
+var (
+	ErrModelAliasConflict            = errors.New("model alias already points to a different price identity")
+	ErrModelAliasSourcePriceConflict = errors.New("source model already has an explicit price")
+)
 
 func ModelAliasList(ctx context.Context) ([]model.ModelAlias, error) {
 	aliases := make([]model.ModelAlias, 0, modelAliasCache.Len())
@@ -31,6 +40,8 @@ func ModelAliasList(ctx context.Context) ([]model.ModelAlias, error) {
 }
 
 func ModelAliasCreate(alias *model.ModelAlias, ctx context.Context) error {
+	modelAliasMutationMu.Lock()
+	defer modelAliasMutationMu.Unlock()
 	if alias == nil {
 		return fmt.Errorf("alias is required")
 	}
@@ -49,6 +60,8 @@ func ModelAliasCreate(alias *model.ModelAlias, ctx context.Context) error {
 }
 
 func ModelAliasUpdate(alias *model.ModelAlias, ctx context.Context) error {
+	modelAliasMutationMu.Lock()
+	defer modelAliasMutationMu.Unlock()
 	if alias == nil || alias.ID <= 0 {
 		return fmt.Errorf("alias id is required")
 	}
@@ -71,6 +84,8 @@ func ModelAliasUpdate(alias *model.ModelAlias, ctx context.Context) error {
 }
 
 func ModelAliasDelete(id int64, ctx context.Context) error {
+	modelAliasMutationMu.Lock()
+	defer modelAliasMutationMu.Unlock()
 	if id <= 0 {
 		return fmt.Errorf("alias id is required")
 	}
@@ -85,9 +100,70 @@ func ModelAliasDelete(id int64, ctx context.Context) error {
 	return nil
 }
 
+// ModelAliasAttach 在单个事务中创建或替换管理员 Alias。
+// 源模型已有显式/免费价格时必须拒绝：ResolvePrice 会优先检查源模型名，
+// 若仍接受挂靠，就会产生“保存成功但实际不生效”的静默错误。
+func ModelAliasAttach(alias *model.ModelAlias, conflictPolicy string, ctx context.Context) error {
+	modelAliasMutationMu.Lock()
+	defer modelAliasMutationMu.Unlock()
+	if alias == nil {
+		return fmt.Errorf("alias is required")
+	}
+	normalizeModelAlias(alias)
+	alias.Source = "user"
+	alias.Enabled = true
+	if err := validateModelAlias(*alias); err != nil {
+		return err
+	}
+	if conflictPolicy == "" {
+		conflictPolicy = model.ModelAliasConflictReject
+	}
+	if conflictPolicy != model.ModelAliasConflictReject && conflictPolicy != model.ModelAliasConflictReplace {
+		return fmt.Errorf("invalid conflict policy: %s", conflictPolicy)
+	}
+
+	attached := *alias
+	err := db.GetDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var source model.LLMInfo
+		err := tx.Where("name = ?", attached.Alias).Take(&source).Error
+		if err == nil && (source.PriceMode == model.PriceExplicit || source.PriceMode == model.PriceFree) {
+			return ErrModelAliasSourcePriceConflict
+		}
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		var existing model.ModelAlias
+		err = tx.Where("scope_key = ? AND alias = ?", attached.ScopeKey, attached.Alias).Take(&existing).Error
+		switch {
+		case err == nil:
+			sameTarget := existing.CanonicalModelID == attached.CanonicalModelID &&
+				existing.BillingClassID == attached.BillingClassID
+			if !sameTarget && conflictPolicy != model.ModelAliasConflictReplace {
+				return ErrModelAliasConflict
+			}
+			attached.ID = existing.ID
+			attached.CreatedAt = existing.CreatedAt
+			return tx.Save(&attached).Error
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return tx.Create(&attached).Error
+		default:
+			return err
+		}
+	})
+	if err != nil {
+		return err
+	}
+	*alias = attached
+	modelAliasCache.Set(modelAliasCacheKey(attached.ScopeKey, attached.Alias), attached)
+	return nil
+}
+
 // ModelAliasUpsertAuto creates or refreshes a system-derived alias without
 // overwriting an administrator-managed alias in the same scope.
 func ModelAliasUpsertAuto(alias *model.ModelAlias, ctx context.Context) error {
+	modelAliasMutationMu.Lock()
+	defer modelAliasMutationMu.Unlock()
 	if alias == nil {
 		return fmt.Errorf("alias is required")
 	}
@@ -142,6 +218,8 @@ func ModelAliasResolve(channelID int, provider, rawAlias string) (model.ModelAli
 }
 
 func modelAliasRefreshCache(ctx context.Context) error {
+	modelAliasMutationMu.Lock()
+	defer modelAliasMutationMu.Unlock()
 	var aliases []model.ModelAlias
 	if err := db.GetDB().WithContext(ctx).Find(&aliases).Error; err != nil {
 		return err
