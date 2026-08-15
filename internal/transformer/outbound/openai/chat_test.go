@@ -6,6 +6,7 @@ import (
 	"io"
 	"testing"
 
+	inboundOpenAI "github.com/bestruirui/octopus/internal/transformer/inbound/openai"
 	"github.com/bestruirui/octopus/internal/transformer/model"
 )
 
@@ -197,6 +198,100 @@ func TestTransformRequestPreservesDeveloperRole(t *testing.T) {
 	}
 	if role := payload.Messages[0]["role"]; role != "developer" {
 		t.Errorf("expected first message role=developer, got %q", role)
+	}
+}
+
+// TestResponsesInboundToChatOutboundPreservesParallelToolCallPairing covers
+// the full Responses -> internal model -> Chat Completions conversion path.
+// Consecutive function calls belong to one assistant turn; splitting them into
+// separate assistant messages makes the first call appear unanswered when the
+// next assistant message reaches a Chat Completions provider.
+func TestResponsesInboundToChatOutboundPreservesParallelToolCallPairing(t *testing.T) {
+	const responsesRequest = `{
+		"model": "gpt-4o",
+		"input": [
+			{"type":"function_call","call_id":"run_code_1","name":"run_code","arguments":"{\"code\":\"first\"}"},
+			{"type":"function_call","call_id":"run_code_2","name":"run_code","arguments":"{\"code\":\"second\"}"},
+			{"type":"function_call_output","call_id":"run_code_1","output":"first result"},
+			{"type":"function_call_output","call_id":"run_code_2","output":"second result"}
+		]
+	}`
+
+	inbound := &inboundOpenAI.ResponseInbound{}
+	internalReq, err := inbound.TransformRequest(context.Background(), []byte(responsesRequest))
+	if err != nil {
+		t.Fatalf("Responses inbound TransformRequest: %v", err)
+	}
+	if err := internalReq.Validate(); err != nil {
+		t.Fatalf("validate transformed request: %v", err)
+	}
+
+	outbound := &ChatOutbound{}
+	httpReq, err := outbound.TransformRequest(
+		context.Background(),
+		internalReq,
+		"https://api.openai.com/v1",
+		"sk-test",
+	)
+	if err != nil {
+		t.Fatalf("Chat outbound TransformRequest: %v", err)
+	}
+	body, err := io.ReadAll(httpReq.Body)
+	if err != nil {
+		t.Fatalf("read outbound request body: %v", err)
+	}
+
+	var payload struct {
+		Messages []struct {
+			Role       string  `json:"role"`
+			ToolCallID *string `json:"tool_call_id"`
+			ToolCalls  []struct {
+				ID       string `json:"id"`
+				Index    int    `json:"index"`
+				Type     string `json:"type"`
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal outbound request: %v", err)
+	}
+
+	if got, want := len(payload.Messages), 3; got != want {
+		t.Fatalf("message count = %d, want %d; body=%s", got, want, body)
+	}
+	wantRoles := []string{"assistant", "tool", "tool"}
+	for index, wantRole := range wantRoles {
+		if got := payload.Messages[index].Role; got != wantRole {
+			t.Fatalf("messages[%d].role = %q, want %q; body=%s", index, got, wantRole, body)
+		}
+	}
+
+	assistantCalls := payload.Messages[0].ToolCalls
+	if got, want := len(assistantCalls), 2; got != want {
+		t.Fatalf("assistant tool_calls count = %d, want %d; body=%s", got, want, body)
+	}
+	wantCallIDs := []string{"run_code_1", "run_code_2"}
+	for index, wantID := range wantCallIDs {
+		call := assistantCalls[index]
+		if call.ID != wantID {
+			t.Errorf("tool_calls[%d].id = %q, want %q", index, call.ID, wantID)
+		}
+		if call.Index != index {
+			t.Errorf("tool_calls[%d].index = %d, want dense index %d", index, call.Index, index)
+		}
+		if call.Type != "function" || call.Function.Name != "run_code" {
+			t.Errorf("tool_calls[%d] function = %#v, want function run_code", index, call)
+		}
+
+		toolMessage := payload.Messages[index+1]
+		if toolMessage.ToolCallID == nil {
+			t.Errorf("messages[%d].tool_call_id is nil, want %q", index+1, wantID)
+		} else if *toolMessage.ToolCallID != wantID {
+			t.Errorf("messages[%d].tool_call_id = %q, want %q", index+1, *toolMessage.ToolCallID, wantID)
+		}
 	}
 }
 

@@ -1374,15 +1374,55 @@ func convertInputToMessages(input *ResponsesInput) ([]model.Message, error) {
 
 	// Array of items
 	messages := make([]model.Message, 0, len(input.Items))
+	var pendingAssistant *model.Message
+	flushPendingAssistant := func() {
+		if pendingAssistant == nil {
+			return
+		}
+		messages = append(messages, *pendingAssistant)
+		pendingAssistant = nil
+	}
+
 	for _, item := range input.Items {
 		msg, err := convertItemToMessage(&item)
 		if err != nil {
 			return nil, err
 		}
-		if msg != nil {
-			messages = append(messages, *msg)
+
+		switch item.Type {
+		case "reasoning":
+			// A reasoning item immediately before function calls belongs to the
+			// same assistant turn. Keep it pending so its content/signature can be
+			// carried by the eventual tool-call message without a generic role merge.
+			flushPendingAssistant()
+			if msg != nil {
+				pendingAssistant = msg
+			}
+
+		case "function_call":
+			if msg == nil || len(msg.ToolCalls) == 0 {
+				flushPendingAssistant()
+				continue
+			}
+			if pendingAssistant == nil {
+				pendingAssistant = &model.Message{Role: "assistant"}
+			}
+			for _, toolCall := range msg.ToolCalls {
+				toolCall.Index = len(pendingAssistant.ToolCalls)
+				pendingAssistant.ToolCalls = append(pendingAssistant.ToolCalls, toolCall)
+			}
+
+		default:
+			// Every item other than reasoning/function_call is a turn boundary.
+			// This also prevents unsupported inputs from joining calls that were
+			// not actually adjacent in the Responses input.
+			flushPendingAssistant()
+			if msg != nil {
+				messages = append(messages, *msg)
+			}
 		}
 	}
+	flushPendingAssistant()
 
 	return messages, nil
 }
