@@ -14,7 +14,7 @@ func Cors() gin.HandlerFunc {
 	config.AllowCredentials = true
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"*"}
-	config.ExposeHeaders = []string{"Content-Disposition"}
+	config.ExposeHeaders = []string{"Content-Disposition", "X-Octopus-Request-ID", "X-Octopus-Request-Source", "X-Octopus-Requested-Model", "X-Octopus-Channel-ID", "X-Octopus-Channel-Name", "X-Octopus-Remote-Model", "X-Octopus-Input-Tokens", "X-Octopus-Output-Tokens", "X-Octopus-Cache-Read-Tokens", "X-Octopus-Cache-Write-Tokens", "X-Octopus-Estimated-Cost"}
 	// CORS 白名单:
 	// - 为空: 不允许跨域
 	// - "*": 允许所有来源

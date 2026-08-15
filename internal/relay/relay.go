@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,6 +60,49 @@ func writeSSEHeartbeat(writer streamHeartbeatWriter) error {
 	return nil
 }
 
+const (
+	executionGroupOverrideKey = "octopus_execution_group_override"
+	executionDirectKey        = "octopus_execution_direct"
+	executionErrorKey         = "octopus_execution_error"
+	executionAttemptsKey      = "octopus_execution_attempts"
+)
+
+// ExecuteWithGroup runs the normal relay pipeline with an explicit in-memory group.
+// It is used by admin-only direct-channel probes and the Playground without an HTTP self-call.
+func ExecuteWithGroup(inboundType inbound.InboundType, c *gin.Context, group dbmodel.Group) {
+	c.Set(executionGroupOverrideKey, group)
+	Handler(inboundType, c)
+}
+
+// ExecuteDirectWithGroup executes a single-channel target without consulting or
+// mutating the production circuit breaker, outlier window, sticky routing, or
+// route-learning state. The in-memory group is only a transport descriptor.
+func ExecuteDirectWithGroup(inboundType inbound.InboundType, c *gin.Context, group dbmodel.Group) {
+	c.Set(executionGroupOverrideKey, group)
+	c.Set(executionDirectKey, true)
+	Handler(inboundType, c)
+}
+
+// ExecutionError returns the detailed internal execution error captured for an
+// admin-only probe. Callers must sanitize it before returning it to a client.
+func ExecutionError(c *gin.Context) string {
+	return c.GetString(executionErrorKey)
+}
+
+// ExecutionAttempts returns a detached copy of the route decisions captured
+// for an admin health probe.
+func ExecutionAttempts(c *gin.Context) []dbmodel.ChannelAttempt {
+	value, ok := c.Get(executionAttemptsKey)
+	if !ok {
+		return nil
+	}
+	attempts, ok := value.([]dbmodel.ChannelAttempt)
+	if !ok {
+		return nil
+	}
+	return append([]dbmodel.ChannelAttempt(nil), attempts...)
+}
+
 func Handler(inboundType inbound.InboundType, c *gin.Context) {
 	// 解析请求
 	rawBody, internalRequest, inAdapter, err := parseRequest(inboundType, c)
@@ -76,12 +120,26 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 
 	requestModel := internalRequest.Model
 	apiKeyID := c.GetInt("api_key_id")
+	requestSource := c.GetString("request_source")
+	if requestSource == "" {
+		requestSource = dbmodel.RelayLogRequestSourceAPI
+	}
+	directExecution := c.GetBool(executionDirectKey)
 
-	// 获取通道分组
-	group, err := op.GroupGetEnabledMap(requestModel, c.Request.Context())
-	if err != nil {
-		resp.ErrorWithCode(c, http.StatusNotFound, CodeRelayModelNotFound, "model not found")
-		return
+	// 获取通道分组；后台测试工具可显式注入仅包含指定 Channel/Model 的临时分组。
+	var group dbmodel.Group
+	if override, ok := c.Get(executionGroupOverrideKey); ok {
+		group, ok = override.(dbmodel.Group)
+		if !ok {
+			resp.ErrorWithCode(c, http.StatusInternalServerError, CodeRelayModelNotFound, "invalid execution target")
+			return
+		}
+	} else {
+		group, err = op.GroupGetEnabledMap(requestModel, c.Request.Context())
+		if err != nil {
+			resp.ErrorWithCode(c, http.StatusNotFound, CodeRelayModelNotFound, "model not found")
+			return
+		}
 	}
 
 	// === HTTP Replay 机制 ===
@@ -121,7 +179,19 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		}
 	}
 	iter := balancer.NewIteratorWithPreference(group, apiKeyID, requestModel, preferredSticky)
+	defer func() {
+		c.Set(executionAttemptsKey, append([]dbmodel.ChannelAttempt(nil), iter.Attempts()...))
+	}()
+	metrics := NewRelayMetrics(apiKeyID, requestModel, rawBody, internalRequest)
+	metrics.RequestSource = requestSource
+	metrics.RequestID = c.Writer.Header().Get("X-Octopus-Request-ID")
+	if requestSource != dbmodel.RelayLogRequestSourceAPI {
+		c.Header("X-Octopus-Requested-Model", requestModel)
+	}
 	if iter.Len() == 0 {
+		err := errors.New("no available channel")
+		c.Set(executionErrorKey, err.Error())
+		metrics.SaveWithChannelStats(c.Request.Context(), false, err, nil, false)
 		resp.ErrorWithCode(c, http.StatusServiceUnavailable, CodeRelayNoAvailableChannel, "no available channel")
 		return
 	}
@@ -135,8 +205,6 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 	hb := startEarlyHeartbeat(c, isStream)
 	defer hb.Stop()
 
-	// 初始化 Metrics
-	metrics := NewRelayMetrics(apiKeyID, requestModel, rawBody, internalRequest)
 	// 如果触发了 HTTP replay，记录 ws_mode=replay 和 ws_recovery=replay
 	if responsesReplayState != nil {
 		metrics.SetWSMode(dbmodel.RelayLogWSModeReplay)
@@ -156,6 +224,7 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		groupID:             group.ID,
 		groupSessionTTL:     group.SessionKeepTime,
 		requireKnownBilling: c.GetBool("billing_require_known"),
+		directExecution:     directExecution,
 		iter:                iter,
 		rawBody:             rawBody,
 		heartbeat:           hb,
@@ -222,8 +291,14 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 			continue
 		}
 
-		// 设置实际模型
+		// 设置实际模型，并暴露轻量诊断元数据给后台 Playground/测活。
 		internalRequest.Model = item.ModelName
+		if requestSource != dbmodel.RelayLogRequestSourceAPI {
+			c.Header("X-Octopus-Requested-Model", requestModel)
+			c.Header("X-Octopus-Channel-ID", strconv.Itoa(channel.ID))
+			c.Header("X-Octopus-Channel-Name", channel.Name)
+			c.Header("X-Octopus-Remote-Model", item.ModelName)
+		}
 		if err := metrics.SetBillingRoute(*channel, item, req.requireKnownBilling); err != nil {
 			iter.Skip(channel.ID, 0, channel.Name, err.Error())
 			lastErr = err
@@ -244,7 +319,7 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 			if usedKey.ChannelKey == "" {
 				break
 			}
-			if !iter.SkipCircuitBreak(channel.ID, usedKey.ID, channel.Name) {
+			if directExecution || !iter.SkipCircuitBreak(channel.ID, usedKey.ID, channel.Name) {
 				break
 			}
 			selectOpts.ExcludeKeyIDs[usedKey.ID] = struct{}{}
@@ -293,7 +368,7 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		}
 
 		// 同通道重试耗尽后记录熔断器失败
-		if !result.Success && !result.Written && !result.Canceled && !result.ResetConversation {
+		if !directExecution && req.metrics.shouldAggregateStats() && !result.Success && !result.Written && !result.Canceled && !result.ResetConversation {
 			failureKind := circuitFailureKind(group.RetryEnabled, result.StatusCode)
 			balancer.RecordFailure(channel.ID, usedKey.ID, internalRequest.Model, failureKind)
 			outlierwindow.Report(channel.ID, false, result.StatusCode, time.Now())
@@ -303,7 +378,9 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		}
 
 		if result.Success {
-			outlierwindow.Report(channel.ID, true, result.StatusCode, time.Now())
+			if !directExecution && req.metrics.shouldAggregateStats() {
+				outlierwindow.Report(channel.ID, true, result.StatusCode, time.Now())
+			}
 
 			// === HTTP Replay 状态保存 ===
 			// 成功后，如果是 OpenAI Responses HTTP 请求，保存 replay 状态供后续续接
@@ -350,6 +427,9 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 			return
 		}
 		if result.Canceled {
+			if result.Err != nil {
+				c.Set(executionErrorKey, result.Err.Error())
+			}
 			metrics.SaveWithChannelStats(c.Request.Context(), false, result.Err, iter.Attempts(), false)
 			return
 		}
@@ -371,11 +451,17 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 	}
 
 	// 所有候选通道均失败
+	if lastErr == nil {
+		lastErr = errors.New("all channels failed")
+	}
 	if responsesPassthroughRequired && !responsesPassthroughCapableFound {
 		err := fmt.Errorf("openai responses native tools require an openai responses channel")
 		metrics.SaveWithChannelStats(c.Request.Context(), false, err, iter.Attempts(), false)
 		hb.FlushOrError(c, http.StatusBadRequest, "当前请求包含 OpenAI Responses 原生工具，仅支持 OpenAI Responses 通道直通")
 		return
+	}
+	if lastErr != nil {
+		c.Set(executionErrorKey, lastErr.Error())
 	}
 	metrics.SaveWithChannelStats(c.Request.Context(), false, lastErr, iter.Attempts(), false)
 	if errors.Is(lastErr, price.ErrUnknownBillingPrice) {
@@ -420,21 +506,25 @@ func (ra *relayAttempt) attempt() attemptResult {
 		// ====== 成功 ======
 		// Passthrough handlers collect response at stream end via PassthroughConfig.CollectMetrics
 		ra.collectResponse()
+		ra.writeExecutionMetadataEvent()
 		ra.usedKey.TotalCost += ra.metrics.Stats.InputCost + ra.metrics.Stats.OutputCost
 		op.ChannelKeyUpdate(ra.usedKey)
 
 		span.End(dbmodel.AttemptSuccess, statusCode, "")
 
-		// Channel 维度统计
-		op.StatsChannelUpdate(ra.channel.ID, dbmodel.StatsMetrics{
-			WaitTime:       span.Duration().Milliseconds(),
-			RequestSuccess: 1,
-		})
+		if ra.metrics.shouldAggregateStats() {
+			// Channel 维度统计仅属于普通 API 业务流量。
+			op.StatsChannelUpdate(ra.channel.ID, dbmodel.StatsMetrics{
+				WaitTime:       span.Duration().Milliseconds(),
+				RequestSuccess: 1,
+			})
+		}
 
-		// 熔断器：记录成功
-		balancer.RecordSuccess(ra.channel.ID, ra.usedKey.ID, ra.internalRequest.Model)
-		// 会话保持：更新粘性记录
-		balancer.SetSticky(ra.apiKeyID, ra.requestModel, ra.channel.ID, ra.usedKey.ID)
+		if !ra.directExecution && ra.metrics.shouldAggregateStats() {
+			// 后台执行不得改变生产熔断与粘性状态。
+			balancer.RecordSuccess(ra.channel.ID, ra.usedKey.ID, ra.internalRequest.Model)
+			balancer.SetSticky(ra.apiKeyID, ra.requestModel, ra.channel.ID, ra.usedKey.ID)
+		}
 
 		return attemptResult{Success: true}
 	}
@@ -459,11 +549,13 @@ func (ra *relayAttempt) attempt() attemptResult {
 	op.ChannelKeyUpdate(ra.usedKey)
 	span.End(dbmodel.AttemptFailed, statusCode, fwdErr.Error())
 
-	// Channel 维度统计
-	op.StatsChannelUpdate(ra.channel.ID, dbmodel.StatsMetrics{
-		WaitTime:      span.Duration().Milliseconds(),
-		RequestFailed: 1,
-	})
+	if ra.metrics.shouldAggregateStats() {
+		// 后台测活/Playground 失败保留日志，但不污染业务成功率。
+		op.StatsChannelUpdate(ra.channel.ID, dbmodel.StatsMetrics{
+			WaitTime:      span.Duration().Milliseconds(),
+			RequestFailed: 1,
+		})
+	}
 
 	// 注意：熔断器记录已移至 Handler() 的同通道重试循环外，
 	// 避免重试期间过早触发熔断
@@ -764,6 +856,7 @@ func (ra *relayAttempt) handleWSStreamResponseV2(ctx context.Context, reader *ws
 func (ra *relayAttempt) forwardViaHTTP(ctx context.Context) (int, error) {
 	// Check for passthrough capability using interface
 	if pt, ok := ra.outAdapter.(model.PassthroughCapable); ok &&
+		ra.metrics.shouldAggregateStats() &&
 		len(ra.rawBody) > 0 &&
 		pt.CanPassthrough(ra.internalRequest.RawAPIFormat) {
 		// Additional checks for OpenAI Responses edge cases
@@ -1326,9 +1419,68 @@ func (ra *relayAttempt) handleResponse(ctx context.Context, response *http.Respo
 		log.Warnf("failed to transform response: %v", err)
 		return fmt.Errorf("failed to transform inbound response: %w", err)
 	}
+	if ra.responseCollected.CompareAndSwap(false, true) {
+		actualModel := strings.TrimSpace(internalResponse.Model)
+		if actualModel == "" {
+			actualModel = strings.TrimSpace(ra.internalRequest.Model)
+		}
+		ra.metrics.SetInternalResponse(internalResponse, actualModel)
+	}
+	ra.setExecutionMetadataHeaders()
 
 	ra.c.Data(http.StatusOK, "application/json", inResponse)
 	return nil
+}
+
+func (ra *relayAttempt) setExecutionMetadataHeaders() {
+	if ra == nil || ra.c == nil || ra.metrics == nil || ra.metrics.shouldAggregateStats() {
+		return
+	}
+	ra.c.Header("X-Octopus-Input-Tokens", strconv.FormatInt(ra.metrics.Stats.InputToken, 10))
+	ra.c.Header("X-Octopus-Output-Tokens", strconv.FormatInt(ra.metrics.Stats.OutputToken, 10))
+	if ra.metrics.BilledPrice.Status != dbmodel.BillingStatusUnknown {
+		ra.c.Header("X-Octopus-Estimated-Cost", strconv.FormatFloat(ra.metrics.Stats.InputCost+ra.metrics.Stats.OutputCost, 'f', 10, 64))
+	}
+	if ra.metrics.CacheReadTokens != nil {
+		ra.c.Header("X-Octopus-Cache-Read-Tokens", strconv.Itoa(*ra.metrics.CacheReadTokens))
+	}
+	if ra.metrics.CacheWriteTokens != nil {
+		ra.c.Header("X-Octopus-Cache-Write-Tokens", strconv.Itoa(*ra.metrics.CacheWriteTokens))
+	}
+}
+
+// writeExecutionMetadataEvent appends one admin-only SSE event after the
+// upstream [DONE] marker. Playground keeps reading until EOF and uses this
+// event for cost/cache diagnostics; ordinary API streams are unchanged.
+func (ra *relayAttempt) writeExecutionMetadataEvent() {
+	if ra == nil || ra.c == nil || ra.metrics == nil || ra.metrics.shouldAggregateStats() ||
+		ra.internalRequest == nil || ra.internalRequest.Stream == nil || !*ra.internalRequest.Stream {
+		return
+	}
+	metadata := map[string]any{
+		"type":            "octopus.metadata",
+		"model":           ra.metrics.ActualModel,
+		"requested_model": ra.requestModel,
+		"channel_name":    ra.channel.Name,
+		"remote_model":    ra.internalRequest.Model,
+		"usage": map[string]any{
+			"prompt_tokens":               ra.metrics.Stats.InputToken,
+			"completion_tokens":           ra.metrics.Stats.OutputToken,
+			"cache_read_input_tokens":     pointerInt(ra.metrics.CacheReadTokens),
+			"cache_creation_input_tokens": pointerInt(ra.metrics.CacheWriteTokens),
+		},
+	}
+	if ra.metrics.BilledPrice.Status != dbmodel.BillingStatusUnknown {
+		metadata["estimated_cost"] = ra.metrics.Stats.InputCost + ra.metrics.Stats.OutputCost
+	}
+	payload, err := json.Marshal(metadata)
+	if err != nil {
+		return
+	}
+	writer := ra.getStreamWriter()
+	if _, err := writer.Write([]byte("event: octopus.metadata\ndata: " + string(payload) + "\n\n")); err == nil {
+		writer.Flush()
+	}
 }
 
 // collectResponse 收集响应信息

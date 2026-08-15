@@ -94,6 +94,7 @@ type relayRequest struct {
 	groupID             int
 	groupSessionTTL     int
 	requireKnownBilling bool
+	directExecution     bool // 后台 Direct Channel：复用转换与转发，但隔离生产路由状态
 	iter                *balancer.Iterator
 
 	// rawBody 保存客户端原始请求 body，用于同格式（如 Anthropic→Anthropic）直通转发时

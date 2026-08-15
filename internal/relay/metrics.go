@@ -16,9 +16,11 @@ import (
 
 // RelayMetrics 负责最终的日志收集与持久化
 type RelayMetrics struct {
-	APIKeyID     int
-	RequestModel string
-	StartTime    time.Time
+	APIKeyID      int
+	RequestModel  string
+	RequestSource string
+	RequestID     string
+	StartTime     time.Time
 
 	// 首 Token 时间
 	FirstTokenTime time.Time
@@ -185,16 +187,22 @@ func (m *RelayMetrics) SaveWithChannelStats(ctx context.Context, success bool, e
 	}
 
 	channelID, channelName := finalChannel(attempts)
-	op.StatsTotalUpdate(globalStats)
-	op.StatsHourlyUpdate(globalStats)
-	op.StatsDailyUpdate(context.Background(), globalStats)
-	op.StatsAPIKeyUpdate(m.APIKeyID, globalStats)
-	if updateChannelStats {
-		op.StatsChannelUpdate(channelID, globalStats)
-	} else {
-		updateFinalChannelUsageStats(channelID, globalStats)
+	// Playground 与测活是真实上游请求，费用和 Token 仍写入 RelayLog；
+	// 但业务 Usage 聚合只统计普通 API 流量，避免成功率、额度和 API Key 维度失真。
+	if m.shouldAggregateStats() {
+		op.StatsTotalUpdate(globalStats)
+		op.StatsHourlyUpdate(globalStats)
+		op.StatsDailyUpdate(context.Background(), globalStats)
+		if m.APIKeyID > 0 {
+			op.StatsAPIKeyUpdate(m.APIKeyID, globalStats)
+		}
+		if updateChannelStats {
+			op.StatsChannelUpdate(channelID, globalStats)
+		} else {
+			updateFinalChannelUsageStats(channelID, globalStats)
+		}
+		op.StatsSiteModelHourlyRecordAttempts(attempts, m.ActualModel)
 	}
-	op.StatsSiteModelHourlyRecordAttempts(attempts, m.ActualModel)
 
 	// 上游未上报 usage（或输入侧全为 0）时打告警，便于定位是哪个通道缺失 usage。
 	if success && (m.InternalResponse == nil || m.InternalResponse.Usage == nil ||
@@ -246,6 +254,10 @@ func (m *RelayMetrics) SaveWithChannelStats(ctx context.Context, success bool, e
 	m.saveLog(ctx, success, err, duration, attempts, channelID, channelName)
 }
 
+func (m *RelayMetrics) shouldAggregateStats() bool {
+	return m.RequestSource == "" || m.RequestSource == model.RelayLogRequestSourceAPI
+}
+
 func finalChannel(attempts []model.ChannelAttempt) (int, string) {
 	var lastID int
 	var lastName string
@@ -271,6 +283,8 @@ func (m *RelayMetrics) saveLog(ctx context.Context, success bool, err error, dur
 	relayLog := model.RelayLog{
 		Time:              m.StartTime.Unix(),
 		RequestModelName:  m.RequestModel,
+		RequestSource:     m.RequestSource,
+		RequestID:         m.RequestID,
 		ChannelName:       channelName,
 		ChannelId:         channelID,
 		ActualModelName:   actualModel,
