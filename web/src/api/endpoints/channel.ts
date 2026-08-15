@@ -61,6 +61,31 @@ export type ManagedChannelSource = {
 /**
  * 渠道完整数据（与后端 model.Channel 对齐；数组字段在前端保证为 []）
  */
+export type ExecutionHealthResult = {
+    success: boolean;
+    latency_ms: number;
+    channel_id?: number;
+    channel_name?: string;
+    requested_model?: string;
+    actual_model?: string;
+    group?: string;
+    selected_channel?: string;
+    remote_model?: string;
+    request_id: string;
+    status_code: number;
+    error?: string;
+    attempts?: Array<{
+        channel_id: number;
+        channel_key_id?: number;
+        channel_name: string;
+        model_name: string;
+        attempt_num: number;
+        status: string;
+        duration: number;
+        msg?: string;
+    }>;
+};
+
 export type Channel = {
     id: number;
     name: string;
@@ -341,6 +366,25 @@ export function useEnableChannel() {
         onError: (error) => {
             logger.error('渠道状态更新失败:', error);
         },
+    });
+}
+
+export function useCreateGroupFromChannelModel() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ channelId, model, groupName }: { channelId: number; model: string; groupName: string }) =>
+            apiClient.post<import('./group').Group>(`/api/v1/channel/${channelId}/models/create-group`, { model, group_name: groupName }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['groups', 'list'] });
+            queryClient.invalidateQueries({ queryKey: ['models', 'channel'] });
+        },
+    });
+}
+
+export function useChannelModelHealth() {
+    return useMutation({
+        mutationFn: ({ channelId, model }: { channelId: number; model: string }) =>
+            apiClient.post<ExecutionHealthResult>(`/api/v1/channel/${channelId}/models/health`, { model }),
     });
 }
 

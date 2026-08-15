@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { useChannelList } from '@/api/endpoints/channel';
 import { useSiteChannelList } from '@/api/endpoints/site-channel';
 import { SettingKey, useSettingValue } from '@/api/endpoints/setting';
-import { useToolbarViewOptionsStore } from '@/components/modules/toolbar/view-options-store';
+import { useToolbarViewOptionsStore, type LogRequestSource } from '@/components/modules/toolbar/view-options-store';
 import { useSearchStore } from '@/components/modules/toolbar/search-store';
 
 type ChannelEntry = {
@@ -146,10 +146,12 @@ export function LogFilterPopover() {
     const t = useTranslations('toolbar');
     const logDateRange = useToolbarViewOptionsStore((s) => s.logDateRange);
     const logChannelIds = useToolbarViewOptionsStore((s) => s.logChannelIds);
+    const logRequestSources = useToolbarViewOptionsStore((s) => s.logRequestSources);
     const logKeywordMode = useToolbarViewOptionsStore((s) => s.logKeywordMode);
     const logKeywordScope = useToolbarViewOptionsStore((s) => s.logKeywordScope);
     const setLogDateRange = useToolbarViewOptionsStore((s) => s.setLogDateRange);
     const setLogChannelIds = useToolbarViewOptionsStore((s) => s.setLogChannelIds);
+    const setLogRequestSources = useToolbarViewOptionsStore((s) => s.setLogRequestSources);
     const setLogKeywordMode = useToolbarViewOptionsStore((s) => s.setLogKeywordMode);
     const setLogKeywordScope = useToolbarViewOptionsStore((s) => s.setLogKeywordScope);
     const { value: logKeepPeriodValue } = useSettingValue(SettingKey.RelayLogKeepPeriod, '0');
@@ -225,6 +227,13 @@ export function LogFilterPopover() {
         setLogChannelIds(Array.from(next));
     };
 
+    const toggleRequestSource = (source: LogRequestSource) => {
+        const next = new Set(logRequestSources);
+        if (next.has(source)) next.delete(source);
+        else next.add(source);
+        setLogRequestSources(Array.from(next));
+    };
+
     const toggleGroup = (group: ChannelGroup) => {
         const ids = group.channels.map((c) => c.id);
         const allSelected = ids.every((id) => selectedSet.has(id));
@@ -244,6 +253,7 @@ export function LogFilterPopover() {
     const handleClear = () => {
         setLogDateRange({});
         setLogChannelIds([]);
+        setLogRequestSources([]);
         setLogKeywordMode('default');
         setLogKeywordScope('default');
         setSearch('');
@@ -287,6 +297,7 @@ export function LogFilterPopover() {
     const activeCount =
         (dateActive ? 1 : 0) +
         (logChannelIds.length > 0 ? 1 : 0) +
+        (logRequestSources.length > 0 ? 1 : 0) +
         (keywordModeActive || keywordScopeActive ? 1 : 0);
 
     return (
@@ -391,6 +402,37 @@ export function LogFilterPopover() {
                                 {t('popover.logFilter.search.slowHint')}
                             </p>
                         ) : null}
+                    </div>
+
+                    <div className="grid gap-2">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-medium text-muted-foreground">{t('popover.logFilter.source.title')}</p>
+                            {logRequestSources.length > 0 ? (
+                                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-semibold tabular-nums">
+                                    {logRequestSources.length}
+                                </Badge>
+                            ) : null}
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                            {(['api', 'playground', 'health_check'] as const).map((source) => {
+                                const checked = logRequestSources.includes(source);
+                                return (
+                                    <button
+                                        key={source}
+                                        type="button"
+                                        onClick={() => toggleRequestSource(source)}
+                                        className={cn(
+                                            'flex min-h-8 items-center justify-center rounded-lg border px-1.5 text-[11px] transition-colors',
+                                            checked
+                                                ? 'border-primary bg-primary text-primary-foreground'
+                                                : 'border-border bg-muted/20 text-muted-foreground hover:text-foreground',
+                                        )}
+                                    >
+                                        {t(`popover.logFilter.source.${source}`)}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <div className="grid gap-2">

@@ -184,7 +184,7 @@ export function VirtualizedGrid<T>({
                         clientHeight: target.clientHeight,
                     });
                 } : undefined}
-                className="relative h-full w-full overflow-y-auto overscroll-contain rounded-t-3xl"
+                className="relative h-full w-full overflow-y-auto overscroll-contain rounded-t-3xl pb-24 md:pb-0"
             >
                 {rowCount === 0 ? (
                     emptyState ? (

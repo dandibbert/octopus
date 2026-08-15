@@ -39,7 +39,7 @@ export function Model() {
             columns={{ default: 1, md: 2, lg: 3 }}
             estimateItemHeight={layout === 'list' ? 156 : 232}
             getItemKey={(model) => `model-${model.canonical_model_id ?? model.name}-${model.provider ?? ''}-${model.name}`}
-            renderItem={(model) => <ModelItem model={model} layout={layout} />}
+            renderItem={(model) => <ModelItem model={model} models={models ?? []} layout={layout} />}
             emptyState={
                 <div className="flex max-w-sm flex-col items-center gap-3 rounded-3xl border border-dashed bg-card px-8 py-10 text-center">
                     <SearchX className="size-10 text-muted-foreground/60" />

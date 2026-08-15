@@ -44,10 +44,12 @@
         "supportedModels": "支持的模型"
     },
     "navbar": {
+        "label": "主导航",
         "home": "主页",
         "site": "站点",
         "channel": "渠道",
         "group": "分组",
+        "playground": "测试场",
         "key": "密钥",
         "model": "价格",
         "log": "日志",
@@ -91,6 +93,12 @@
                     "includeContent": "搜索请求/响应内容",
                     "slowHint": "包含模式（特别是搜索内容）较慢，建议配合时间范围使用。"
                 },
+                "source": {
+                    "title": "请求来源",
+                    "api": "API",
+                    "playground": "Playground",
+                    "health_check": "健康检查"
+                },
                 "channel": {
                     "title": "渠道",
                     "searchPlaceholder": "搜索渠道...",
@@ -103,6 +111,7 @@
     },
     "common": {
         "copy": {
+            "action": "复制",
             "success": "复制成功",
             "failed": "复制失败",
             "noContent": "无可复制内容"
@@ -519,6 +528,69 @@
             "notConfigured": "WebDAV 未配置"
         }
     },
+    "playground": {
+        "title": "模型测试",
+        "subtitle": "不保存为会话历史；请求与响应会遵循系统日志设置留存",
+        "regenerate": "重新生成",
+        "clear": "清空",
+        "empty": "发送消息，验证模型回答、参数兼容和实际路由。",
+        "inputPlaceholder": "输入消息，按 Enter 发送",
+        "stop": "停止生成",
+        "send": "发送",
+        "copy": "复制",
+        "settings": {
+            "mode": "调用模式",
+            "group": "分组",
+            "channel": "渠道",
+            "directChannel": "直连渠道",
+            "selectGroup": "选择分组",
+            "selectChannel": "选择渠道",
+            "remoteModel": "远端模型",
+            "selectModel": "选择模型",
+            "systemPrompt": "系统提示词",
+            "optional": "可选",
+            "reasoning": "思考强度",
+            "temperature": "温度",
+            "maxOutputTokens": "最大输出 Tokens",
+            "auto": "自动",
+            "streaming": "流式输出",
+            "streamingHint": "实时显示回答"
+        },
+        "reasoning": {
+            "auto": "自动",
+            "off": "关闭",
+            "low": "低",
+            "medium": "中",
+            "high": "高",
+            "xhigh": "极高"
+        },
+        "errors": {
+            "selectTarget": "请先选择调用目标",
+            "invalidTemperature": "温度必须在 0 到 2 之间",
+            "invalidMaxOutputTokens": "最大输出 Tokens 必须在 1 到 131072 之间",
+            "invalidStream": "上游返回了无效的流事件",
+            "streamFailed": "流式请求失败",
+            "emptyResponse": "上游返回了空响应",
+            "generationFailed": "生成失败"
+        },
+        "diagnostics": {
+            "title": "诊断信息",
+            "total": "总耗时",
+            "outputRate": "输出速度",
+            "inputTokens": "输入 Tokens",
+            "outputTokens": "输出 Tokens",
+            "estimatedCost": "估算费用",
+            "cacheReadTokens": "缓存读取 Tokens",
+            "cacheWriteTokens": "缓存写入 Tokens",
+            "requestedGroup": "请求 Group",
+            "requestedChannel": "请求渠道",
+            "requestedModel": "请求模型",
+            "actualChannel": "实际渠道",
+            "remoteModel": "远端模型",
+            "actualModel": "实际模型",
+            "requestId": "请求 ID"
+        }
+    },
     "group": {
         "toast": {
             "created": "创建成功",
@@ -535,6 +607,20 @@
         "pin": {
             "pin": "置顶",
             "unpin": "取消置顶"
+        },
+        "routeHealth": {
+            "action": "路由测活",
+            "testing": "路由测试中…",
+            "available": "路由可用",
+            "unavailable": "路由不可用",
+            "failed": "路由测活失败",
+            "routed": "已路由",
+            "availableDescription": "{target} · {latency} ms",
+            "availableLatency": "可用 · {latency}ms",
+            "actualChannel": "实际渠道",
+            "actualModel": "实际模型",
+            "errorDetails": "错误详情",
+            "playground": "测试场"
         },
         "preset": {
             "title": "预设",
@@ -650,6 +736,7 @@
             "attemptStatus": {
                 "success": "成功",
                 "failed": "失败",
+                "circuit_break": "熔断",
                 "skipped": "跳过"
             },
             "statusValue": {
@@ -783,6 +870,8 @@
             "aliasType": "模型别名",
             "needsReview": "待确认",
             "unknownPrice": "尚未配置有效价格",
+            "copyName": "复制模型名",
+            "attachPrice": "关联已有价格",
             "inheritedFrom": "继承自：{model}",
             "source": "来源：{source}",
             "edit": "编辑",
@@ -837,7 +926,15 @@
             "disabled": "停用",
             "automatic": "自动发现",
             "edit": "编辑别名",
-            "delete": "删除别名"
+            "delete": "删除别名",
+            "attachTitle": "关联已有价格",
+            "attachDescription": "让这个上游模型共享一个已有模型的价格；目标价格更新后会自动同步。",
+            "targetSearchPlaceholder": "搜索已有价格、Provider 或计费 SKU...",
+            "noPricedTargets": "没有找到可关联的有效价格",
+            "attachedFinal": "已关联并验证最终价格",
+            "currentTarget": "当前关联",
+            "newTarget": "新目标",
+            "replaceAttachment": "更新关联"
         }
     },
     "log": {
@@ -853,12 +950,56 @@
             "input": "输入",
             "output": "输出",
             "cost": "费用",
+            "requestId": "请求 ID",
             "modelPath": "模型路径",
             "billingPlan": "用户计费计划",
             "priceResolution": "价格解析",
             "dualLedger": "双账本",
             "billedAmount": "记账",
             "providerCost": "上游成本",
+            "billingReceivable": "用户应收",
+            "billingBasisLabel": "计费依据",
+            "billingSkuLabel": "计费 SKU",
+            "billingStatusNotRecorded": "未记录",
+            "billingStatusResolved": "已解析",
+            "billingStatusFree": "明确免费",
+            "billingStatusUnknown": "价格未知",
+            "billingStatusConflict": "价格冲突",
+            "billingAmountUnavailable": "无法计算",
+            "billingFreeAmount": "$0（免费）",
+            "billingEstimated": "估算",
+            "billingPriceEstimated": "价格估算",
+            "billingUsageEstimated": "用量估算",
+            "billingModelMismatch": "模型不匹配",
+            "billingMethodLabel": "解析方式",
+            "billingSourceLabel": "价格来源",
+            "billingSourceUser": "用户设置",
+            "billingSourceRemote": "在线目录",
+            "billingSourceBuiltin": "内置目录",
+            "billingSourceAuto": "自动发现",
+            "billingModeLabel": "价格模式",
+            "billingBasisActual": "上游实际模型",
+            "billingBasisRequested": "请求模型",
+            "billingBasisRouted": "路由模型",
+            "billingBasisFixedSku": "固定 SKU",
+            "billingMethodRouteFallback": "回退使用路由价格",
+            "billingMethodRouteFallbackUnknown": "已尝试回退到路由模型，但仍没有可用价格",
+            "billingMethodRouteBinding": "路由绑定",
+            "billingMethodFixedSku": "固定 SKU",
+            "billingMethodActualPending": "等待上游实际模型",
+            "billingMethodActualOverride": "使用上游实际模型价格",
+            "billingMethodExact": "精确匹配",
+            "billingMethodProviderPrefix": "Provider 前缀匹配",
+            "billingMethodChannelWrapper": "渠道包装名匹配",
+            "billingMethodChannelAlias": "渠道名称映射",
+            "billingMethodProviderAlias": "Provider 名称映射",
+            "billingMethodAlias": "全局名称映射",
+            "billingMethodCatalog": "价格目录匹配",
+            "billingMethodUnknown": "无法识别",
+            "billingPriceModeExplicit": "独立价格",
+            "billingPriceModeFree": "明确免费",
+            "billingPriceModeInherited": "继承价格",
+            "billingPriceModeUnknown": "未知",
             "requestContent": "请求内容",
             "responseContent": "响应内容",
             "noRequestContent": "(无请求内容)",
@@ -915,6 +1056,32 @@
         }
     },
     "channel": {
+        "model_actions": {
+            "section_title": "模型与快捷操作",
+            "empty": "暂无已配置模型",
+            "create_group": "创建分组",
+            "create_success": "分组创建成功",
+            "create_failed": "分组创建失败",
+            "name_conflict": "分组“{name}”已存在，请修改分组名称。",
+            "health_check": "测活",
+            "playground": "测试场",
+            "testing": "测试中…",
+            "health_available": "模型可用",
+            "health_unavailable": "模型不可用",
+            "health_failed": "测活失败",
+            "available_latency": "可用 · {latency}ms",
+            "unavailable": "不可用",
+            "error_details": "错误详情",
+            "source": "来源：{channel} / {model}",
+            "add_prefix": "添加渠道前缀",
+            "prefix": "前缀",
+            "group_name": "分组名称",
+            "automatic_name": "自动名称",
+            "restore_auto_name": "恢复自动名称",
+            "cancel": "取消",
+            "create": "创建",
+            "creating": "创建中…"
+        },
         "tabs": {
             "site": "站点渠道",
             "manual": "普通渠道"
@@ -922,15 +1089,30 @@
         "card": {
             "requestCount": "请求次数",
             "totalCost": "总成本",
+            "managedBadge": "站点投影",
+            "openDetails": "打开 {name} 的详情",
+            "toggleEnabled": "切换 {name} 的启用状态",
             "toast": {
                 "enabled": "渠道已启用",
                 "disabled": "渠道已禁用"
             }
         },
+        "list": {
+            "targetedManagedTitle": "定位的托管渠道",
+            "targetedManagedDescription": "这个渠道由站点账号投影生成，默认不会出现在普通渠道列表中。",
+            "loadFailed": "普通渠道加载失败：{message}",
+            "empty": "当前筛选下没有普通渠道"
+        },
         "detail": {
             "title": {
                 "edit": "编辑渠道",
                 "view": "渠道详情"
+            },
+            "managed": {
+                "badge": "站点投影",
+                "description": "这是站点账号自动投影生成的托管通道。请到站点管理中修改账号、分组、模型、代理或启停状态；该页面不再允许直接编辑、删除或启停，避免被后续投影覆盖。",
+                "viewSite": "查看来源站点",
+                "viewSiteChannel": "查看站点通道"
             },
             "sections": {
                 "requests": "请求详情",
@@ -1126,9 +1308,26 @@
         },
         "group": {
             "not_found": "分组不存在。",
+            "name_conflict": "分组“{name}”已存在，请修改分组名称。",
             "create_failed": "创建分组失败。",
             "update_failed": "更新分组失败。",
             "delete_failed": "删除分组失败。"
+        },
+        "playground": {
+            "concurrent_limit": "同时运行的测试请求过多，并发上限为 {limit}。",
+            "rate_limited": "测试请求过于频繁，请在 {retryAfter} 秒后重试（上限 {maxRPM} 次/分钟）。",
+            "messages_required": "请至少添加一条消息后再发送。",
+            "messages_limit": "单次请求最多可包含 {max} 条消息。",
+            "text_too_long": "提示词或消息超过 {maxBytes} 字节上限。",
+            "unsupported_role": "第 {index} 条消息使用了不支持的角色“{role}”。",
+            "temperature_range": "温度必须介于 {min} 到 {max} 之间。",
+            "max_output_tokens_range": "最大输出 Token 必须介于 {min} 到 {max} 之间。",
+            "invalid_reasoning_effort": "不支持推理强度“{effort}”。",
+            "target_required": "请选择有效的调用目标。",
+            "target_unavailable": "所选测试目标（{targetId}）不可用。",
+            "model_not_configured": "渠道 {channelId} 未配置模型“{model}”。",
+            "unsupported_target_type": "不支持调用目标类型“{type}”。",
+            "execution_failed": "测试请求未能完成，请检查调用目标后重试。"
         },
         "model": {
             "price_update_failed": "更新模型价格失败。",
@@ -1136,6 +1335,14 @@
             "create_failed": "创建模型失败。",
             "update_failed": "更新模型失败。",
             "delete_failed": "删除模型失败。"
+        },
+        "model_alias": {
+            "attach": {
+                "invalid_request": "关联参数无效，请检查模型和作用域。",
+                "target_price_unknown": "所选目标没有可用价格，请选择其他模型。",
+                "source_price_conflict": "该模型已有独立价格，不能再挂靠其他价格。",
+                "alias_conflict": "当前作用域已存在指向其他价格的映射。"
+            }
         },
         "relay": {
             "model_not_supported": "当前 API Key 不支持该模型。",

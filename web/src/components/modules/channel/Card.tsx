@@ -49,7 +49,7 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
 
     return (
         <MorphingDialog>
-            <MorphingDialogTrigger className="w-full">
+            <MorphingDialogTrigger aria-label={t('openDetails', { name: channel.name })} className="w-full">
                 <article className="flex flex-col gap-4 rounded-3xl border border-border bg-card text-card-foreground p-4 transition-all duration-300">
                     <header className="relative flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
@@ -62,12 +62,13 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
                             {channel.managed ? (
                                 <div className="mt-1">
                                     <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                                        站点投影
+                                        {t('managedBadge')}
                                     </span>
                                 </div>
                             ) : null}
                         </div>
                         <Switch
+                            aria-label={t('toggleEnabled', { name: channel.name })}
                             checked={channel.enabled}
                             onCheckedChange={handleEnableChange}
                             disabled={enableChannel.isPending || channel.managed}

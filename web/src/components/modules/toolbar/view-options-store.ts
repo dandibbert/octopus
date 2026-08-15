@@ -10,6 +10,7 @@ export type ToolbarPage = (typeof TOOLBAR_PAGES)[number];
 export type LogDateRange = { start?: number; end?: number };
 export type LogKeywordMode = 'default' | 'prefix' | 'exact' | 'contains';
 export type LogKeywordScope = 'default' | 'content';
+export type LogRequestSource = 'api' | 'playground' | 'health_check';
 
 interface ToolbarViewOptionsState {
     layouts: Partial<Record<ToolbarPage, ToolbarLayout>>;
@@ -17,6 +18,7 @@ interface ToolbarViewOptionsState {
     sortOrders: Partial<Record<ToolbarPage, ToolbarSortOrder>>;
     logDateRange: LogDateRange;
     logChannelIds: number[];
+    logRequestSources: LogRequestSource[];
     logKeywordMode: LogKeywordMode;
     logKeywordScope: LogKeywordScope;
 
@@ -35,6 +37,7 @@ interface ToolbarViewOptionsState {
 
     setLogDateRange: (value: LogDateRange) => void;
     setLogChannelIds: (value: number[]) => void;
+    setLogRequestSources: (value: LogRequestSource[]) => void;
     setLogKeywordMode: (value: LogKeywordMode) => void;
     setLogKeywordScope: (value: LogKeywordScope) => void;
 }
@@ -47,6 +50,7 @@ export const useToolbarViewOptionsStore = create<ToolbarViewOptionsState>()(
             sortOrders: {},
             logDateRange: {},
             logChannelIds: [],
+            logRequestSources: [],
             logKeywordMode: 'default',
             logKeywordScope: 'default',
 
@@ -81,6 +85,7 @@ export const useToolbarViewOptionsStore = create<ToolbarViewOptionsState>()(
 
             setLogDateRange: (value) => set({ logDateRange: value }),
             setLogChannelIds: (value) => set({ logChannelIds: value }),
+            setLogRequestSources: (value) => set({ logRequestSources: value }),
             setLogKeywordMode: (value) => set({ logKeywordMode: value }),
             setLogKeywordScope: (value) => set({ logKeywordScope: value }),
         }),
@@ -92,6 +97,7 @@ export const useToolbarViewOptionsStore = create<ToolbarViewOptionsState>()(
                 sortOrders: state.sortOrders,
                 logDateRange: state.logDateRange,
                 logChannelIds: state.logChannelIds,
+                logRequestSources: state.logRequestSources,
                 logKeywordMode: state.logKeywordMode,
                 logKeywordScope: state.logKeywordScope,
             }),

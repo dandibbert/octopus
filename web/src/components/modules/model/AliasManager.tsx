@@ -16,6 +16,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/common/Toast';
 import {
@@ -23,6 +30,12 @@ import {
     MorphingDialogDescription,
     MorphingDialogTitle,
 } from '@/components/ui/morphing-dialog';
+import {
+    effectivePriceMode,
+    FreeformModelCombobox,
+    getPricedModelOptions,
+    PricedModelCombobox,
+} from './ModelIdentityCombobox';
 
 type AliasScope = 'global' | 'provider' | 'channel';
 
@@ -63,6 +76,7 @@ export function AliasManager({
     onSearchTermChange: (value: string) => void;
 }) {
     const t = useTranslations('model.alias');
+    const tm = useTranslations('model');
     const { data: aliases = [] } = useModelAliasList();
     const { data: channelModels = [] } = useModelChannelList();
     const createAlias = useCreateModelAlias();
@@ -71,13 +85,28 @@ export function AliasManager({
     const [form, setForm] = useState<AliasForm>(EMPTY_FORM);
     const [showForm, setShowForm] = useState(false);
 
-    const canonicalOptions = useMemo(() => {
-        const values = new Set<string>();
+    const sourceOptions = useMemo(() => {
+        const values = new Map<string, LLMInfo>();
         for (const item of models) {
-            if (item.canonical_model_id) values.add(item.canonical_model_id);
+            if (effectivePriceMode(item) !== 'unknown' && !item.needs_review) continue;
+            values.set(`${item.provider ?? ''}\u0000${item.name}`, item);
         }
-        return Array.from(values).sort((a, b) => a.localeCompare(b));
+        return Array.from(values.values()).sort((a, b) => a.name.localeCompare(b.name));
     }, [models]);
+
+    const canonicalOptions = useMemo(() => getPricedModelOptions(models), [models]);
+
+    const selectedCanonicalKey = useMemo(() => canonicalOptions.find((option) => (
+        option.canonicalModelID === form.canonical_model_id &&
+        (option.billingClassID ?? '') === form.billing_class_id
+    ))?.key ?? form.canonical_model_id, [canonicalOptions, form.billing_class_id, form.canonical_model_id]);
+
+    const sourceName = (source: string) => ({
+        remote: tm('card.sourceRemote'),
+        builtin: tm('card.sourceBuiltin'),
+        user: tm('card.sourceUser'),
+        auto: tm('card.sourceAuto'),
+    }[source] ?? source);
 
     const channels = useMemo(() => {
         const values = new Map<number, string>();
@@ -170,38 +199,68 @@ export function AliasManager({
 
             {showForm && (
                 <form onSubmit={submit} className="mt-4 grid gap-3 rounded-2xl border bg-muted/20 p-4 md:grid-cols-2">
-                    <label className="grid gap-1 text-xs text-muted-foreground">
+                    <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
                         {t('alias')}
-                        <Input value={form.alias} onChange={(event) => setForm({ ...form, alias: event.target.value })} className="rounded-xl" />
-                    </label>
-                    <label className="grid gap-1 text-xs text-muted-foreground">
-                        {t('canonical')}
-                        <Input
-                            list="canonical-model-options"
-                            value={form.canonical_model_id}
-                            onChange={(event) => setForm({ ...form, canonical_model_id: event.target.value })}
-                            className="rounded-xl"
+                        <FreeformModelCombobox
+                            value={form.alias}
+                            options={sourceOptions}
+                            ariaLabel={t('alias')}
+                            onValueChange={(alias) => setForm((current) => ({ ...current, alias }))}
+                            onOptionSelect={(option) => setForm((current) => ({
+                                ...current,
+                                alias: option.name,
+                                scope: option.provider ? 'provider' : current.scope,
+                                provider: option.provider ?? current.provider,
+                            }))}
                         />
-                        <datalist id="canonical-model-options">
-                            {canonicalOptions.map((value) => <option key={value} value={value} />)}
-                        </datalist>
                     </label>
+                    <div className="grid min-w-0 gap-1 text-xs text-muted-foreground">
+                        {t('canonical')}
+                        <PricedModelCombobox
+                            value={selectedCanonicalKey}
+                            options={canonicalOptions}
+                            onSelect={(option) => setForm((current) => ({
+                                ...current,
+                                canonical_model_id: option.canonicalModelID,
+                                billing_class_id: option.billingClassID ?? '',
+                            }))}
+                            labels={{
+                                ariaLabel: t('canonical'),
+                                searchPlaceholder: t('targetSearchPlaceholder'),
+                                empty: t('noPricedTargets'),
+                                input: tm('card.input'),
+                                output: tm('card.output'),
+                                free: tm('mode.free'),
+                                source: (source) => tm('card.source', { source: sourceName(source) }),
+                            }}
+                        />
+                    </div>
                     <label className="grid gap-1 text-xs text-muted-foreground">
                         {t('billingClass')}
-                        <Input value={form.billing_class_id} onChange={(event) => setForm({ ...form, billing_class_id: event.target.value })} className="rounded-xl" placeholder={t('inheritPlaceholder')} />
+                        <Input
+                            value={form.billing_class_id}
+                            readOnly
+                            aria-readonly="true"
+                            className="rounded-xl bg-muted/25"
+                            placeholder={t('inheritPlaceholder')}
+                        />
                     </label>
-                    <label className="grid gap-1 text-xs text-muted-foreground">
+                    <div className="grid gap-1 text-xs text-muted-foreground">
                         {t('scope')}
-                        <select
+                        <Select
                             value={form.scope}
-                            onChange={(event) => setForm({ ...form, scope: event.target.value as AliasScope })}
-                            className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+                            onValueChange={(scope: AliasScope) => setForm((current) => ({ ...current, scope }))}
                         >
-                            <option value="global">{t('scopeGlobal')}</option>
-                            <option value="provider">{t('scopeProvider')}</option>
-                            <option value="channel">{t('scopeChannel')}</option>
-                        </select>
-                    </label>
+                            <SelectTrigger aria-label={t('scope')} className="w-full rounded-xl">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="z-[120] rounded-xl">
+                                <SelectItem value="global">{t('scopeGlobal')}</SelectItem>
+                                <SelectItem value="provider">{t('scopeProvider')}</SelectItem>
+                                <SelectItem value="channel">{t('scopeChannel')}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                     {form.scope === 'provider' && (
                         <label className="grid gap-1 text-xs text-muted-foreground">
                             {t('provider')}
@@ -209,17 +268,24 @@ export function AliasManager({
                         </label>
                     )}
                     {form.scope === 'channel' && (
-                        <label className="grid gap-1 text-xs text-muted-foreground">
+                        <div className="grid gap-1 text-xs text-muted-foreground">
                             {t('channel')}
-                            <select
+                            <Select
                                 value={form.channel_id}
-                                onChange={(event) => setForm({ ...form, channel_id: event.target.value })}
-                                className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+                                onValueChange={(channel_id) => setForm((current) => ({ ...current, channel_id }))}
                             >
-                                <option value="">{t('selectChannel')}</option>
-                                {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name} (#{channel.id})</option>)}
-                            </select>
-                        </label>
+                                <SelectTrigger aria-label={t('channel')} className="w-full rounded-xl">
+                                    <SelectValue placeholder={t('selectChannel')} />
+                                </SelectTrigger>
+                                <SelectContent className="z-[120] rounded-xl">
+                                    {channels.map((channel) => (
+                                        <SelectItem key={channel.id} value={String(channel.id)}>
+                                            {channel.name} (#{channel.id})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     )}
                     <label className="flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-2 text-xs text-muted-foreground">
                         {t('enabled')}
@@ -257,7 +323,12 @@ export function AliasManager({
                                             {alias.source === 'auto' && <Badge variant="outline">{t('automatic')}</Badge>}
                                         </div>
                                         <p className="mt-1 break-all text-xs text-muted-foreground">→ {alias.canonical_model_id}</p>
-                                        {alias.billing_class_id && <p className="break-all text-xs text-muted-foreground">SKU: {alias.billing_class_id}</p>}
+                                        {alias.billing_class_id && (
+                                            <div className="mt-1 grid gap-0.5 text-xs text-muted-foreground">
+                                                <span>{t('billingClass')}</span>
+                                                <span className="break-all font-medium text-card-foreground/75">{alias.billing_class_id}</span>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex shrink-0 gap-1">
                                         <button type="button" onClick={() => edit(alias)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" aria-label={t('edit')}>

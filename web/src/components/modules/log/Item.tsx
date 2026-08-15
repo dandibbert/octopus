@@ -271,6 +271,263 @@ function getAttemptStatusMeta(status: AttemptStatus, t: ReturnType<typeof useTra
     }
 }
 
+type LogCardTranslator = ReturnType<typeof useTranslations<'log.card'>>;
+
+function formatLedgerAmount(value: number): string {
+    if (!Number.isFinite(value)) return '—';
+    const formatted = new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: 12,
+        useGrouping: false,
+    }).format(value);
+    return `$${formatted}`;
+}
+
+function hasBillingDiagnostics(log: RelayLog): boolean {
+    return Boolean(
+        log.billing_basis
+        || log.billing_class_id
+        || log.billing_resolution_method
+        || log.billing_price_source
+        || log.billing_price_version
+        || log.billing_price_mode
+        || log.billing_cost_status,
+    );
+}
+
+function getLedgerAmountLabel(
+    amount: number | undefined,
+    status: string | undefined,
+    recorded: boolean,
+    allowLegacyAmount: boolean,
+    t: LogCardTranslator,
+): string {
+    if (!recorded) {
+        return allowLegacyAmount && amount != null ? formatLedgerAmount(amount) : '—';
+    }
+    if (status === 'free') return t('billingFreeAmount');
+    if (status === 'unknown' || status === 'conflict' || amount == null) {
+        return t('billingAmountUnavailable');
+    }
+    return formatLedgerAmount(amount);
+}
+
+function getBillingBasisLabel(basis: RelayLog['billing_basis'], t: LogCardTranslator): string {
+    switch (basis) {
+        case 'actual':
+            return t('billingBasisActual');
+        case 'requested':
+            return t('billingBasisRequested');
+        case 'routed':
+            return t('billingBasisRouted');
+        case 'fixed_sku':
+            return t('billingBasisFixedSku');
+        default:
+            return '—';
+    }
+}
+
+function getPriceModeLabel(mode: RelayLog['billing_price_mode'], t: LogCardTranslator): string {
+    switch (mode) {
+        case 'explicit':
+            return t('billingPriceModeExplicit');
+        case 'free':
+            return t('billingPriceModeFree');
+        case 'inherited':
+            return t('billingPriceModeInherited');
+        case 'unknown':
+            return t('billingPriceModeUnknown');
+        default:
+            return '—';
+    }
+}
+
+function getPriceSourceLabel(source: string | undefined, t: LogCardTranslator): string {
+    switch (source) {
+        case 'user':
+            return t('billingSourceUser');
+        case 'remote':
+            return t('billingSourceRemote');
+        case 'builtin':
+            return t('billingSourceBuiltin');
+        case 'auto':
+            return t('billingSourceAuto');
+        default:
+            return source || '—';
+    }
+}
+
+function getPriceResolutionMethodLabel(method: string | undefined, status: string | undefined, t: LogCardTranslator): string {
+    switch (method) {
+        case 'route_fallback':
+            return status === 'unknown'
+                ? t('billingMethodRouteFallbackUnknown')
+                : t('billingMethodRouteFallback');
+        case 'route_binding':
+            return t('billingMethodRouteBinding');
+        case 'fixed_sku':
+            return t('billingMethodFixedSku');
+        case 'actual_pending':
+            return t('billingMethodActualPending');
+        case 'actual_override':
+            return t('billingMethodActualOverride');
+        case 'exact':
+            return t('billingMethodExact');
+        case 'provider_prefix':
+            return t('billingMethodProviderPrefix');
+        case 'channel_wrapper':
+            return t('billingMethodChannelWrapper');
+        case 'channel_alias':
+            return t('billingMethodChannelAlias');
+        case 'provider_alias':
+            return t('billingMethodProviderAlias');
+        case 'alias':
+            return t('billingMethodAlias');
+        case 'catalog':
+            return t('billingMethodCatalog');
+        case 'unknown':
+            return t('billingMethodUnknown');
+        default:
+            // 未知扩展值保留原始标识，避免前端吞掉后端新增的诊断信息。
+            return method || '—';
+    }
+}
+
+function getBillingStatusMeta(status: string | undefined, recorded: boolean, t: LogCardTranslator) {
+    if (!recorded) {
+        return {
+            label: t('billingStatusNotRecorded'),
+            className: 'bg-muted text-muted-foreground',
+        };
+    }
+
+    switch (status) {
+        case 'resolved':
+            return {
+                label: t('billingStatusResolved'),
+                className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+            };
+        case 'free':
+            return {
+                label: t('billingStatusFree'),
+                className: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
+            };
+        case 'unknown':
+            return {
+                label: t('billingStatusUnknown'),
+                className: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+            };
+        case 'conflict':
+            return {
+                label: t('billingStatusConflict'),
+                className: 'bg-destructive/15 text-destructive',
+            };
+        default:
+            return {
+                label: status || t('billingStatusNotRecorded'),
+                className: 'bg-muted text-muted-foreground',
+            };
+    }
+}
+
+interface PriceLedgerCardProps {
+    title: string;
+    amount?: number;
+    status?: string;
+    basis?: RelayLog['billing_basis'];
+    sku?: string;
+    method?: string;
+    source?: string;
+    version?: string;
+    mode?: RelayLog['billing_price_mode'];
+    kind: 'billing' | 'provider';
+    t: LogCardTranslator;
+}
+
+function PriceLedgerCard({
+    title,
+    amount,
+    status,
+    basis,
+    sku,
+    method,
+    source,
+    version,
+    mode,
+    kind,
+    t,
+}: PriceLedgerCardProps) {
+    const recorded = Boolean(status || basis || sku || method || source || version || mode);
+    const statusMeta = getBillingStatusMeta(status, recorded, t);
+    // 历史用户账本在诊断字段引入前已经持久化 cost，可以继续展示；Provider
+    // 的历史默认值却是 0，缺少 status 时不能把它误报成真实的上游成本。
+    const amountRecorded = kind === 'provider' ? Boolean(status) : recorded;
+    const amountLabel = getLedgerAmountLabel(amount, status, amountRecorded, kind === 'billing', t);
+    const localizedSource = getPriceSourceLabel(source, t);
+    const sourceLabel = source
+        ? (version ? `${localizedSource} · ${version}` : localizedSource)
+        : '—';
+
+    return (
+        <div className="min-w-0 rounded-xl border border-border/60 bg-background/50 p-3">
+            <div className="mb-3 flex min-w-0 items-start gap-2">
+                <div className={cn(
+                    'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg',
+                    kind === 'billing'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+                )}>
+                    {kind === 'billing' ? <DollarSign className="size-4" /> : <ArrowUpFromLine className="size-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium text-foreground">{title}</span>
+                        <Badge className={cn('h-5 border-0 px-1.5 text-[10px] shadow-none', statusMeta.className)}>
+                            {statusMeta.label}
+                        </Badge>
+                    </div>
+                    <div className={cn(
+                        'mt-0.5 truncate text-base font-semibold tabular-nums',
+                        status === 'unknown' && 'text-amber-700 dark:text-amber-300',
+                        status === 'conflict' && 'text-destructive',
+                        status !== 'unknown' && status !== 'conflict' && 'text-foreground',
+                    )} title={amountLabel}>
+                        {amountLabel}
+                    </div>
+                </div>
+            </div>
+
+            <dl className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-1.5 text-[11px] sm:grid-cols-2">
+                {kind === 'billing' ? (
+                    <div className="flex min-w-0 items-baseline gap-1.5">
+                        <dt className="shrink-0 text-muted-foreground">{t('billingBasisLabel')}</dt>
+                        <dd className="truncate text-foreground" title={basis || ''}>{getBillingBasisLabel(basis, t)}</dd>
+                    </div>
+                ) : null}
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                    <dt className="shrink-0 text-muted-foreground">{t('billingSkuLabel')}</dt>
+                    <dd className="truncate font-mono text-foreground" title={sku || ''}>{sku || '—'}</dd>
+                </div>
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                    <dt className="shrink-0 text-muted-foreground">{t('billingMethodLabel')}</dt>
+                    <dd className="truncate text-foreground" title={method || ''}>
+                        {getPriceResolutionMethodLabel(method, status, t)}
+                    </dd>
+                </div>
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                    <dt className="shrink-0 text-muted-foreground">{t('billingSourceLabel')}</dt>
+                    <dd className="truncate text-foreground" title={sourceLabel}>{sourceLabel}</dd>
+                </div>
+                {kind === 'billing' ? (
+                    <div className="flex min-w-0 items-baseline gap-1.5">
+                        <dt className="shrink-0 text-muted-foreground">{t('billingModeLabel')}</dt>
+                        <dd className="truncate text-foreground" title={mode || ''}>{getPriceModeLabel(mode, t)}</dd>
+                    </div>
+                ) : null}
+            </dl>
+        </div>
+    );
+}
+
 interface RetryBadgeWithTooltipProps {
     channelName: string;
     brandColor: string;
@@ -523,6 +780,7 @@ function AttemptDisableButton({
 
 export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogSiteActionTargets | null }) {
     const t = useTranslations('log.card');
+    const sourceT = useTranslations('toolbar.popover.logFilter.source');
     const displayActualModelName = useMemo(
         () => log.actual_model_name?.trim() || log.request_model_name?.trim() || '',
         [log.actual_model_name, log.request_model_name],
@@ -650,6 +908,15 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     <span className="font-semibold text-card-foreground truncate" title={log.request_model_name}>
                                         {log.request_model_name}
                                     </span>
+                                    {log.request_source && log.request_source !== 'api' ? (
+                                        <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                                            {log.request_source === 'playground'
+                                                ? sourceT('playground')
+                                                : log.request_source === 'health_check'
+                                                    ? sourceT('health_check')
+                                                    : log.request_source}
+                                        </Badge>
+                                    ) : null}
                                     <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/50" />
                                     {hasMultipleAttempts ? (
                                         <RetryBadgeWithTooltip
@@ -714,7 +981,13 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                 <div className="flex items-center gap-1.5">
                                     <DollarSign className="size-3.5 shrink-0 text-emerald-500" />
                                     <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                        {t('cost')} {Number(log.cost).toFixed(6)}
+                                        {t('cost')} {getLedgerAmountLabel(
+                                            Number.isFinite(log.cost) ? log.cost : undefined,
+                                            log.billing_cost_status,
+                                            hasBillingDiagnostics(log),
+                                            true,
+                                            t,
+                                        )}
                                     </span>
                                 </div>
                             </div>
@@ -938,30 +1211,78 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     </div>
                                 ) : null}
 
-                                <div className="grid shrink-0 grid-cols-1 gap-2 rounded-2xl border border-border/60 bg-muted/20 p-3 text-xs md:grid-cols-2 xl:grid-cols-4">
-                                    <div className="min-w-0">
-                                        <div className="text-muted-foreground">{t('modelPath')}</div>
-                                        <div className="truncate font-mono text-foreground" title={`${displayLog.request_model_name} → ${displayLog.routed_model_name ?? '-'} → ${displayLog.actual_model_name}`}>
-                                            {displayLog.request_model_name} → {displayLog.routed_model_name ?? '-'} → {displayLog.actual_model_name}
+                                <div className="shrink-0 rounded-2xl border border-border/60 bg-muted/20 p-3 text-xs">
+                                    <div className="mb-3 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                                            <span>{t('modelPath')}</span>
+                                            {displayLog.price_estimated ? (
+                                                <Badge className="h-5 border-0 bg-amber-500/15 px-1.5 text-[10px] text-amber-700 shadow-none dark:text-amber-300">
+                                                    {t('billingPriceEstimated')}
+                                                </Badge>
+                                            ) : null}
+                                            {displayLog.usage_estimated ? (
+                                                <Badge className="h-5 border-0 bg-orange-500/15 px-1.5 text-[10px] text-orange-700 shadow-none dark:text-orange-300">
+                                                    {t('billingUsageEstimated')}
+                                                </Badge>
+                                            ) : null}
+                                            {displayLog.model_mismatch ? (
+                                                <Badge className="h-5 border-0 bg-destructive/15 px-1.5 text-[10px] text-destructive shadow-none">
+                                                    {t('billingModelMismatch')}
+                                                </Badge>
+                                            ) : null}
                                         </div>
+                                        <div
+                                            className="mt-0.5 truncate font-mono text-foreground"
+                                            title={`${displayLog.request_model_name} → ${displayLog.routed_model_name || '—'} → ${displayLog.actual_model_name || '—'}`}
+                                        >
+                                            {displayLog.request_model_name} → {displayLog.routed_model_name || '—'} → {displayLog.actual_model_name || '—'}
+                                        </div>
+                                        {displayLog.requested_canonical_id || displayLog.routed_canonical_id || displayLog.actual_canonical_id ? (
+                                            <div
+                                                className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
+                                                title={`${displayLog.requested_canonical_id || '—'} → ${displayLog.routed_canonical_id || '—'} → ${displayLog.actual_canonical_id || '—'}`}
+                                            >
+                                                <Link className="size-3 shrink-0" />
+                                                <span className="truncate font-mono">
+                                                    {displayLog.requested_canonical_id || '—'} → {displayLog.routed_canonical_id || '—'} → {displayLog.actual_canonical_id || '—'}
+                                                </span>
+                                            </div>
+                                        ) : null}
+                                        {displayLog.request_id ? (
+                                            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                                                <span className="shrink-0">{t('requestId')}</span>
+                                                <code className="truncate" title={displayLog.request_id}>{displayLog.request_id}</code>
+                                            </div>
+                                        ) : null}
                                     </div>
-                                    <div className="min-w-0">
-                                        <div className="text-muted-foreground">{t('billingPlan')}</div>
-                                        <div className="truncate text-foreground" title={displayLog.billing_class_id ?? ''}>
-                                            {displayLog.billing_basis ?? 'actual'} · {displayLog.billing_class_id || '-'} · {displayLog.billing_cost_status || 'unknown'}
-                                        </div>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="text-muted-foreground">{t('priceResolution')}</div>
-                                        <div className="truncate text-foreground">
-                                            {displayLog.billing_resolution_method || '-'} · {displayLog.billing_price_source || '-'} · {displayLog.billing_price_mode || '-'}
-                                        </div>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="text-muted-foreground">{t('dualLedger')}</div>
-                                        <div className="text-foreground">
-                                            {t('billedAmount')} {Number(displayLog.cost ?? 0).toFixed(6)} · {t('providerCost')} {Number(displayLog.provider_cost ?? 0).toFixed(6)}
-                                        </div>
+
+                                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                                        <PriceLedgerCard
+                                            title={t('billingReceivable')}
+                                            amount={Number.isFinite(displayLog.cost) ? displayLog.cost : undefined}
+                                            status={displayLog.billing_cost_status}
+                                            basis={displayLog.billing_basis}
+                                            sku={displayLog.billing_class_id}
+                                            method={displayLog.billing_resolution_method}
+                                            source={displayLog.billing_price_source}
+                                            version={displayLog.billing_price_version}
+                                            mode={displayLog.billing_price_mode}
+                                            kind="billing"
+                                            t={t}
+                                        />
+                                        <PriceLedgerCard
+                                            title={t('providerCost')}
+                                            amount={displayLog.provider_cost != null && Number.isFinite(displayLog.provider_cost)
+                                                ? displayLog.provider_cost
+                                                : undefined}
+                                            status={displayLog.provider_cost_status}
+                                            sku={displayLog.provider_billing_class_id}
+                                            method={displayLog.provider_resolution_method}
+                                            source={displayLog.provider_price_source}
+                                            version={displayLog.provider_price_version}
+                                            kind="provider"
+                                            t={t}
+                                        />
                                     </div>
                                 </div>
 
@@ -1016,7 +1337,13 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                             <div className="flex items-center gap-1.5">
                                 <DollarSign className="size-3.5 text-emerald-500" />
                                 <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                    {t('cost')}: {Number(log.cost).toFixed(6)}
+                                    {t('cost')}: {getLedgerAmountLabel(
+                                        Number.isFinite(displayLog.cost) ? displayLog.cost : undefined,
+                                        displayLog.billing_cost_status,
+                                        hasBillingDiagnostics(displayLog),
+                                        true,
+                                        t,
+                                    )}
                                 </span>
                             </div>
                         </div>

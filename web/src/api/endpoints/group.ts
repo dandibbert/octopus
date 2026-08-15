@@ -3,6 +3,7 @@ import { apiClient } from '../client';
 import { logger } from '@/lib/logger';
 import {
     AutoGroupType,
+    type ExecutionHealthResult,
     type BillingBasis as ChannelBillingBasis,
     type UnknownPricePolicy as ChannelUnknownPricePolicy,
 } from './channel';
@@ -323,6 +324,12 @@ export function useUpdateGroup() {
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ['groups', 'list'] });
         },
+    });
+}
+
+export function useGroupRouteHealth() {
+    return useMutation({
+        mutationFn: (groupID: number) => apiClient.post<ExecutionHealthResult>(`/api/v1/group/${groupID}/health`, {}),
     });
 }
 

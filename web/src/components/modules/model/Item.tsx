@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, Copy, GitMerge } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useCreateModel, useUpdateModel, useDeleteModel, type LLMInfo, type PriceMode } from '@/api/endpoints/model';
@@ -12,17 +12,14 @@ import { ModelDeleteOverlay, ModelEditOverlay } from './ItemOverlays';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { AttachPriceDialog } from './AttachPriceDialog';
+import { effectivePriceMode, formatModelPrice } from './ModelIdentityCombobox';
 
 interface ModelItemProps {
     model: LLMInfo;
+    models: LLMInfo[];
     layout?: 'grid' | 'list';
-}
-
-function effectivePriceMode(model: LLMInfo): PriceMode {
-    if (model.price_mode) return model.price_mode;
-    return model.input === 0 && model.output === 0 && model.cache_read === 0 && model.cache_write === 0
-        ? 'unknown'
-        : 'explicit';
 }
 
 function canonicalBareModel(value?: string) {
@@ -35,10 +32,14 @@ function canonicalBareModel(value?: string) {
 function PriceMetric({
     label,
     value,
+    priceMode,
+    freeLabel,
     icon,
 }: {
     label: string;
     value: number;
+    priceMode: PriceMode;
+    freeLabel: string;
     icon: ReactNode;
 }) {
     return (
@@ -48,16 +49,18 @@ function PriceMetric({
                 <span>{label}</span>
             </div>
             <div className="mt-1 whitespace-nowrap text-sm font-semibold tabular-nums text-card-foreground">
-                ${value.toFixed(2)}
+                {formatModelPrice(value, priceMode, freeLabel)}
             </div>
         </div>
     );
 }
 
-export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: ModelItemProps) {
+export const ModelItem = memo(function ModelItem({ model, models, layout = 'grid' }: ModelItemProps) {
     const t = useTranslations('model');
+    const copyT = useTranslations('common.copy');
     const isListLayout = layout === 'list';
     const [isEditOpen, setIsEditOpen] = useState(false);
+    const [isAttachOpen, setIsAttachOpen] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [overlayRect, setOverlayRect] = useState<{ top: number; left: number; width: number } | null>(null);
     const instanceId = useId();
@@ -147,6 +150,17 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
     const handleDeleteClick = () => {
         closeEdit();
         setConfirmDelete(true);
+    };
+
+    const handleCopyName = async () => {
+        try {
+            await navigator.clipboard.writeText(model.name);
+            toast.success(copyT('success'));
+        } catch (error) {
+            toast.error(copyT('failed'), {
+                description: error instanceof Error ? error.message : String(error),
+            });
+        }
     };
     const handleCancelDelete = () => setConfirmDelete(false);
     const handleConfirmDelete = () => {
@@ -241,37 +255,66 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
             {model.canonical_model_id && (
                 <Tooltip side="top" sideOffset={8} align="start">
                     <TooltipTrigger className="block w-full truncate rounded-xl bg-muted/25 px-3 py-2 text-left text-xs text-muted-foreground">
-                        <span className="font-medium text-card-foreground/75">{t('card.canonical')}：</span>
-                        {model.canonical_model_id}
+                        <span className="block font-medium text-card-foreground/75">{t('card.canonical')}</span>
+                        <span className="mt-0.5 block truncate">{model.canonical_model_id}</span>
                     </TooltipTrigger>
                     <TooltipContent>{model.canonical_model_id}</TooltipContent>
                 </Tooltip>
             )}
 
             {priceMode === 'unknown' ? (
-                <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
-                    {t('card.unknownPrice')}
-                </p>
+                <div className="rounded-xl bg-destructive/10 px-3 py-2.5">
+                    <p className="text-sm font-medium text-destructive">{t('card.unknownPrice')}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="min-h-10 flex-1 rounded-xl bg-background px-3 sm:flex-none"
+                            onClick={handleCopyName}
+                        >
+                            <Copy className="size-4" />
+                            {t('card.copyName')}
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="min-h-10 flex-1 rounded-xl px-3 sm:flex-none"
+                            onClick={() => setIsAttachOpen(true)}
+                        >
+                            <GitMerge className="size-4" />
+                            {t('card.attachPrice')}
+                        </Button>
+                    </div>
+                </div>
             ) : (
                 <div className={cn('grid gap-2', isListLayout ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2')}>
                     <PriceMetric
                         label={t('card.input')}
                         value={model.input}
+                        priceMode={priceMode}
+                        freeLabel={t('mode.free')}
                         icon={<ArrowDownToLine className="size-3.5 shrink-0" style={{ color: brandColor }} />}
                     />
                     <PriceMetric
                         label={t('card.cacheRead')}
                         value={model.cache_read}
+                        priceMode={priceMode}
+                        freeLabel={t('mode.free')}
                         icon={<ArrowDownToLine className="size-3.5 shrink-0 opacity-60" style={{ color: brandColor }} />}
                     />
                     <PriceMetric
                         label={t('card.output')}
                         value={model.output}
+                        priceMode={priceMode}
+                        freeLabel={t('mode.free')}
                         icon={<ArrowUpFromLine className="size-3.5 shrink-0" style={{ color: brandColor }} />}
                     />
                     <PriceMetric
                         label={t('card.cacheWrite')}
                         value={model.cache_write}
+                        priceMode={priceMode}
+                        freeLabel={t('mode.free')}
                         icon={<ArrowUpFromLine className="size-3.5 shrink-0 opacity-60" style={{ color: brandColor }} />}
                     />
                 </div>
@@ -349,6 +392,15 @@ export const ModelItem = memo(function ModelItem({ model, layout = 'grid' }: Mod
                     document.body
                 )
                 : null}
+
+            {isAttachOpen && (
+                <AttachPriceDialog
+                    source={model}
+                    models={models}
+                    open
+                    onOpenChange={setIsAttachOpen}
+                />
+            )}
         </article>
     );
 });

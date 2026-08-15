@@ -44,10 +44,12 @@
         "supportedModels": "Supported Models"
     },
     "navbar": {
+        "label": "Main navigation",
         "home": "Home",
         "site": "Site",
         "channel": "Channel",
         "group": "Group",
+        "playground": "Playground",
         "key": "Key",
         "model": "Price",
         "log": "Log",
@@ -91,6 +93,12 @@
                     "includeContent": "Search request/response content",
                     "slowHint": "Contains mode (especially over content) is slower; pair with a time range."
                 },
+                "source": {
+                    "title": "Request source",
+                    "api": "API",
+                    "playground": "Playground",
+                    "health_check": "Health check"
+                },
                 "channel": {
                     "title": "Channel",
                     "searchPlaceholder": "Search channels...",
@@ -103,6 +111,7 @@
     },
     "common": {
         "copy": {
+            "action": "Copy",
             "success": "Copied",
             "failed": "Copy failed",
             "noContent": "Nothing to copy"
@@ -519,6 +528,69 @@
             "notConfigured": "WebDAV not configured"
         }
     },
+    "playground": {
+        "title": "Model playground",
+        "subtitle": "Conversation history is not saved; requests and responses follow system log retention settings",
+        "regenerate": "Regenerate",
+        "clear": "Clear",
+        "empty": "Send a message to verify model output, parameter compatibility, and routing.",
+        "inputPlaceholder": "Type a message; press Enter to send",
+        "stop": "Stop generation",
+        "send": "Send",
+        "copy": "Copy",
+        "settings": {
+            "mode": "Invocation mode",
+            "group": "Group",
+            "channel": "Channel",
+            "directChannel": "Direct Channel",
+            "selectGroup": "Select group",
+            "selectChannel": "Select channel",
+            "remoteModel": "Remote Model",
+            "selectModel": "Select model",
+            "systemPrompt": "System Prompt",
+            "optional": "Optional",
+            "reasoning": "Reasoning effort",
+            "temperature": "Temperature",
+            "maxOutputTokens": "Max output tokens",
+            "auto": "Auto",
+            "streaming": "Streaming",
+            "streamingHint": "Display output as it arrives"
+        },
+        "reasoning": {
+            "auto": "Auto",
+            "off": "Off",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "xhigh": "Extra high"
+        },
+        "errors": {
+            "selectTarget": "Select an invocation target first",
+            "invalidTemperature": "Temperature must be between 0 and 2",
+            "invalidMaxOutputTokens": "Max output tokens must be between 1 and 131072",
+            "invalidStream": "The upstream returned an invalid stream event",
+            "streamFailed": "Streaming request failed",
+            "emptyResponse": "The upstream returned an empty response",
+            "generationFailed": "Generation failed"
+        },
+        "diagnostics": {
+            "title": "Diagnostics",
+            "total": "Total time",
+            "outputRate": "Output speed",
+            "inputTokens": "Input tokens",
+            "outputTokens": "Output tokens",
+            "estimatedCost": "Estimated cost",
+            "cacheReadTokens": "Cache read tokens",
+            "cacheWriteTokens": "Cache write tokens",
+            "requestedGroup": "Requested group",
+            "requestedChannel": "Requested channel",
+            "requestedModel": "Requested model",
+            "actualChannel": "Actual channel",
+            "remoteModel": "Remote model",
+            "actualModel": "Actual model",
+            "requestId": "Request ID"
+        }
+    },
     "group": {
         "toast": {
             "created": "Created successfully",
@@ -535,6 +607,20 @@
         "pin": {
             "pin": "Pin to top",
             "unpin": "Unpin"
+        },
+        "routeHealth": {
+            "action": "Route health check",
+            "testing": "Testing route…",
+            "available": "Route available",
+            "unavailable": "Route unavailable",
+            "failed": "Route health check failed",
+            "routed": "Routed",
+            "availableDescription": "{target} · {latency} ms",
+            "availableLatency": "Available · {latency}ms",
+            "actualChannel": "Actual channel",
+            "actualModel": "Actual model",
+            "errorDetails": "Error details",
+            "playground": "Playground"
         },
         "preset": {
             "title": "Presets",
@@ -650,6 +736,7 @@
             "attemptStatus": {
                 "success": "Success",
                 "failed": "Failed",
+                "circuit_break": "Circuit break",
                 "skipped": "Skipped"
             },
             "statusValue": {
@@ -783,6 +870,8 @@
             "aliasType": "Model alias",
             "needsReview": "Needs review",
             "unknownPrice": "No valid price configured",
+            "copyName": "Copy model name",
+            "attachPrice": "Link existing price",
             "inheritedFrom": "Inherited from: {model}",
             "source": "Source: {source}",
             "edit": "Edit",
@@ -837,7 +926,15 @@
             "disabled": "Disabled",
             "automatic": "Auto-discovered",
             "edit": "Edit alias",
-            "delete": "Delete alias"
+            "delete": "Delete alias",
+            "attachTitle": "Link existing price",
+            "attachDescription": "Share an existing model price with this upstream model. Future target price updates apply automatically.",
+            "targetSearchPlaceholder": "Search priced models, providers, or billing SKUs...",
+            "noPricedTargets": "No valid price is available to link",
+            "attachedFinal": "Price linked and verified",
+            "currentTarget": "Current link",
+            "newTarget": "New target",
+            "replaceAttachment": "Update link"
         }
     },
     "log": {
@@ -853,12 +950,56 @@
             "input": "Input",
             "output": "Output",
             "cost": "Cost",
+            "requestId": "Request ID",
             "modelPath": "Model path",
             "billingPlan": "Billing plan",
             "priceResolution": "Price resolution",
             "dualLedger": "Dual ledger",
             "billedAmount": "Billed",
             "providerCost": "Provider cost",
+            "billingReceivable": "User charge",
+            "billingBasisLabel": "Billing basis",
+            "billingSkuLabel": "Billing SKU",
+            "billingStatusNotRecorded": "Not recorded",
+            "billingStatusResolved": "Resolved",
+            "billingStatusFree": "Explicitly free",
+            "billingStatusUnknown": "Price unknown",
+            "billingStatusConflict": "Price conflict",
+            "billingAmountUnavailable": "Cannot calculate",
+            "billingFreeAmount": "$0 (Free)",
+            "billingEstimated": "Estimated",
+            "billingPriceEstimated": "Price estimated",
+            "billingUsageEstimated": "Usage estimated",
+            "billingModelMismatch": "Model mismatch",
+            "billingMethodLabel": "Resolution",
+            "billingSourceLabel": "Price source",
+            "billingSourceUser": "User setting",
+            "billingSourceRemote": "Online catalog",
+            "billingSourceBuiltin": "Built-in catalog",
+            "billingSourceAuto": "Auto-discovered",
+            "billingModeLabel": "Price mode",
+            "billingBasisActual": "Actual upstream model",
+            "billingBasisRequested": "Requested model",
+            "billingBasisRouted": "Routed model",
+            "billingBasisFixedSku": "Fixed SKU",
+            "billingMethodRouteFallback": "Fell back to routed price",
+            "billingMethodRouteFallbackUnknown": "Tried the routed model price, but no usable price was found",
+            "billingMethodRouteBinding": "Route binding",
+            "billingMethodFixedSku": "Fixed SKU",
+            "billingMethodActualPending": "Awaiting actual upstream model",
+            "billingMethodActualOverride": "Actual upstream model price",
+            "billingMethodExact": "Exact match",
+            "billingMethodProviderPrefix": "Provider-prefix match",
+            "billingMethodChannelWrapper": "Channel-wrapper match",
+            "billingMethodChannelAlias": "Channel name mapping",
+            "billingMethodProviderAlias": "Provider name mapping",
+            "billingMethodAlias": "Global name mapping",
+            "billingMethodCatalog": "Price catalog match",
+            "billingMethodUnknown": "Unrecognized",
+            "billingPriceModeExplicit": "Custom price",
+            "billingPriceModeFree": "Explicitly free",
+            "billingPriceModeInherited": "Inherited price",
+            "billingPriceModeUnknown": "Unknown",
             "requestContent": "Request Content",
             "responseContent": "Response Content",
             "noRequestContent": "(No request content)",
@@ -915,6 +1056,32 @@
         }
     },
     "channel": {
+        "model_actions": {
+            "section_title": "Models and quick actions",
+            "empty": "No configured models",
+            "create_group": "Create group",
+            "create_success": "Group created",
+            "create_failed": "Failed to create group",
+            "name_conflict": "Group “{name}” already exists. Choose another name.",
+            "health_check": "Health check",
+            "playground": "Playground",
+            "testing": "Testing…",
+            "health_available": "Model available",
+            "health_unavailable": "Model unavailable",
+            "health_failed": "Health check failed",
+            "available_latency": "Available · {latency}ms",
+            "unavailable": "Unavailable",
+            "error_details": "Error details",
+            "source": "Source: {channel} / {model}",
+            "add_prefix": "Add channel prefix",
+            "prefix": "Prefix",
+            "group_name": "Group name",
+            "automatic_name": "Automatic name",
+            "restore_auto_name": "Restore automatic name",
+            "cancel": "Cancel",
+            "create": "Create",
+            "creating": "Creating…"
+        },
         "tabs": {
             "site": "Site Channels",
             "manual": "Manual Channels"
@@ -922,15 +1089,30 @@
         "card": {
             "requestCount": "Requests",
             "totalCost": "Total Cost",
+            "managedBadge": "Site projection",
+            "openDetails": "Open details for {name}",
+            "toggleEnabled": "Toggle {name}",
             "toast": {
                 "enabled": "Channel enabled",
                 "disabled": "Channel disabled"
             }
         },
+        "list": {
+            "targetedManagedTitle": "Located managed channel",
+            "targetedManagedDescription": "This channel is projected from a site account and is normally hidden from the manual channel list.",
+            "loadFailed": "Failed to load manual channels: {message}",
+            "empty": "No manual channels match the current filters"
+        },
         "detail": {
             "title": {
                 "edit": "Edit Channel",
                 "view": "Channel Details"
+            },
+            "managed": {
+                "badge": "Site projection",
+                "description": "This managed channel is projected automatically from a site account. Change its account, group, model, proxy, or enabled state in Site management; direct editing, deletion, and toggling are disabled here to prevent later projections from overwriting changes.",
+                "viewSite": "View source site",
+                "viewSiteChannel": "View site channel"
             },
             "sections": {
                 "requests": "Request Details",
@@ -1126,9 +1308,26 @@
         },
         "group": {
             "not_found": "The group was not found.",
+            "name_conflict": "Group “{name}” already exists. Choose another name.",
             "create_failed": "Failed to create the group.",
             "update_failed": "Failed to update the group.",
             "delete_failed": "Failed to delete the group."
+        },
+        "playground": {
+            "concurrent_limit": "Too many test requests are running. The concurrency limit is {limit}.",
+            "rate_limited": "Too many test requests. Try again in {retryAfter} seconds (limit: {maxRPM}/min).",
+            "messages_required": "Add at least one message before sending.",
+            "messages_limit": "A request can contain at most {max} messages.",
+            "text_too_long": "A prompt or message exceeds the {maxBytes}-byte limit.",
+            "unsupported_role": "Message {index} uses unsupported role “{role}”.",
+            "temperature_range": "Temperature must be between {min} and {max}.",
+            "max_output_tokens_range": "Max output tokens must be between {min} and {max}.",
+            "invalid_reasoning_effort": "Reasoning effort “{effort}” is not supported.",
+            "target_required": "Select a valid invocation target.",
+            "target_unavailable": "The selected test target ({targetId}) is unavailable.",
+            "model_not_configured": "Model “{model}” is not configured on channel {channelId}.",
+            "unsupported_target_type": "Invocation target type “{type}” is not supported.",
+            "execution_failed": "The test request could not be completed. Check the target and try again."
         },
         "model": {
             "price_update_failed": "Failed to update model prices.",
@@ -1136,6 +1335,14 @@
             "create_failed": "Failed to create the model.",
             "update_failed": "Failed to update the model.",
             "delete_failed": "Failed to delete the model."
+        },
+        "model_alias": {
+            "attach": {
+                "invalid_request": "The price-link request is invalid. Check the model and scope.",
+                "target_price_unknown": "The selected target has no usable price. Choose another model.",
+                "source_price_conflict": "This model already has its own price and cannot link to another price.",
+                "alias_conflict": "This scope already has a mapping to a different price."
+            }
         },
         "relay": {
             "model_not_supported": "This API key does not support the requested model.",

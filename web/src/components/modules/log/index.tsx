@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLogs, useLogSiteActionTargets, type LogKeywordMode, type LogKeywordScope } from '@/api/endpoints/log';
+import { useLogs, useLogSiteActionTargets, type LogKeywordMode, type LogKeywordScope, type LogRequestSource } from '@/api/endpoints/log';
 import { LogCard, type LogSiteActionTargets } from './Item';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -15,6 +15,7 @@ type LogFilters = {
     keywordMode: LogKeywordMode;
     keywordScope: LogKeywordScope;
     channelIds: number[];
+    requestSources: LogRequestSource[];
     startTime?: number;
     endTime?: number;
 };
@@ -34,6 +35,7 @@ function filtersActive(filters: LogFilters) {
     return (
         !!filters.keyword.trim() ||
         filters.channelIds.length > 0 ||
+        filters.requestSources.length > 0 ||
         !!filters.startTime ||
         !!filters.endTime
     );
@@ -54,6 +56,7 @@ export function Log() {
     const lastHandledRefreshRequestIdRef = useRef(refreshRequestId);
     const logDateRange = useToolbarViewOptionsStore((s) => s.logDateRange);
     const logChannelIds = useToolbarViewOptionsStore((s) => s.logChannelIds);
+    const logRequestSources = useToolbarViewOptionsStore((s) => s.logRequestSources);
     const logKeywordMode = useToolbarViewOptionsStore((s) => s.logKeywordMode);
     const logKeywordScope = useToolbarViewOptionsStore((s) => s.logKeywordScope);
     const filters = useMemo<LogFilters>(() => ({
@@ -61,9 +64,10 @@ export function Log() {
         keywordMode: logKeywordMode,
         keywordScope: logKeywordScope,
         channelIds: logChannelIds,
+        requestSources: logRequestSources,
         startTime: logDateRange.start,
         endTime: logDateRange.end,
-    }), [logDateRange.end, logDateRange.start, logChannelIds, searchTerm, logKeywordMode, logKeywordScope]);
+    }), [logDateRange.end, logDateRange.start, logChannelIds, logRequestSources, searchTerm, logKeywordMode, logKeywordScope]);
     const debouncedFilters = useDebouncedValue(filters, 200);
     const filterMode = filtersActive(debouncedFilters);
     const logFilters = useMemo(() => ({
@@ -71,6 +75,7 @@ export function Log() {
         keyword_mode: debouncedFilters.keyword.trim() ? debouncedFilters.keywordMode : undefined,
         keyword_scope: debouncedFilters.keyword.trim() ? debouncedFilters.keywordScope : undefined,
         channel_ids: debouncedFilters.channelIds.length > 0 ? debouncedFilters.channelIds : undefined,
+        request_sources: debouncedFilters.requestSources.length > 0 ? debouncedFilters.requestSources : undefined,
         start_time: debouncedFilters.startTime,
         end_time: debouncedFilters.endTime,
     }), [debouncedFilters]);

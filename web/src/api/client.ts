@@ -126,6 +126,18 @@ async function request<T>(
     return handleResponse<T>(response);
 }
 
+export async function authenticatedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers);
+    if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    if (typeof window !== 'undefined' && getAuthStore) {
+        const store = getAuthStore();
+        if (store.token) headers.set('Authorization', `Bearer ${store.token}`);
+    }
+    const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+    if (response.status === HttpStatus.UNAUTHORIZED && getAuthStore) getAuthStore().logout();
+    return response;
+}
+
 /**
  * API 客户端 - 基础 HTTP 方法
  */

@@ -25,6 +25,12 @@ export interface LLMInfo extends LLMPrice {
     price_mode?: PriceMode;
     price_source?: string;
     price_version?: string;
+    effective_price?: LLMPrice;
+    effective_price_source?: string;
+    effective_price_version?: string;
+    resolution_status?: string;
+    resolution_method?: string;
+    inherited_from?: string;
     auto_discovered?: boolean;
     needs_review?: boolean;
     catalog_only?: boolean;
@@ -41,6 +47,41 @@ export interface ModelAlias {
     source?: string;
     priority?: number;
     enabled: boolean;
+}
+
+export interface AttachModelAliasRequest {
+    alias: string;
+    canonical_model_id: string;
+    billing_class_id?: string;
+    provider?: string;
+    channel_id?: number;
+    conflict_policy?: 'reject' | 'replace';
+}
+
+export interface ModelAliasAttachResponse {
+    alias: ModelAlias;
+    model_resolution: {
+        raw_model: string;
+        normalized_model: string;
+        provider: string;
+        canonical_model_id: string;
+        billing_class_id: string;
+        method: string;
+        confidence: number;
+        estimated: boolean;
+        alias_id?: number;
+        status: string;
+    };
+    price_resolution: {
+        price?: LLMPrice;
+        billing_class_id: string;
+        price_source: string;
+        price_version: string;
+        price_mode: PriceMode;
+        status: string;
+        method: string;
+        estimated: boolean;
+    };
 }
 
 /**
@@ -236,8 +277,10 @@ export function useLastUpdateTime() {
 }
 
 function invalidateModelIdentityQueries(queryClient: ReturnType<typeof useQueryClient>) {
-    queryClient.invalidateQueries({ queryKey: ['models', 'list'] });
-    queryClient.invalidateQueries({ queryKey: ['models', 'aliases'] });
+    return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['models', 'list'] }),
+        queryClient.invalidateQueries({ queryKey: ['models', 'aliases'] }),
+    ]);
 }
 
 export function useModelAliasList() {
@@ -272,5 +315,16 @@ export function useDeleteModelAlias() {
         mutationFn: async (id: number) => apiClient.delete<null>(`/api/v1/model/alias/delete/${id}`),
         onSuccess: () => invalidateModelIdentityQueries(queryClient),
         onError: (error) => logger.error('模型别名删除失败:', error),
+    });
+}
+
+export function useAttachModelAlias() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (data: AttachModelAliasRequest) => (
+            apiClient.post<ModelAliasAttachResponse>('/api/v1/model/alias/attach', data)
+        ),
+        onSuccess: () => invalidateModelIdentityQueries(queryClient),
+        onError: (error) => logger.error('模型价格挂靠失败:', error),
     });
 }

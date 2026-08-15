@@ -52,10 +52,14 @@ export interface LogSiteActionTargets {
     legacy_error_target?: LogSiteActionTarget | null;
 }
 
+export type LogRequestSource = 'api' | 'playground' | 'health_check';
+
 export interface RelayLog {
     id: number;
     time: number;                // 时间戳
     request_model_name: string;  // 请求模型名称
+    request_source?: LogRequestSource;
+    request_id?: string;
     routed_model_name?: string;
     request_api_key_name?: string; // 请求使用的 API Key 名称
     channel: number;             // 实际使用的渠道ID
@@ -127,6 +131,7 @@ export interface LogListParams {
     start_time?: number;
     end_time?: number;
     channel_ids?: number[];
+    request_sources?: LogRequestSource[];
     status?: LogStatusFilter;
     keyword?: string;
     keyword_scope?: LogKeywordScope;
@@ -147,6 +152,7 @@ const logFiltersKey = (filters?: UseLogsOptions['filters']) => ({
     start_time: filters?.start_time ?? null,
     end_time: filters?.end_time ?? null,
     channel_ids: filters?.channel_ids?.filter((id) => id > 0).sort((a, b) => a - b) ?? [],
+    request_sources: filters?.request_sources?.slice().sort() ?? [],
     status: filters?.status && filters.status !== 'all' ? filters.status : 'all',
     keyword: filters?.keyword?.trim() ?? '',
     keyword_scope: filters?.keyword_scope ?? 'default',
@@ -158,6 +164,8 @@ function appendLogListParams(params: URLSearchParams, filters?: UseLogsOptions['
     if (filters?.end_time) params.set('end_time', String(filters.end_time));
     const channelIds = filters?.channel_ids?.filter((id) => id > 0) ?? [];
     if (channelIds.length > 0) params.set('channel_ids', channelIds.join(','));
+    const requestSources = filters?.request_sources ?? [];
+    if (requestSources.length > 0) params.set('request_source', requestSources.join(','));
     if (filters?.status && filters.status !== 'all') params.set('status', filters.status);
     const keyword = filters?.keyword?.trim();
     if (keyword) params.set('keyword', keyword);

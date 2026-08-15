@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Trash2, X, Pencil, Pin, PinOff } from 'lucide-react';
+import { Trash2, X, Pencil, Pin, PinOff, Activity, MessageSquareText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { type Group, useDeleteGroup, useUpdateGroup, useToggleGroupPin } from '@/api/endpoints/group';
+import { type Group, useDeleteGroup, useUpdateGroup, useToggleGroupPin, useGroupRouteHealth } from '@/api/endpoints/group';
+import type { ExecutionHealthResult } from '@/api/endpoints/channel';
 import { useModelChannelList } from '@/api/endpoints/model';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,8 @@ import { GroupHealthBadge } from './health';
 import { modelChannelKey, MODE_LABELS } from './utils';
 import { GroupMode, type GroupUpdateRequest } from '@/api/endpoints/group';
 import { PresetPopover } from './PresetPopover';
+import { Button } from '@/components/ui/button';
+import { openPlayground } from '@/stores/playground';
 import {
     MorphingDialog,
     MorphingDialogClose,
@@ -76,6 +79,7 @@ export function GroupCard({ group }: { group: Group }) {
     const t = useTranslations('group');
     const updateGroup = useUpdateGroup();
     const deleteGroup = useDeleteGroup();
+    const routeHealth = useGroupRouteHealth();
     const togglePin = useToggleGroupPin();
     const { data: modelChannels = [] } = useModelChannelList();
 
@@ -83,6 +87,7 @@ export function GroupCard({ group }: { group: Group }) {
     const [isDragging, setIsDragging] = useState(false);
     const [members, setMembers] = useState<SelectedMember[]>([]);
     const [weightOverrides, setWeightOverrides] = useState<Record<string, number>>({});
+    const [routeHealthResult, setRouteHealthResult] = useState<ExecutionHealthResult | null>(null);
     const weightTimerRef = useRef<NodeJS.Timeout | null>(null);
     const membersRef = useRef<SelectedMember[]>([]);
 
@@ -217,6 +222,36 @@ export function GroupCard({ group }: { group: Group }) {
         }, 500);
     }, [clearWeightOverride, group.id, isDragging, priorityByItemId, updateGroup, onSuccess, onError]);
 
+    const handleRouteHealth = useCallback(() => {
+        if (!group.id || routeHealth.isPending) return;
+        routeHealth.mutate(group.id, {
+            onSuccess: (result) => {
+                setRouteHealthResult(result);
+                if (result.success) {
+                    toast.success(t('routeHealth.available'), {
+                        description: t('routeHealth.availableDescription', {
+                            target: result.selected_channel || result.channel_name || t('routeHealth.routed'),
+                            latency: result.latency_ms,
+                        }),
+                    });
+                    return;
+                }
+                toast.error(t('routeHealth.unavailable'), { description: result.error });
+            },
+            onError: (error) => {
+                const result: ExecutionHealthResult = {
+                    success: false,
+                    latency_ms: 0,
+                    request_id: '',
+                    status_code: 0,
+                    error: error instanceof Error ? error.message : String(error),
+                };
+                setRouteHealthResult(result);
+                toast.error(t('routeHealth.failed'), { description: result.error });
+            },
+        });
+    }, [group.id, routeHealth, t]);
+
     const handleSubmitEdit = useCallback((values: GroupEditorValues, onDone?: () => void) => {
         if (!group.id) return;
 
@@ -333,10 +368,10 @@ export function GroupCard({ group }: { group: Group }) {
 
                 <div className="flex items-center gap-1 shrink-0">
                     <Tooltip side="top" sideOffset={10} align="center">
-                        <TooltipTrigger>
+                        <TooltipTrigger asChild>
                             <CopyIconButton
                                 text={group.name}
-                                className="p-1.5 rounded-lg transition-colors hover:bg-muted text-muted-foreground hover:text-foreground"
+                                className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted text-muted-foreground hover:text-foreground"
                                 copyIconClassName="size-4"
                                 checkIconClassName="size-4 text-primary"
                             />
@@ -347,7 +382,10 @@ export function GroupCard({ group }: { group: Group }) {
                     <PresetPopover group={group} />
 
                     <MorphingDialog>
-                        <MorphingDialogTrigger className="p-1.5 rounded-lg transition-colors hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <MorphingDialogTrigger
+                            aria-label={t('detail.actions.edit')}
+                            className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted text-muted-foreground hover:text-foreground"
+                        >
                             <Tooltip side="top" sideOffset={10} align="center">
                                 <TooltipTrigger asChild>
                                     <Pencil className="size-4" />
@@ -383,7 +421,7 @@ export function GroupCard({ group }: { group: Group }) {
                             updateGroup.mutate({ id: group.id!, mode: m }, { onSuccess, onError });
                         }}
                         className={cn(
-                            'flex-1 py-1 text-xs rounded-lg transition-colors',
+                            'min-h-10 flex-1 px-1 py-2 text-xs rounded-lg transition-colors',
                             group.mode === m ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80',
                             // Keep visuals stable (no opacity/disabled flicker) while still preventing double-submit via onClick guard.
                             (!group.id) && 'cursor-not-allowed opacity-50'
@@ -394,7 +432,69 @@ export function GroupCard({ group }: { group: Group }) {
                 ))}
             </div>
 
-            <GroupHealthBadge groupId={group.id} />
+            <div className="flex flex-wrap items-stretch gap-2">
+                <GroupHealthBadge groupId={group.id} />
+                <Button
+                    className="h-10 flex-1 sm:flex-none"
+                    variant="outline"
+                    disabled={!group.id || routeHealth.isPending}
+                    onClick={handleRouteHealth}
+                >
+                    <Activity className="size-3.5" />
+                    {routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}
+                </Button>
+                <Button
+                    className="h-10 flex-1 sm:flex-none"
+                    variant="outline"
+                    disabled={!group.id}
+                    onClick={() => group.id && openPlayground({ type: 'group', groupId: group.id, group: group.name })}
+                >
+                    <MessageSquareText className="size-3.5" />
+                    {t('routeHealth.playground')}
+                </Button>
+            </div>
+
+            {routeHealthResult && (
+                <div className={cn(
+                    'mt-2 rounded-xl border px-3 py-2 text-xs',
+                    routeHealthResult.success
+                        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400'
+                        : 'border-destructive/30 bg-destructive/5 text-destructive',
+                )}>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="font-medium">
+                            {routeHealthResult.success
+                                ? t('routeHealth.availableLatency', { latency: routeHealthResult.latency_ms })
+                                : t('routeHealth.unavailable')}
+                        </span>
+                        {(routeHealthResult.selected_channel || routeHealthResult.channel_name) && (
+                            <span>{t('routeHealth.actualChannel')}: {routeHealthResult.selected_channel || routeHealthResult.channel_name}</span>
+                        )}
+                        {(routeHealthResult.actual_model || routeHealthResult.remote_model) && (
+                            <span>{t('routeHealth.actualModel')}: {routeHealthResult.actual_model || routeHealthResult.remote_model}</span>
+                        )}
+                    </div>
+                    {!routeHealthResult.success && (routeHealthResult.error || routeHealthResult.attempts?.length) && (
+                        <details className="mt-2">
+                            <summary className="cursor-pointer font-medium">{t('routeHealth.errorDetails')}</summary>
+                            {routeHealthResult.error && <pre className="mt-2 whitespace-pre-wrap break-words font-sans">{routeHealthResult.error}</pre>}
+                            {routeHealthResult.attempts?.map((attempt, index) => {
+                                const translatedStatus = attempt.status === 'success'
+                                    || attempt.status === 'failed'
+                                    || attempt.status === 'circuit_break'
+                                    || attempt.status === 'skipped'
+                                    ? t(`health.attemptStatus.${attempt.status}`)
+                                    : attempt.status;
+                                return (
+                                    <div key={`${attempt.attempt_num}-${attempt.channel_id}-${index}`} className="mt-2 break-words">
+                                        #{index + 1} {attempt.channel_name || String(attempt.channel_id)} · {attempt.model_name} · {translatedStatus}{attempt.msg ? `: ${attempt.msg}` : ''}
+                                    </div>
+                                );
+                            })}
+                        </details>
+                    )}
+                </div>
+            )}
 
             <section className="rounded-xl border border-border/50 bg-muted/30 overflow-hidden relative h-101">
                 <MemberList
@@ -423,6 +523,7 @@ export function GroupCard({ group }: { group: Group }) {
                         <TooltipTrigger asChild>
                             <button
                                 type="button"
+                                aria-label={group.pinned ? t('pin.unpin') : t('pin.pin')}
                                 disabled={togglePin.isPending || !group.id}
                                 onClick={() => {
                                     if (!group.id || togglePin.isPending) return;
@@ -435,7 +536,7 @@ export function GroupCard({ group }: { group: Group }) {
                                     );
                                 }}
                                 className={cn(
-                                    'p-1.5 rounded-lg transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none',
+                                    'flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none',
                                     group.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                                 )}
                             >
@@ -450,8 +551,9 @@ export function GroupCard({ group }: { group: Group }) {
                             <motion.button
                                 layoutId={`delete-btn-group-${group.id}`}
                                 type="button"
+                                aria-label={t('detail.actions.delete')}
                                 onClick={() => setConfirmDelete(true)}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                className="flex size-10 items-center justify-center rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                             >
                                 <Trash2 className="size-4" />
                             </motion.button>
@@ -470,8 +572,9 @@ export function GroupCard({ group }: { group: Group }) {
                     >
                         <button
                             type="button"
+                            aria-label={t('detail.actions.cancel')}
                             onClick={() => setConfirmDelete(false)}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-destructive-foreground/20 text-destructive-foreground transition-all hover:bg-destructive-foreground/30 active:scale-95"
+                            className="flex size-10 items-center justify-center rounded-lg bg-destructive-foreground/20 text-destructive-foreground transition-all hover:bg-destructive-foreground/30 active:scale-95"
                         >
                             <X className="size-4" />
                         </button>
@@ -482,7 +585,7 @@ export function GroupCard({ group }: { group: Group }) {
                                 onError: (e) => toast.error(t('toast.deleteFailed'), { description: e.message }),
                             })}
                             disabled={deleteGroup.isPending}
-                            className="h-7 px-3 flex items-center justify-center gap-2 rounded-lg bg-destructive-foreground text-destructive text-sm font-semibold transition-all hover:bg-destructive-foreground/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="min-h-10 px-3 flex items-center justify-center gap-2 rounded-lg bg-destructive-foreground text-destructive text-sm font-semibold transition-all hover:bg-destructive-foreground/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Trash2 className="size-3.5" />
                             {t('detail.actions.confirmDelete')}

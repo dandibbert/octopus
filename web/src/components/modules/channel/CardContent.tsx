@@ -28,6 +28,7 @@ import { formatMoney } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useJumpStore } from '@/stores/jump';
+import { ChannelModelActions } from './ModelActions';
 
 export function CardContent({ channel, stats }: { channel: Channel; stats: StatsMetricsFormatted }) {
     const { setIsOpen } = useMorphingDialog();
@@ -70,6 +71,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
         provider_unknown_policy: channel.provider_unknown_policy ?? 'use_routed',
     });
     const t = useTranslations('channel.detail');
+    const tModelActions = useTranslations('channel.model_actions');
     const tProxy = useTranslations('proxyPool');
 
     const currentView = isEditing ? 'editing' : 'viewing';
@@ -210,7 +212,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                     </h2>
                     {channel.managed ? (
                         <Badge variant="outline" className="ml-3 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                            站点投影
+                            {t('managed.badge')}
                         </Badge>
                     ) : null}
                     <MorphingDialogClose
@@ -228,11 +230,11 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                 <Tabs value={currentView}>
                     <TabsContents>
                         <TabsContent value="viewing" >
-                            <div className="max-h-[60vh] overflow-y-auto space-y-4 sm:space-y-5">
+                            <div className="max-h-[60vh] overflow-y-auto space-y-4 pb-24 sm:space-y-5">
                                 {channel.managed ? (
                                     <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
                                         <div>
-                                            这是站点账号自动投影生成的托管 channel。请到站点管理中修改账号、分组、模型、代理或启停状态；该页面不再允许直接编辑、删除或启停，避免被后续投影覆盖。
+                                            {t('managed.description')}
                                         </div>
                                         {channel.managed_source ? (
                                             <div className="mt-3 flex flex-wrap gap-2">
@@ -240,24 +242,30 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    className="rounded-xl border-amber-500/30 bg-white/70 text-amber-900 hover:bg-white dark:bg-background/40 dark:text-amber-100"
+                                                    className="min-h-10 rounded-xl border-amber-500/30 bg-white/70 text-amber-900 hover:bg-white dark:bg-background/40 dark:text-amber-100"
                                                     onClick={() => handleManagedSourceJump('site')}
                                                 >
-                                                    查看来源站点
+                                                    {t('managed.viewSite')}
                                                 </Button>
                                                 <Button
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    className="rounded-xl border-amber-500/30 bg-white/70 text-amber-900 hover:bg-white dark:bg-background/40 dark:text-amber-100"
+                                                    className="min-h-10 rounded-xl border-amber-500/30 bg-white/70 text-amber-900 hover:bg-white dark:bg-background/40 dark:text-amber-100"
                                                     onClick={() => handleManagedSourceJump('site-channel')}
                                                 >
-                                                    查看站点渠道
+                                                    {t('managed.viewSiteChannel')}
                                                 </Button>
                                             </div>
                                         ) : null}
                                     </section>
                                 ) : null}
+
+                                <section className="space-y-3">
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{tModelActions('section_title')}</h4>
+                                    <ChannelModelActions channel={channel} onNavigate={() => setIsOpen(false)} />
+                                </section>
+
                                 <dl className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                                     <div className="rounded-2xl border bg-linear-to-br from-chart-1/10 to-chart-1/5 p-3 sm:p-4">
                                         <dt className="flex items-center gap-2 mb-2 text-xs font-medium text-muted-foreground">

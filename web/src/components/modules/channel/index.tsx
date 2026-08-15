@@ -15,10 +15,12 @@ import {
     useJumpStore,
 } from '@/stores/jump';
 import { useChannelTabStore } from './tab-store';
+import { useTranslations } from 'next-intl';
 
 type ChannelPendingJump = PendingJump & { target: ChannelJumpTarget };
 
 export function Channel() {
+    const t = useTranslations('channel.list');
     const { data: channelsData, isLoading, error } = useChannelList();
     const pendingJump = useJumpStore((state) => state.pending);
     const clearPending = useJumpStore((state) => state.clearPending);
@@ -128,9 +130,9 @@ export function Channel() {
     const manualHeader = targetedManagedChannel ? (
         <section className="space-y-3 px-1 pb-4">
             <div>
-                <div className="text-sm font-semibold">定位的托管渠道</div>
+                <div className="text-sm font-semibold">{t('targetedManagedTitle')}</div>
                 <div className="text-xs text-muted-foreground">
-                    这个渠道由站点账号投影生成，默认不会出现在普通渠道列表中。
+                    {t('targetedManagedDescription')}
                 </div>
             </div>
             {renderChannelCard(targetedManagedChannel)}
@@ -145,11 +147,11 @@ export function Channel() {
         </div>
     ) : error ? (
         <div className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-6 text-sm text-destructive">
-            普通渠道加载失败：{error.message}
+            {t('loadFailed', { message: error.message })}
         </div>
     ) : visibleManualChannels.length === 0 && !targetedManagedChannel ? (
         <div className="rounded-3xl border border-border/70 bg-card/70 px-4 py-8 text-center text-sm text-muted-foreground">
-            当前筛选下没有普通渠道
+            {t('empty')}
         </div>
     ) : null;
 
