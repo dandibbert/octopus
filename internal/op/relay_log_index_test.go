@@ -9,7 +9,7 @@ import (
 )
 
 // TestRelayLogEnsureIndexesIdempotent 验证：
-//  1. 头一次跑能把三个性能索引建出来；
+//  1. 头一次跑能把四个性能索引建出来；
 //  2. 重复调用不会报错也不会重复建（幂等）；
 //  3. 关键：迁移路径上不再建索引，依赖这条 op 函数作为唯一入口。
 func TestRelayLogEnsureIndexesCreatesAndIsIdempotent(t *testing.T) {
@@ -21,6 +21,7 @@ func TestRelayLogEnsureIndexesCreatesAndIsIdempotent(t *testing.T) {
 		"idx_relay_logs_time_id",
 		"idx_relay_logs_success_time_id",
 		"idx_relay_logs_channel_time_id",
+		"idx_relay_logs_source_time_id",
 	} {
 		if dbpkg.GetDB().Migrator().HasIndex("relay_logs", name) {
 			t.Fatalf("startup path unexpectedly created index %s; that's the OOM regression we're trying to avoid", name)
@@ -35,6 +36,7 @@ func TestRelayLogEnsureIndexesCreatesAndIsIdempotent(t *testing.T) {
 		"idx_relay_logs_time_id",
 		"idx_relay_logs_success_time_id",
 		"idx_relay_logs_channel_time_id",
+		"idx_relay_logs_source_time_id",
 	} {
 		if !dbpkg.GetDB().Migrator().HasIndex("relay_logs", name) {
 			t.Fatalf("expected index %s to exist after RelayLogEnsureIndexesSync", name)
@@ -79,6 +81,7 @@ func TestRelayLogEnsureIndexesAsyncCancelsImmediately(t *testing.T) {
 		"idx_relay_logs_time_id",
 		"idx_relay_logs_success_time_id",
 		"idx_relay_logs_channel_time_id",
+		"idx_relay_logs_source_time_id",
 	} {
 		if dbpkg.GetDB().Migrator().HasIndex("relay_logs", name) {
 			t.Fatalf("index %s should not be created when ctx is already canceled", name)
@@ -114,4 +117,3 @@ func TestRelayLogEnsureIndexesAsyncCancelsDuringWarmup(t *testing.T) {
 		t.Fatalf("RelayLogEnsureIndexes blocked through warmup despite ctx cancel")
 	}
 }
-

@@ -82,6 +82,9 @@ func TestRelayLogListDefaultsToLightFieldsAndNoContentKeyword(t *testing.T) {
 		if item.RequestContent != "" || item.ResponseContent != "" {
 			t.Fatalf("expected list to omit content fields by default, got %+v", item)
 		}
+		if item.RequestSource != model.RelayLogRequestSourceAPI {
+			t.Fatalf("expected empty historical request_source to read as api, got %+v", item)
+		}
 	}
 
 	contentResult, err := RelayLogListWithFilter(ctx, RelayLogListFilter{Keyword: "hidden-needle", Page: 1, PageSize: 10, WithTotal: true})
@@ -98,6 +101,78 @@ func TestRelayLogListDefaultsToLightFieldsAndNoContentKeyword(t *testing.T) {
 	}
 	if contentResult.Total != 1 || len(contentResult.Logs) != 1 || contentResult.Logs[0].ID != 101 {
 		t.Fatalf("content keyword did not find expected row: %+v", contentResult)
+	}
+}
+
+func TestRelayLogListFiltersRequestSourceAndIncludesLegacyAPI(t *testing.T) {
+	ctx := setupSiteOpTestDB(t)
+	if err := settingRefreshCache(ctx); err != nil {
+		t.Fatalf("settingRefreshCache failed: %v", err)
+	}
+	resetRelayLogStateForTest()
+
+	rows := []model.RelayLog{
+		{ID: 501, Time: 501, RequestModelName: "legacy", Success: true},
+		{ID: 502, Time: 502, RequestModelName: "playground", RequestSource: model.RelayLogRequestSourcePlayground, Success: true},
+		{ID: 503, Time: 503, RequestModelName: "health", RequestSource: model.RelayLogRequestSourceHealthCheck, Success: false},
+	}
+	if err := dbpkg.GetDB().WithContext(ctx).Create(&rows).Error; err != nil {
+		t.Fatalf("create relay logs failed: %v", err)
+	}
+	if err := dbpkg.GetDB().WithContext(ctx).Exec("UPDATE relay_logs SET request_source = NULL WHERE id = ?", 501).Error; err != nil {
+		t.Fatalf("set legacy request_source NULL: %v", err)
+	}
+
+	apiResult, err := RelayLogListWithFilter(ctx, RelayLogListFilter{
+		RequestSources: []string{model.RelayLogRequestSourceAPI},
+		Page:           1,
+		PageSize:       10,
+		WithTotal:      true,
+	})
+	if err != nil {
+		t.Fatalf("filter api request source: %v", err)
+	}
+	if apiResult.Total != 1 || len(apiResult.Logs) != 1 || apiResult.Logs[0].ID != 501 {
+		t.Fatalf("api filter returned unexpected rows: %+v", apiResult)
+	}
+	if apiResult.Logs[0].RequestSource != model.RelayLogRequestSourceAPI {
+		t.Fatalf("legacy source was not normalized: %+v", apiResult.Logs[0])
+	}
+
+	backgroundResult, err := RelayLogListWithFilter(ctx, RelayLogListFilter{
+		RequestSources: []string{model.RelayLogRequestSourcePlayground, model.RelayLogRequestSourceHealthCheck},
+		Page:           1,
+		PageSize:       10,
+		WithTotal:      true,
+	})
+	if err != nil {
+		t.Fatalf("filter background request sources: %v", err)
+	}
+	if backgroundResult.Total != 2 || len(backgroundResult.Logs) != 2 || backgroundResult.Logs[0].ID != 503 || backgroundResult.Logs[1].ID != 502 {
+		t.Fatalf("background filter returned unexpected rows: %+v", backgroundResult)
+	}
+}
+
+func TestRelayLogAddDefaultsRequestSourceToAPI(t *testing.T) {
+	ctx := setupSiteOpTestDB(t)
+	if err := settingRefreshCache(ctx); err != nil {
+		t.Fatalf("settingRefreshCache failed: %v", err)
+	}
+	resetRelayLogStateForTest()
+
+	if err := RelayLogAdd(ctx, model.RelayLog{Time: 601, RequestModelName: "api-default", Success: true}); err != nil {
+		t.Fatalf("RelayLogAdd failed: %v", err)
+	}
+	result, err := RelayLogListWithFilter(ctx, RelayLogListFilter{
+		RequestSources: []string{model.RelayLogRequestSourceAPI},
+		Page:           1,
+		PageSize:       10,
+	})
+	if err != nil {
+		t.Fatalf("list default api request source: %v", err)
+	}
+	if len(result.Logs) != 1 || result.Logs[0].RequestSource != model.RelayLogRequestSourceAPI {
+		t.Fatalf("RelayLogAdd did not default request source: %+v", result)
 	}
 }
 

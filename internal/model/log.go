@@ -1,5 +1,22 @@
 package model
 
+import "gorm.io/gorm"
+
+const (
+	RelayLogRequestSourceAPI         = "api"
+	RelayLogRequestSourcePlayground  = "playground"
+	RelayLogRequestSourceHealthCheck = "health_check"
+)
+
+// NormalizeRelayLogRequestSource keeps historical rows compatible without
+// rewriting the potentially very large relay_logs table during startup.
+func NormalizeRelayLogRequestSource(source string) string {
+	if source == "" {
+		return RelayLogRequestSourceAPI
+	}
+	return source
+}
+
 // AttemptStatus 尝试状态
 type AttemptStatus string
 
@@ -53,6 +70,8 @@ type RelayLog struct {
 	ID                       int64               `json:"id" gorm:"primaryKey;autoIncrement:false"` // Snowflake ID
 	Time                     int64               `json:"time"`                                     // 时间戳（秒）
 	RequestModelName         string              `json:"request_model_name"`                       // 请求模型名称
+	RequestSource            string              `json:"request_source" gorm:"size:32"`            // api/playground/health_check
+	RequestID                string              `json:"request_id,omitempty" gorm:"size:96"`      // 后台执行请求关联 ID
 	RoutedModelName          string              `json:"routed_model_name"`                        // 路由后发送给上游的模型名称
 	RequestAPIKeyName        string              `json:"request_api_key_name"`                     // 请求使用的 API Key 名称
 	ChannelId                int                 `json:"channel" gorm:"index"`                     // 实际使用的渠道ID
@@ -100,4 +119,11 @@ type RelayLog struct {
 	WSMode                   *RelayLogWSMode     `json:"ws_mode,omitempty"`                     // 上游 WebSocket 会话模式
 	WSExecMode               *RelayLogWSExecMode `json:"ws_exec_mode,omitempty"`                // 上游 WebSocket 事件处理方式
 	WSRecovery               *RelayLogWSRecovery `json:"ws_recovery,omitempty"`                 // 本次请求触发的恢复动作
+}
+
+// AfterFind treats legacy NULL/empty request_source values as ordinary API
+// traffic. This avoids an expensive one-shot UPDATE of all historical rows.
+func (r *RelayLog) AfterFind(_ *gorm.DB) error {
+	r.RequestSource = NormalizeRelayLogRequestSource(r.RequestSource)
+	return nil
 }

@@ -53,6 +53,10 @@ func listLog(c *gin.Context) {
 	startTimeStr := c.Query("start_time")
 	endTimeStr := c.Query("end_time")
 	channelIDsStr := c.Query("channel_ids")
+	requestSourcesStr := strings.TrimSpace(c.Query("request_source"))
+	if requestSourcesStr == "" {
+		requestSourcesStr = strings.TrimSpace(c.Query("request_sources"))
+	}
 	status := op.RelayLogStatusFilter(strings.TrimSpace(c.Query("status")))
 	keyword := c.Query("keyword")
 	keywordScope := op.RelayLogKeywordScope(strings.TrimSpace(c.Query("keyword_scope")))
@@ -149,10 +153,17 @@ func listLog(c *gin.Context) {
 		}
 	}
 
+	requestSources, err := parseRelayLogRequestSources(requestSourcesStr)
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	result, err := op.RelayLogListWithFilter(c.Request.Context(), op.RelayLogListFilter{
 		StartTime:      startTime,
 		EndTime:        endTime,
 		ChannelIDs:     channelIDs,
+		RequestSources: requestSources,
 		Status:         status,
 		Keyword:        keyword,
 		KeywordScope:   keywordScope,
@@ -184,6 +195,31 @@ func listLog(c *gin.Context) {
 		"search_mode": result.SearchMode,
 		"warning":     result.Warning,
 	})
+}
+
+func parseRelayLogRequestSources(raw string) ([]string, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	allowed := map[string]struct{}{
+		"api":          {},
+		"playground":   {},
+		"health_check": {},
+	}
+	seen := make(map[string]struct{}, len(allowed))
+	sources := make([]string, 0, len(allowed))
+	for _, item := range strings.Split(raw, ",") {
+		source := strings.TrimSpace(item)
+		if _, ok := allowed[source]; !ok {
+			return nil, fmt.Errorf("invalid request_source %q", source)
+		}
+		if _, ok := seen[source]; ok {
+			continue
+		}
+		seen[source] = struct{}{}
+		sources = append(sources, source)
+	}
+	return sources, nil
 }
 
 func parseBoolQuery(c *gin.Context, key string, defaultValue bool) (bool, error) {

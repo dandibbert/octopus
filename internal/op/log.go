@@ -306,6 +306,7 @@ func RelayLogAdd(ctx context.Context, relayLog model.RelayLog) error {
 		return err
 	}
 	relayLog.ID = snowflake.GenerateID()
+	relayLog.RequestSource = model.NormalizeRelayLogRequestSource(relayLog.RequestSource)
 	notifySubscribers(relayLog)
 	appendRelayLogRecent(relayLog)
 
@@ -440,6 +441,7 @@ type RelayLogListFilter struct {
 	StartTime      *int
 	EndTime        *int
 	ChannelIDs     []int
+	RequestSources []string
 	Status         RelayLogStatusFilter
 	Keyword        string
 	KeywordScope   RelayLogKeywordScope
@@ -693,6 +695,8 @@ func selectRelayLogListFields(query *gorm.DB, includeContent bool) *gorm.DB {
 		"id",
 		"time",
 		"request_model_name",
+		"request_source",
+		"request_id",
 		"routed_model_name",
 		"request_api_key_name",
 		"channel_id",
@@ -843,6 +847,7 @@ func relayLogFindRecent(id int64) (model.RelayLog, bool) {
 }
 
 func relayLogLightCopy(entry model.RelayLog) model.RelayLog {
+	entry.RequestSource = model.NormalizeRelayLogRequestSource(entry.RequestSource)
 	entry.RequestContent = ""
 	entry.ResponseContent = ""
 	return entry
@@ -856,6 +861,9 @@ func relayLogMatchesFilter(relayLog model.RelayLog, filter RelayLogListFilter, c
 		return false
 	}
 	if len(channelSet) > 0 && !logMatchesChannels(relayLog, channelSet) {
+		return false
+	}
+	if len(filter.RequestSources) > 0 && !logMatchesRequestSource(relayLog, filter.RequestSources) {
 		return false
 	}
 	if filter.Status == RelayLogStatusSuccess && !relayLog.Success {
@@ -879,6 +887,9 @@ func applyRelayLogDBFilters(query *gorm.DB, filter RelayLogListFilter) *gorm.DB 
 	}
 	if len(filter.ChannelIDs) > 0 {
 		query = query.Where("channel_id IN ?", filter.ChannelIDs)
+	}
+	if len(filter.RequestSources) > 0 {
+		query = applyRelayLogRequestSourceDBFilter(query, filter.RequestSources)
 	}
 	if filter.Status == RelayLogStatusSuccess {
 		query = query.Where("success = ?", true)
@@ -919,6 +930,38 @@ func applyRelayLogDBFilters(query *gorm.DB, filter RelayLogListFilter) *gorm.DB 
 		)
 	}
 	return query
+}
+
+func logMatchesRequestSource(relayLog model.RelayLog, sources []string) bool {
+	source := model.NormalizeRelayLogRequestSource(relayLog.RequestSource)
+	for _, allowed := range sources {
+		if source == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func applyRelayLogRequestSourceDBFilter(query *gorm.DB, sources []string) *gorm.DB {
+	includeLegacyAPI := false
+	nonAPI := make([]string, 0, len(sources))
+	for _, source := range sources {
+		if source == model.RelayLogRequestSourceAPI {
+			includeLegacyAPI = true
+			continue
+		}
+		nonAPI = append(nonAPI, source)
+	}
+	if includeLegacyAPI && len(nonAPI) > 0 {
+		return query.Where(
+			"request_source IN ? OR request_source IS NULL OR request_source = ?",
+			append(nonAPI, model.RelayLogRequestSourceAPI), "",
+		)
+	}
+	if includeLegacyAPI {
+		return query.Where("request_source = ? OR request_source IS NULL OR request_source = ?", model.RelayLogRequestSourceAPI, "")
+	}
+	return query.Where("request_source IN ?", nonAPI)
 }
 
 // escapeLikeKeyword escapes SQL LIKE wildcards (and the escape char itself) so
