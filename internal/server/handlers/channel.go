@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,6 +47,10 @@ func init() {
 		AddRoute(
 			router.NewRoute("/fetch-model", http.MethodPost).
 				Handle(fetchModel),
+		).
+		AddRoute(
+			router.NewRoute("/:id/models/create-group", http.MethodPost).
+				Handle(createGroupFromChannelModel),
 		)
 	router.NewGroupRouter("/api/v1/channel").
 		Use(middleware.Auth()).
@@ -189,6 +195,36 @@ func deleteChannel(c *gin.Context) {
 	}
 	resp.Success(c, nil)
 }
+func createGroupFromChannelModel(c *gin.Context) {
+	channelID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || channelID <= 0 {
+		resp.InvalidParam(c)
+		return
+	}
+	var req model.ChannelModelCreateGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.InvalidJSON(c)
+		return
+	}
+	group, err := op.GroupCreateFromChannelModel(channelID, req.Model, req.GroupName, c.Request.Context())
+	if err != nil {
+		if errors.Is(err, op.ErrGroupNameConflict) {
+			groupName := strings.TrimSpace(req.GroupName)
+			resp.ErrorWithCodeAndParams(
+				c,
+				http.StatusConflict,
+				codeGroupNameConflict,
+				fmt.Sprintf("group %q already exists; choose another name", groupName),
+				map[string]any{"name": groupName},
+			)
+			return
+		}
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	resp.Success(c, group)
+}
+
 func fetchModel(c *gin.Context) {
 	var request model.Channel
 	if err := c.ShouldBindJSON(&request); err != nil {

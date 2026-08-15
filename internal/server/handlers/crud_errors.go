@@ -26,6 +26,7 @@ const (
 	codeChannelFetchModelsFailed = "channel.fetch_models_failed"
 
 	codeGroupNotFound     = "group.not_found"
+	codeGroupNameConflict = "group.name_conflict"
 	codeGroupCreateFailed = "group.create_failed"
 	codeGroupUpdateFailed = "group.update_failed"
 	codeGroupDeleteFailed = "group.delete_failed"

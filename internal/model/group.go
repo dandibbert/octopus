@@ -107,6 +107,12 @@ type GroupIDAndLLMName struct {
 	ModelName string
 }
 
+// ChannelModelCreateGroupRequest creates a group whose first route is the selected channel model.
+type ChannelModelCreateGroupRequest struct {
+	Model     string `json:"model" binding:"required"`
+	GroupName string `json:"group_name" binding:"required"`
+}
+
 // GroupPresetCreateRequest 新增预设：服务端从 Group 当前实时状态取快照；
 // 也用于 create-blank 和 clone 接口（均只需 Name）
 type GroupPresetCreateRequest struct {

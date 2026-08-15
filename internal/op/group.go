@@ -17,6 +17,7 @@ var groupCache = cache.New[int, model.Group](16)
 var groupMap = cache.New[string, model.Group](16)
 
 var ErrInvalidGroupBilling = errors.New("invalid group billing configuration")
+var ErrGroupNameConflict = errors.New("group name already exists")
 
 func GroupList(ctx context.Context) ([]model.Group, error) {
 	groups := make([]model.Group, 0, groupCache.Len())
@@ -61,6 +62,71 @@ func GroupGetEnabledMap(name string, ctx context.Context) (model.Group, error) {
 		enabledItems = append(enabledItems, item)
 	}
 	group.Items = enabledItems
+	return group, nil
+}
+
+// GroupCreateFromChannelModel atomically creates a group and its first channel-model item.
+func GroupCreateFromChannelModel(channelID int, modelName, groupName string, ctx context.Context) (*model.Group, error) {
+	modelName = strings.TrimSpace(modelName)
+	groupName = strings.TrimSpace(groupName)
+	if modelName == "" || groupName == "" {
+		return nil, fmt.Errorf("model and group name are required")
+	}
+
+	channel, err := ChannelGet(channelID, ctx)
+	if err != nil {
+		return nil, err
+	}
+	found := false
+	for _, raw := range []string{channel.Model, channel.CustomModel} {
+		for _, candidate := range strings.Split(raw, ",") {
+			if strings.TrimSpace(candidate) == modelName {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("model %q is not configured on channel", modelName)
+	}
+
+	if _, ok := groupMap.Get(groupName); ok {
+		return nil, ErrGroupNameConflict
+	}
+
+	group := &model.Group{
+		Name: groupName,
+		Mode: model.GroupModeFailover,
+		Items: []model.GroupItem{{
+			ChannelID: channelID,
+			ModelName: modelName,
+			Priority:  1,
+			Weight:    1,
+		}},
+	}
+	if err := normalizeGroupItemBilling(&group.Items[0]); err != nil {
+		return nil, err
+	}
+
+	err = db.GetDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&model.Group{}).Where("name = ?", groupName).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return ErrGroupNameConflict
+		}
+		return tx.Create(group).Error
+	})
+	if err != nil {
+		lower := strings.ToLower(err.Error())
+		if strings.Contains(lower, "unique") || strings.Contains(lower, "duplicate") {
+			return nil, ErrGroupNameConflict
+		}
+		return nil, err
+	}
+	groupCache.Set(group.ID, *group)
+	groupMap.Set(group.Name, *group)
 	return group, nil
 }
 
