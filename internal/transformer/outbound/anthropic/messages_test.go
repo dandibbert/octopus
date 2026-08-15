@@ -50,6 +50,32 @@ func TestTransformRequestRawRewritesModel(t *testing.T) {
 	}
 }
 
+func TestReasoningEffortNoneDisablesThinking(t *testing.T) {
+	out := convertToAnthropicRequest(&model.InternalLLMRequest{
+		Model:           "claude-sonnet-4-5",
+		ReasoningEffort: "none",
+	})
+	if out.Thinking == nil || out.Thinking.Type != anthropicModel.ThinkingTypeDisabled {
+		t.Fatalf("reasoning_effort=none must explicitly disable thinking, got %+v", out.Thinking)
+	}
+	if out.Thinking.BudgetTokens != nil {
+		t.Fatalf("disabled thinking must not carry a budget, got %+v", out.Thinking)
+	}
+}
+
+func TestTransformRequestRejectsUnsupportedReasoningEffort(t *testing.T) {
+	o := &MessageOutbound{}
+	for _, effort := range []string{"xhigh", "bogus"} {
+		_, err := o.TransformRequest(context.Background(), &model.InternalLLMRequest{
+			Model:           "claude-sonnet-4-5",
+			ReasoningEffort: effort,
+		}, "https://api.anthropic.com", "test-key")
+		if err == nil || !strings.Contains(err.Error(), "reasoning_effort="+effort) {
+			t.Errorf("effort=%q: expected explicit unsupported-parameter error, got %v", effort, err)
+		}
+	}
+}
+
 // TestCollectBetaHeadersAutomation covers A-H7 — each new signal drives a
 // specific anthropic-beta header. The test is table-driven so adding a
 // future trigger only needs a new row, not a whole test function.

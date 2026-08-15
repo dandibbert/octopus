@@ -38,6 +38,9 @@ func (o *MessageOutbound) TransformRequest(ctx context.Context, request *model.I
 	if request == nil {
 		return nil, fmt.Errorf("request is nil")
 	}
+	if err := validateReasoningIntent(request); err != nil {
+		return nil, err
+	}
 
 	request.NormalizeMessages()
 	request.EnforceMessageAlternation(model.AlternationProviderAnthropic)
@@ -749,20 +752,23 @@ func convertToAnthropicRequest(req *model.InternalLLMRequest) *anthropicModel.Me
 		result.StopSequences = convertStopSequences(req.Stop)
 	}
 
-	// Convert thinking/reasoning
-	if req.ReasoningEffort != "" {
+	// none/off 是明确的关闭意图，不能作为未知强度落入默认预算。
+	effort := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
+	if effort == "none" || effort == "off" {
+		result.Thinking = &anthropicModel.Thinking{Type: anthropicModel.ThinkingTypeDisabled}
+	} else if effort != "" || req.ReasoningBudget != nil || req.AdaptiveThinking {
 		if req.AdaptiveThinking {
 			result.Thinking = &anthropicModel.Thinking{
 				Type:    anthropicModel.ThinkingTypeAdaptive,
 				Display: req.ThinkingDisplay,
 			}
-			result.OutputConfig = &anthropicModel.OutputConfig{
-				Effort: req.ReasoningEffort,
+			if effort != "" {
+				result.OutputConfig = &anthropicModel.OutputConfig{Effort: effort}
 			}
 		} else {
 			result.Thinking = &anthropicModel.Thinking{
 				Type:         anthropicModel.ThinkingTypeEnabled,
-				BudgetTokens: getThinkingBudget(req.ReasoningEffort, req.ReasoningBudget),
+				BudgetTokens: getThinkingBudget(effort, req.ReasoningBudget),
 				Display:      req.ThinkingDisplay,
 			}
 		}
@@ -784,6 +790,34 @@ func convertToAnthropicRequest(req *model.InternalLLMRequest) *anthropicModel.Me
 	pruneCacheBreakpoints(result)
 
 	return result
+}
+
+func validateReasoningIntent(req *model.InternalLLMRequest) error {
+	effort := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
+	if effort == "" {
+		return nil
+	}
+	if effort == "none" || effort == "off" {
+		if req.AdaptiveThinking || req.ReasoningBudget != nil {
+			return fmt.Errorf("unsupported reasoning_effort=%s: disable thinking cannot be combined with adaptive thinking or a reasoning budget", effort)
+		}
+		return nil
+	}
+	if req.AdaptiveThinking {
+		switch effort {
+		case anthropicModel.EffortLow, anthropicModel.EffortMedium, anthropicModel.EffortHigh,
+			anthropicModel.EffortXHigh, anthropicModel.EffortMax:
+			return nil
+		default:
+			return fmt.Errorf("unsupported reasoning_effort=%s for Anthropic adaptive thinking", effort)
+		}
+	}
+	switch effort {
+	case "minimal", anthropicModel.EffortLow, anthropicModel.EffortMedium, anthropicModel.EffortHigh:
+		return nil
+	default:
+		return fmt.Errorf("unsupported reasoning_effort=%s for Anthropic extended thinking", effort)
+	}
 }
 
 // applyThinkingParamConstraints enforces Anthropic's documented restrictions
@@ -1810,6 +1844,8 @@ func getThinkingBudget(effort string, budget *int64) *int64 {
 
 	var result int64
 	switch effort {
+	case "minimal":
+		result = 1024
 	case anthropicModel.EffortLow:
 		result = 1024
 	case anthropicModel.EffortMedium:

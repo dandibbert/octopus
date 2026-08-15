@@ -27,6 +27,9 @@ func (o *ResponseOutbound) TransformRequest(ctx context.Context, request *model.
 	if request == nil {
 		return nil, fmt.Errorf("request is nil")
 	}
+	if err := validateReasoningIntent(request); err != nil {
+		return nil, err
+	}
 
 	request.NormalizeMessages()
 
@@ -40,9 +43,10 @@ func (o *ResponseOutbound) TransformRequest(ctx context.Context, request *model.
 		ResponsesRequest: openaiReq,
 		Input:            convertToResponsesInput(openaiReq.Input),
 	}
-	switch request.ReasoningEffort {
-	case "minimal":
+	switch strings.ToLower(strings.TrimSpace(request.ReasoningEffort)) {
+	case "none", "off", "minimal":
 		responsesReq.Thinking.Type = ThinkingTypeDisabled
+		responsesReq.Reasoning = nil
 	case "low", "medium", "high":
 		responsesReq.Thinking.Type = ThinkingTypeEnabled
 	default:
@@ -74,6 +78,33 @@ func (o *ResponseOutbound) TransformRequest(ctx context.Context, request *model.
 
 	return req, nil
 
+}
+
+func validateReasoningIntent(request *model.InternalLLMRequest) error {
+	effort := strings.ToLower(strings.TrimSpace(request.ReasoningEffort))
+	hasIntent := effort != "" || request.ReasoningBudget != nil || request.AdaptiveThinking
+	if !hasIntent {
+		return nil
+	}
+	if _, ok := supportedReasoningEffortModel[request.Model]; !ok {
+		return fmt.Errorf("unsupported reasoning_effort=%s for Volcengine model %s", displayReasoningEffort(effort), request.Model)
+	}
+	if request.ReasoningBudget != nil || request.AdaptiveThinking {
+		return fmt.Errorf("unsupported reasoning_effort=%s: Volcengine transformer does not support reasoning budget or adaptive thinking", displayReasoningEffort(effort))
+	}
+	switch effort {
+	case "none", "off", "minimal", "low", "medium", "high":
+		return nil
+	default:
+		return fmt.Errorf("unsupported reasoning_effort=%s for Volcengine model %s", effort, request.Model)
+	}
+}
+
+func displayReasoningEffort(effort string) string {
+	if effort == "" {
+		return "requested"
+	}
+	return effort
 }
 func (o *ResponseOutbound) TransformResponse(ctx context.Context, response *http.Response) (*model.InternalLLMResponse, error) {
 	return o.inner.TransformResponse(ctx, response)

@@ -50,6 +50,9 @@ func (o *MessagesOutbound) TransformRequest(ctx context.Context, request *model.
 	if request == nil {
 		return nil, fmt.Errorf("request is nil")
 	}
+	if err := validateReasoningIntent(request); err != nil {
+		return nil, err
+	}
 
 	request.NormalizeMessages()
 	request.EnforceMessageAlternation(model.AlternationProviderGemini)

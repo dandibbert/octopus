@@ -1,8 +1,10 @@
 package gemini
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/bestruirui/octopus/internal/transformer/model"
 	"github.com/bestruirui/octopus/internal/utils/log"
 )
 
@@ -68,6 +70,57 @@ type thinkingDecision struct {
 	// IncludeThoughts mirrors the Gemini includeThoughts flag — surface
 	// thoughts in the response when thinking is enabled.
 	IncludeThoughts bool
+}
+
+// validateReasoningIntent 拒绝目标 Gemini 型号无法准确表达的意图，避免关闭或
+// 强度请求被静默改写成另一个档位。
+func validateReasoningIntent(req *model.InternalLLMRequest) error {
+	effort := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
+	hasIntent := effort != "" || req.ReasoningBudget != nil || req.AdaptiveThinking
+	if !hasIntent {
+		return nil
+	}
+	fam := classifyGeminiFamily(req.Model)
+	if fam == geminiFamilyNoThinking {
+		return fmt.Errorf("unsupported reasoning_effort=%s for Gemini model %s", displayReasoningEffort(effort), req.Model)
+	}
+	if req.AdaptiveThinking {
+		if effort != "" || req.ReasoningBudget != nil {
+			return fmt.Errorf("unsupported reasoning_effort=%s: adaptive thinking cannot be combined with an explicit effort or budget", displayReasoningEffort(effort))
+		}
+		return nil
+	}
+	if req.ReasoningBudget != nil && isGemini3Family(fam) {
+		return fmt.Errorf("unsupported reasoning_effort=budget for Gemini 3: use a supported reasoning effort tier")
+	}
+	if effort == "" {
+		return nil
+	}
+	switch effort {
+	case "none", "off":
+		if fam != geminiFamily25Flash {
+			return fmt.Errorf("unsupported reasoning_effort=%s: model %s cannot disable thinking", effort, req.Model)
+		}
+	case "minimal":
+		if fam == geminiFamily3Pro || fam == geminiFamily31Pro {
+			return fmt.Errorf("unsupported reasoning_effort=%s for Gemini model %s", effort, req.Model)
+		}
+	case "medium":
+		if fam == geminiFamily3Pro {
+			return fmt.Errorf("unsupported reasoning_effort=%s for Gemini model %s", effort, req.Model)
+		}
+	case "low", "high", "xhigh":
+	default:
+		return fmt.Errorf("unsupported reasoning_effort=%s for Gemini model %s", effort, req.Model)
+	}
+	return nil
+}
+
+func displayReasoningEffort(effort string) string {
+	if effort == "" {
+		return "requested"
+	}
+	return effort
 }
 
 // resolveThinkingConfig computes the thinking decision for a given model plus
@@ -272,7 +325,7 @@ func map25EffortToBudget(effort string) int32 {
 		return 1024
 	case "medium":
 		return 4096
-	case "high":
+	case "high", "xhigh":
 		return 24576
 	default:
 		return -1
@@ -296,7 +349,7 @@ func map3EffortToLevel(effort string) string {
 		return "low"
 	case "medium":
 		return "medium"
-	case "high":
+	case "high", "xhigh":
 		return "high"
 	default:
 		return ""
