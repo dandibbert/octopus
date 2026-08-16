@@ -14,11 +14,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/animate-ui
 import type { SelectedMember } from './ItemList';
 import { MemberList } from './ItemList';
 import { GroupEditor, type GroupEditorValues } from './Editor';
-import { GroupHealthBadge } from './health';
 import { modelChannelKey, MODE_LABELS } from './utils';
 import { GroupMode, type GroupUpdateRequest } from '@/api/endpoints/group';
 import { PresetPopover } from './PresetPopover';
 import { openPlayground } from '@/stores/playground';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import {
     MorphingDialog,
     MorphingDialogClose,
@@ -87,6 +87,7 @@ export function GroupCard({ group }: { group: Group }) {
     const [members, setMembers] = useState<SelectedMember[]>([]);
     const [weightOverrides, setWeightOverrides] = useState<Record<string, number>>({});
     const [routeHealthResult, setRouteHealthResult] = useState<ExecutionHealthResult | null>(null);
+    const [routeHealthOpen, setRouteHealthOpen] = useState(false);
     const weightTimerRef = useRef<NodeJS.Timeout | null>(null);
     const membersRef = useRef<SelectedMember[]>([]);
 
@@ -223,19 +224,11 @@ export function GroupCard({ group }: { group: Group }) {
 
     const handleRouteHealth = useCallback(() => {
         if (!group.id || routeHealth.isPending) return;
+        setRouteHealthOpen(false);
         routeHealth.mutate(group.id, {
             onSuccess: (result) => {
                 setRouteHealthResult(result);
-                if (result.success) {
-                    toast.success(t('routeHealth.available'), {
-                        description: t('routeHealth.availableDescription', {
-                            target: result.selected_channel || result.channel_name || t('routeHealth.routed'),
-                            latency: result.latency_ms,
-                        }),
-                    });
-                    return;
-                }
-                toast.error(t('routeHealth.unavailable'), { description: result.error });
+                setRouteHealthOpen(true);
             },
             onError: (error) => {
                 const result: ExecutionHealthResult = {
@@ -246,10 +239,10 @@ export function GroupCard({ group }: { group: Group }) {
                     error: error instanceof Error ? error.message : String(error),
                 };
                 setRouteHealthResult(result);
-                toast.error(t('routeHealth.failed'), { description: result.error });
+                setRouteHealthOpen(true);
             },
         });
-    }, [group.id, routeHealth, t]);
+    }, [group.id, routeHealth]);
 
     const handleSubmitEdit = useCallback((values: GroupEditorValues, onDone?: () => void) => {
         if (!group.id) return;
@@ -354,23 +347,23 @@ export function GroupCard({ group }: { group: Group }) {
     }, [group.first_token_time_out, group.session_keep_time, group.retry_enabled, group.max_retries, group.id, group.items, group.match_regex, group.mode, group.name, onSuccess, onError, updateGroup]);
 
     return (
-        <article className="relative group/card flex flex-col rounded-3xl border border-border bg-card text-card-foreground p-4 custom-shadow">
-            <header className="flex items-start justify-between mb-3 relative overflow-visible rounded-xl -mx-1 px-1 -my-1 py-1">
-                <div className="relative flex-1 mr-2 min-w-0 group/title">
+        <article className="group/card relative flex flex-col rounded-3xl border border-border bg-card p-4 text-card-foreground custom-shadow">
+            <header className="relative -mx-1 -my-1 mb-3 flex items-start justify-between overflow-visible rounded-xl px-1 py-1">
+                <div className="group/title relative mr-2 min-w-0 flex-1">
                     <Tooltip side="top" sideOffset={10} align="center">
                         <TooltipTrigger asChild>
-                            <h3 className="line-clamp-2 break-words text-lg font-bold leading-6 md:truncate md:whitespace-nowrap">{group.name}</h3>
+                            <h3 className="truncate text-lg font-bold">{group.name}</h3>
                         </TooltipTrigger>
                         <TooltipContent key={group.name}>{group.name}</TooltipContent>
                     </Tooltip>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex shrink-0 items-center gap-1">
                     <Tooltip side="top" sideOffset={10} align="center">
                         <TooltipTrigger asChild>
                             <CopyIconButton
                                 text={group.name}
-                                className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted text-muted-foreground hover:text-foreground"
+                                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                                 copyIconClassName="size-4"
                                 checkIconClassName="size-4 text-primary"
                             />
@@ -380,40 +373,10 @@ export function GroupCard({ group }: { group: Group }) {
 
                     <PresetPopover group={group} />
 
-                    <Tooltip side="top" sideOffset={10} align="center">
-                        <TooltipTrigger asChild>
-                            <button
-                                type="button"
-                                aria-label={routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}
-                                disabled={!group.id || routeHealth.isPending}
-                                onClick={handleRouteHealth}
-                                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                            >
-                                <Activity className={cn('size-4', routeHealth.isPending && 'animate-pulse')} />
-                            </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}</TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip side="top" sideOffset={10} align="center">
-                        <TooltipTrigger asChild>
-                            <button
-                                type="button"
-                                aria-label={t('routeHealth.playground')}
-                                disabled={!group.id}
-                                onClick={() => group.id && openPlayground({ type: 'group', groupId: group.id, group: group.name })}
-                                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                            >
-                                <MessageSquareText className="size-4" />
-                            </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t('routeHealth.playground')}</TooltipContent>
-                    </Tooltip>
-
                     <MorphingDialog>
                         <MorphingDialogTrigger
                             aria-label={t('detail.actions.edit')}
-                            className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted text-muted-foreground hover:text-foreground"
+                            className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         >
                             <Tooltip side="top" sideOffset={10} align="center">
                                 <TooltipTrigger asChild>
@@ -437,23 +400,20 @@ export function GroupCard({ group }: { group: Group }) {
                 </div>
             </header>
 
-            {/* Mode: quick switch (no need to enter Edit) */}
-            <div className="mb-3 grid grid-cols-2 gap-1.5 md:grid-cols-4 md:gap-1">
+            <div className="mb-3 flex gap-1">
                 {([GroupMode.RoundRobin, GroupMode.Random, GroupMode.Failover, GroupMode.Weighted] as const).map((m) => (
                     <button
                         key={m}
                         type="button"
                         aria-disabled={isUpdatingMode || !group.id}
                         onClick={() => {
-                            if (isUpdatingMode || !group.id) return;
-                            if (m === group.mode) return;
-                            updateGroup.mutate({ id: group.id!, mode: m }, { onSuccess, onError });
+                            if (isUpdatingMode || !group.id || m === group.mode) return;
+                            updateGroup.mutate({ id: group.id, mode: m }, { onSuccess, onError });
                         }}
                         className={cn(
-                            'min-h-10 min-w-0 px-2 py-2 text-xs rounded-lg transition-colors md:px-1',
+                            'min-h-10 min-w-0 flex-1 rounded-lg px-1 py-2 text-xs transition-colors',
                             group.mode === m ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80',
-                            // Keep visuals stable (no opacity/disabled flicker) while still preventing double-submit via onClick guard.
-                            (!group.id) && 'cursor-not-allowed opacity-50'
+                            !group.id && 'cursor-not-allowed opacity-50',
                         )}
                     >
                         {t(`mode.${MODE_LABELS[m]}`)}
@@ -461,51 +421,7 @@ export function GroupCard({ group }: { group: Group }) {
                 ))}
             </div>
 
-            <GroupHealthBadge groupId={group.id} />
-
-            {routeHealthResult && (
-                <div className={cn(
-                    'mt-2 rounded-xl border px-3 py-2 text-xs',
-                    routeHealthResult.success
-                        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400'
-                        : 'border-destructive/30 bg-destructive/5 text-destructive',
-                )}>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="font-medium">
-                            {routeHealthResult.success
-                                ? t('routeHealth.availableLatency', { latency: routeHealthResult.latency_ms })
-                                : t('routeHealth.unavailable')}
-                        </span>
-                        {(routeHealthResult.selected_channel || routeHealthResult.channel_name) && (
-                            <span>{t('routeHealth.actualChannel')}: {routeHealthResult.selected_channel || routeHealthResult.channel_name}</span>
-                        )}
-                        {(routeHealthResult.actual_model || routeHealthResult.remote_model) && (
-                            <span>{t('routeHealth.actualModel')}: {routeHealthResult.actual_model || routeHealthResult.remote_model}</span>
-                        )}
-                    </div>
-                    {!routeHealthResult.success && (routeHealthResult.error || routeHealthResult.attempts?.length) && (
-                        <details className="mt-2">
-                            <summary className="cursor-pointer font-medium">{t('routeHealth.errorDetails')}</summary>
-                            {routeHealthResult.error && <pre className="mt-2 whitespace-pre-wrap break-words font-sans">{routeHealthResult.error}</pre>}
-                            {routeHealthResult.attempts?.map((attempt, index) => {
-                                const translatedStatus = attempt.status === 'success'
-                                    || attempt.status === 'failed'
-                                    || attempt.status === 'circuit_break'
-                                    || attempt.status === 'skipped'
-                                    ? t(`health.attemptStatus.${attempt.status}`)
-                                    : attempt.status;
-                                return (
-                                    <div key={`${attempt.attempt_num}-${attempt.channel_id}-${index}`} className="mt-2 break-words">
-                                        #{index + 1} {attempt.channel_name || String(attempt.channel_id)} · {attempt.model_name} · {translatedStatus}{attempt.msg ? `: ${attempt.msg}` : ''}
-                                    </div>
-                                );
-                            })}
-                        </details>
-                    )}
-                </div>
-            )}
-
-            <section className="relative mt-3 min-h-28 overflow-visible rounded-xl border border-border/50 bg-muted/30 md:h-[25.25rem] md:min-h-0 md:overflow-hidden">
+            <section className="relative h-101 overflow-hidden rounded-xl border border-border/50 bg-muted/30">
                 <MemberList
                     members={renderedMembers}
                     onReorder={setMembers}
@@ -515,19 +431,141 @@ export function GroupCard({ group }: { group: Group }) {
                     onDrop={handleDropReorder}
                     onDragFinish={handleDragFinish}
                     autoScrollOnAdd={false}
+                    contained
                     showWeight={group.mode === GroupMode.Weighted}
                     layoutScope={`card-${group.id ?? 'unknown'}`}
                 />
             </section>
 
-            {/* Floating secondary actions: hidden by default, appear on card hover/focus */}
             {!confirmDelete && (
                 <div
                     className={cn(
-                        'mt-3 flex self-start items-center gap-0.5 rounded-xl border border-border/40 bg-card/95 p-0.5 shadow-sm backdrop-blur-sm transition-opacity duration-200',
-                        'opacity-100 pointer-events-auto md:absolute md:bottom-3 md:left-3 md:z-10 md:mt-0 md:opacity-0 md:pointer-events-none md:group-hover/card:opacity-100 md:group-hover/card:pointer-events-auto md:group-focus-within/card:opacity-100 md:group-focus-within/card:pointer-events-auto',
+                        'absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-xl border border-border/40 bg-card/95 p-0.5 shadow-sm backdrop-blur-sm transition-opacity duration-200',
+                        'pointer-events-auto opacity-100 md:pointer-events-none md:opacity-0 md:group-hover/card:pointer-events-auto md:group-hover/card:opacity-100 md:group-focus-within/card:pointer-events-auto md:group-focus-within/card:opacity-100',
+                        routeHealthOpen && 'md:pointer-events-auto md:opacity-100',
                     )}
                 >
+                    <Popover open={routeHealthOpen} onOpenChange={setRouteHealthOpen}>
+                        <PopoverAnchor asChild>
+                            <span className="inline-flex">
+                                <Tooltip side="top" sideOffset={6} align="center">
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            aria-label={routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}
+                                            aria-haspopup="dialog"
+                                            aria-expanded={routeHealthOpen}
+                                            aria-controls={`group-route-health-result-${group.id}`}
+                                            disabled={!group.id || routeHealth.isPending}
+                                            onClick={handleRouteHealth}
+                                            className="relative flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                                        >
+                                            <Activity className={cn('size-4', routeHealth.isPending && 'animate-pulse')} />
+                                            {(routeHealth.isPending || routeHealthResult) && (
+                                                <span className={cn(
+                                                    'absolute right-1.5 top-1.5 size-1.5 rounded-full ring-2 ring-card',
+                                                    routeHealth.isPending
+                                                        ? 'animate-pulse bg-sky-500'
+                                                        : routeHealthResult?.success ? 'bg-emerald-500' : 'bg-destructive',
+                                                )} />
+                                            )}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}</TooltipContent>
+                                </Tooltip>
+                            </span>
+                        </PopoverAnchor>
+
+                        {routeHealthResult && (
+                            <PopoverContent
+                                side="top"
+                                align="start"
+                                sideOffset={8}
+                                collisionPadding={12}
+                                id={`group-route-health-result-${group.id}`}
+                                className={cn(
+                                    'w-[min(calc(100vw-1.5rem),20rem)] rounded-xl bg-card p-3 text-xs shadow-lg',
+                                    routeHealthResult.success ? 'border-emerald-500/30' : 'border-destructive/30',
+                                )}
+                            >
+                                <div className="flex items-start gap-2">
+                                    <span className={cn('mt-1 size-2 shrink-0 rounded-full', routeHealthResult.success ? 'bg-emerald-500' : 'bg-destructive')} />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="font-medium" aria-live="polite">
+                                            {routeHealthResult.success
+                                                ? t('routeHealth.availableLatency', { latency: routeHealthResult.latency_ms })
+                                                : t('routeHealth.unavailable')}
+                                        </div>
+                                        {((routeHealthResult.selected_channel || routeHealthResult.channel_name)
+                                            || (routeHealthResult.actual_model || routeHealthResult.remote_model)) && (
+                                            <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 text-muted-foreground">
+                                                {(routeHealthResult.selected_channel || routeHealthResult.channel_name) && (
+                                                    <>
+                                                        <dt>{t('routeHealth.actualChannel')}</dt>
+                                                        <dd className="break-words text-foreground">{routeHealthResult.selected_channel || routeHealthResult.channel_name}</dd>
+                                                    </>
+                                                )}
+                                                {(routeHealthResult.actual_model || routeHealthResult.remote_model) && (
+                                                    <>
+                                                        <dt>{t('routeHealth.actualModel')}</dt>
+                                                        <dd className="break-all text-foreground">{routeHealthResult.actual_model || routeHealthResult.remote_model}</dd>
+                                                    </>
+                                                )}
+                                            </dl>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        aria-label={t('detail.actions.cancel')}
+                                        onClick={() => setRouteHealthOpen(false)}
+                                        className="-mr-1 -mt-1 flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                    >
+                                        <X className="size-3.5" />
+                                    </button>
+                                </div>
+
+                                {!routeHealthResult.success && (routeHealthResult.error || routeHealthResult.attempts?.length) && (
+                                    <details className="mt-2 border-t border-border/60 pt-2">
+                                        <summary className="cursor-pointer font-medium">{t('routeHealth.errorDetails')}</summary>
+                                        <div className="mt-2 max-h-32 overflow-y-auto break-words text-muted-foreground">
+                                            {routeHealthResult.error && <div className="whitespace-pre-wrap">{routeHealthResult.error}</div>}
+                                            {routeHealthResult.attempts?.map((attempt, index) => {
+                                                const translatedStatus = attempt.status === 'success'
+                                                    || attempt.status === 'failed'
+                                                    || attempt.status === 'circuit_break'
+                                                    || attempt.status === 'skipped'
+                                                    ? t(`health.attemptStatus.${attempt.status}`)
+                                                    : attempt.status;
+                                                return (
+                                                    <div key={`${attempt.attempt_num}-${attempt.channel_id}-${index}`} className="mt-1.5">
+                                                        #{index + 1} {attempt.channel_name || String(attempt.channel_id)} · {attempt.model_name} · {translatedStatus}{attempt.msg ? `: ${attempt.msg}` : ''}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </details>
+                                )}
+                            </PopoverContent>
+                        )}
+                    </Popover>
+
+                    <Tooltip side="top" sideOffset={6} align="center">
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label={t('routeHealth.playground')}
+                                disabled={!group.id}
+                                onClick={() => group.id && openPlayground({ type: 'group', groupId: group.id, group: group.name })}
+                                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                            >
+                                <MessageSquareText className="size-4" />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('routeHealth.playground')}</TooltipContent>
+                    </Tooltip>
+
+                    <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-border" />
+
                     <Tooltip side="top" sideOffset={6} align="center">
                         <TooltipTrigger asChild>
                             <button
@@ -540,12 +578,12 @@ export function GroupCard({ group }: { group: Group }) {
                                         { groupID: group.id, pinned: !group.pinned },
                                         {
                                             onSuccess: () => toast.success(group.pinned ? t('toast.unpinned') : t('toast.pinned')),
-                                            onError: (e) => toast.error(t('toast.pinFailed'), { description: e.message }),
+                                            onError: (error) => toast.error(t('toast.pinFailed'), { description: error.message }),
                                         },
                                     );
                                 }}
                                 className={cn(
-                                    'flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none',
+                                    'flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50',
                                     group.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                                 )}
                             >
@@ -561,8 +599,11 @@ export function GroupCard({ group }: { group: Group }) {
                                 layoutId={`delete-btn-group-${group.id}`}
                                 type="button"
                                 aria-label={t('detail.actions.delete')}
-                                onClick={() => setConfirmDelete(true)}
-                                className="flex size-10 items-center justify-center rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                onClick={() => {
+                                    setRouteHealthOpen(false);
+                                    setConfirmDelete(true);
+                                }}
+                                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                             >
                                 <Trash2 className="size-4" />
                             </motion.button>
@@ -576,7 +617,7 @@ export function GroupCard({ group }: { group: Group }) {
                 {confirmDelete && (
                     <motion.div
                         layoutId={`delete-btn-group-${group.id}`}
-                        className="mt-3 flex self-start items-center gap-2 rounded-xl bg-destructive p-2 shadow-md md:absolute md:bottom-3 md:left-3 md:z-10 md:mt-0"
+                        className="absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-xl bg-destructive p-2 shadow-md"
                         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                     >
                         <button
@@ -591,10 +632,10 @@ export function GroupCard({ group }: { group: Group }) {
                             type="button"
                             onClick={() => group.id && deleteGroup.mutate(group.id, {
                                 onSuccess: () => toast.success(t('toast.deleted')),
-                                onError: (e) => toast.error(t('toast.deleteFailed'), { description: e.message }),
+                                onError: (error) => toast.error(t('toast.deleteFailed'), { description: error.message }),
                             })}
                             disabled={deleteGroup.isPending}
-                            className="min-h-10 px-3 flex items-center justify-center gap-2 rounded-lg bg-destructive-foreground text-destructive text-sm font-semibold transition-all hover:bg-destructive-foreground/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-destructive-foreground px-3 text-sm font-semibold text-destructive transition-all hover:bg-destructive-foreground/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <Trash2 className="size-3.5" />
                             {t('detail.actions.confirmDelete')}
@@ -602,6 +643,6 @@ export function GroupCard({ group }: { group: Group }) {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </article >
+        </article>
     );
 }

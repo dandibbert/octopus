@@ -327,6 +327,11 @@ export interface MemberListProps {
     showWeight?: boolean;
     showBilling?: boolean;
     /**
+     * Constrain the list to its parent and make it the scroll owner. Card views
+     * use this to keep a fixed member viewport usable on touch screens.
+     */
+    contained?: boolean;
+    /**
      * When true, show a confirmation overlay before removing an item.
      * When false, clicking the delete button removes the item immediately.
      * Defaults to true.
@@ -348,6 +353,7 @@ export function MemberList({
     removingIds = new Set(),
     showWeight = false,
     showBilling = false,
+    contained = false,
     showConfirmDelete = true,
     layoutScope: externalLayoutScope,
 }: MemberListProps) {
@@ -406,7 +412,10 @@ export function MemberList({
     };
 
     return (
-        <div className="relative min-h-28 md:h-full md:min-h-0 md:p-2">
+        <div className={cn(
+            'relative md:p-2',
+            contained ? 'h-full min-h-0' : 'min-h-28 md:h-full md:min-h-0',
+        )}>
             <div
                 className={cn(
                     'absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground',
@@ -420,7 +429,10 @@ export function MemberList({
 
             <div
                 className={cn(
-                    'min-h-28 touch-pan-y overflow-visible transition-opacity duration-200 md:h-full md:min-h-0 md:overflow-y-auto',
+                    'touch-pan-y transition-opacity duration-200',
+                    contained
+                        ? 'h-full min-h-0 overflow-y-auto'
+                        : 'min-h-28 overflow-visible md:h-full md:min-h-0 md:overflow-y-auto',
                     isEmpty ? 'opacity-0' : 'opacity-100'
                 )}
                 ref={scrollContainerRef}
@@ -434,7 +446,10 @@ export function MemberList({
                             <div
                                 ref={droppableProvided.innerRef}
                                 {...droppableProvided.droppableProps}
-                                className="flex flex-col space-y-1.5 p-2 md:p-0"
+                                className={cn(
+                                    'flex flex-col space-y-1.5 p-2 md:p-0',
+                                    contained && 'pb-14 md:pb-14',
+                                )}
                             >
                                 {members.map((member, index) => (
                                     <Draggable
