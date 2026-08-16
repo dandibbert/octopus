@@ -151,6 +151,9 @@ function MorphingDialogTrigger({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // 内嵌开关、按钮等控件拥有自己的键盘语义，不能把按键继续解释成
+      // “打开整张卡片”。否则在 Switch 上按 Space 会同时切换状态并打开详情。
+      if (event.target !== event.currentTarget) return;
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         setIsOpen(!isOpen);
@@ -306,6 +309,7 @@ function MorphingDialogContent({
   return (
     <motion.div
       ref={containerRef}
+      id={`motion-ui-morphing-dialog-content-${uniqueId}`}
       layoutId={disableLayoutAnimation ? undefined : `dialog-${uniqueId}`}
       className={cn('overflow-hidden', className)}
       style={style}
@@ -383,6 +387,7 @@ function MorphingDialogTitle({
 
   return (
     <motion.div
+      id={`motion-ui-morphing-dialog-title-${uniqueId}`}
       layoutId={disableLayoutAnimation ? undefined : `dialog-title-container-${uniqueId}`}
       className={className}
       style={style}
@@ -449,7 +454,7 @@ function MorphingDialogDescription({
       initial='initial'
       animate='animate'
       exit='exit'
-      id={`dialog-description-${uniqueId}`}
+      id={`motion-ui-morphing-dialog-description-${uniqueId}`}
     >
       {children}
     </motion.div>

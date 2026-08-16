@@ -162,13 +162,6 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
 
             <MorphingDialogContainer>
                 <MorphingDialogContent
-                    disableLayoutAnimation
-                    variants={{
-                        initial: { opacity: 0, scale: 0.96, y: 10 },
-                        animate: { opacity: 1, scale: 1, y: 0 },
-                        exit: { opacity: 0, scale: 0.97, y: 6 },
-                    }}
-                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-3xl bg-card p-3 text-card-foreground md:h-[min(90dvh,52rem)] md:max-h-[90dvh] md:max-w-xl md:p-4"
                 >
                     <CardContent channel={channel} stats={stats} />

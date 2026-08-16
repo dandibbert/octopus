@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Loader2, MessageSquareText, Plus, RotateCcw, X } from 'lucide-react';
+import { Activity, Loader2, MessageSquareText, MoreHorizontal, Plus, RotateCcw, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { Channel, ExecutionHealthResult } from '@/api/endpoints/channel';
 import { useChannelModelHealth, useCreateGroupFromChannelModel } from '@/api/endpoints/channel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/common/Toast';
 import { openPlayground } from '@/stores/playground';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 
 const normalizePrefix = (value: string) => value.toLowerCase().trim().replace(/\s+/g, '-').replace(/^-+|-+$/g, '');
 
@@ -51,6 +53,7 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
     const [groupNameDirty, setGroupNameDirty] = useState(false);
     const [results, setResults] = useState<Record<string, ExecutionHealthResult>>({});
     const [testingModels, setTestingModels] = useState<Set<string>>(() => new Set());
+    const [openMenu, setOpenMenu] = useState<string | null>(null);
 
     useEffect(() => {
         if (!creating) return;
@@ -149,14 +152,14 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
 
     return (
         <div className="overflow-hidden rounded-2xl border bg-card">
-            {models.map((model) => {
+            {models.map((model, modelIndex) => {
                 const result = results[model];
                 const isTesting = testingModels.has(model);
-                const prefixSwitchId = `channel-${channel.id}-model-prefix`;
+                const prefixSwitchId = `channel-${channel.id}-model-${modelIndex}-prefix`;
 
                 return (
-                    <div key={model} className="border-b px-3 py-2.5 last:border-0">
-                        <div className="space-y-2">
+                    <div key={model} className="border-b px-3 py-3 last:border-0">
+                        <div>
                             <div className="flex min-w-0 items-start gap-2">
                                 <span
                                     aria-hidden="true"
@@ -170,53 +173,98 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
                                                     : 'bg-muted-foreground/30'
                                     }`}
                                 />
-                                <code className="min-w-0 flex-1 line-clamp-2 break-all text-sm leading-5" title={model}>{model}</code>
-                            </div>
+                                <div className="min-w-0 flex-1">
+                                    <code className="line-clamp-2 break-all text-sm leading-5" title={model}>{model}</code>
+                                    {(isTesting || result) && (
+                                        <div
+                                            aria-live="polite"
+                                            className={`mt-0.5 flex items-center gap-1 text-xs font-medium ${
+                                                isTesting
+                                                    ? 'text-amber-600'
+                                                    : result?.success
+                                                        ? 'text-emerald-600'
+                                                        : 'text-destructive'
+                                            }`}
+                                        >
+                                            {isTesting && <Loader2 className="size-3 animate-spin" />}
+                                            <span>
+                                                {isTesting
+                                                    ? t('testing')
+                                                    : result?.success
+                                                        ? t('available_latency', { latency: result.latency_ms })
+                                                        : t('unavailable')}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
 
-                            <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                {result ? (
-                                    <span className={result.success
-                                        ? 'mr-auto whitespace-nowrap text-xs font-medium text-emerald-600'
-                                        : 'mr-auto whitespace-nowrap text-xs font-medium text-destructive'}>
-                                        {result.success ? t('available_latency', { latency: result.latency_ms }) : t('unavailable')}
-                                    </span>
-                                ) : <span className="mr-auto" />}
+                                <div className="flex shrink-0 items-center gap-0.5">
+                                    <Tooltip side="top" sideOffset={6} align="center">
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                className="size-10 rounded-xl px-0 md:size-9"
+                                                size="icon"
+                                                variant="default"
+                                                onClick={() => beginCreate(model)}
+                                                aria-label={t('create_group')}
+                                            >
+                                                <Plus className="size-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{t('create_group')}</TooltipContent>
+                                    </Tooltip>
 
-                                <div className="flex shrink-0 items-center gap-1">
-                                    <Button
-                                        className="size-9 px-0 md:size-8"
-                                        size="icon"
-                                        variant="outline"
-                                        onClick={() => test(model)}
-                                        disabled={isTesting}
-                                        aria-label={isTesting ? t('testing') : t('health_check')}
-                                        title={isTesting ? t('testing') : t('health_check')}
+                                    <Popover
+                                        open={openMenu === model}
+                                        onOpenChange={(open) => setOpenMenu(open ? model : null)}
                                     >
-                                        {isTesting ? <Loader2 className="size-4 animate-spin" /> : <Activity className="size-4" />}
-                                    </Button>
-                                    <Button
-                                        size="icon"
-                                        className="size-9 px-0 md:size-8"
-                                        variant="outline"
-                                        onClick={() => {
-                                            onNavigate?.();
-                                            openPlayground({ type: 'channel_model', channelId: channel.id, model });
-                                        }}
-                                        aria-label={t('playground')}
-                                        title={t('playground')}
-                                    >
-                                        <MessageSquareText className="size-4" />
-                                    </Button>
-                                    <Button
-                                        className="size-9 px-0 text-muted-foreground hover:text-foreground md:size-8"
-                                        size="icon"
-                                        variant="ghost"
-                                        onClick={() => beginCreate(model)}
-                                        aria-label={t('create_group')}
-                                        title={t('create_group')}
-                                    >
-                                        <Plus className="size-4" />
-                                    </Button>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                className="size-10 rounded-xl px-0 text-muted-foreground md:size-9"
+                                                size="icon"
+                                                variant="ghost"
+                                                aria-label={t('more_actions')}
+                                            >
+                                                <MoreHorizontal className="size-4" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            align="end"
+                                            sideOffset={6}
+                                            className="w-48 rounded-2xl border-border/60 bg-card p-2 shadow-xl"
+                                        >
+                                            <div role="menu" aria-label={t('more_actions')} className="grid gap-1">
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    disabled={isTesting}
+                                                    onClick={() => {
+                                                        setOpenMenu(null);
+                                                        void test(model);
+                                                    }}
+                                                    className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    {isTesting
+                                                        ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                                                        : <Activity className="size-4 text-muted-foreground" />}
+                                                    <span>{isTesting ? t('testing') : t('health_check')}</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    onClick={() => {
+                                                        setOpenMenu(null);
+                                                        onNavigate?.();
+                                                        openPlayground({ type: 'channel_model', channelId: channel.id, model });
+                                                    }}
+                                                    className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60"
+                                                >
+                                                    <MessageSquareText className="size-4 text-muted-foreground" />
+                                                    <span>{t('playground')}</span>
+                                                </button>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </div>
 

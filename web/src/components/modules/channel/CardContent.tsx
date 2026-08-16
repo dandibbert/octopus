@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     Trash2,
     CheckCircle2,
@@ -37,6 +37,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
     const requestJump = useJumpStore((state) => state.requestJump);
     const [isEditing, setIsEditing] = useState(false);
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [formData, setFormData] = useState<ChannelFormData>({
         name: channel.name,
         type: channel.type,
@@ -75,6 +76,14 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
     const tProxy = useTranslations('proxyPool');
 
     const currentView = isEditing ? 'editing' : 'viewing';
+
+    const setView = (editing: boolean) => {
+        setIsEditing(editing);
+        // Tabs 内容切换后回到新视图起点，避免沿用详情页底部的 scrollTop。
+        window.requestAnimationFrame(() => {
+            scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+        });
+    };
 
     const baseUrlsEqual = (a: Channel['base_urls'] | undefined, b: Channel['base_urls'] | undefined) =>
         JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
@@ -205,7 +214,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
 
     return (
         <>
-            <MorphingDialogTitle disableLayoutAnimation>
+            <MorphingDialogTitle>
                 <header className="mb-6 flex items-center justify-between">
                     <h2 className="text-2xl font-bold text-card-foreground">
                         {isEditing ? t('title.edit') : t('title.view')}
@@ -226,8 +235,8 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                 </header>
             </MorphingDialogTitle>
 
-            <MorphingDialogDescription className="min-h-0 flex-1 overflow-hidden rounded-2xl p-2">
-                <div className="h-full overflow-y-auto overscroll-contain px-1 py-2 [-webkit-overflow-scrolling:touch]">
+            <MorphingDialogDescription className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl p-2">
+                <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-2 [-webkit-overflow-scrolling:touch]">
                 <Tabs value={currentView}>
                     <TabsContents>
                         <TabsContent value="viewing" >
@@ -512,7 +521,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                 isPending={updateChannel.isPending}
                                 submitText={t('actions.save')}
                                 pendingText={t('actions.saving')}
-                                onCancel={() => setIsEditing(false)}
+                                onCancel={() => setView(false)}
                                 cancelText={t('actions.cancel')}
                                 idPrefix="channel"
                             />
@@ -520,33 +529,33 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                     </TabsContents>
                 </Tabs>
                 </div>
+                {/* 沿用上游的 Morph 层级：操作区属于共享描述平面，
+                    但仍固定在详情滚动区之外。 */}
+                {!channel.managed && !isEditing ? (
+                    <div className="grid shrink-0 gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
+                        <Button
+                            onClick={() => (isConfirmingDelete ? setIsConfirmingDelete(false) : setView(true))}
+                            variant={isConfirmingDelete ? 'secondary' : 'default'}
+                            className="h-11 w-full rounded-2xl"
+                        >
+                            {isConfirmingDelete ? t('actions.cancel') : t('actions.edit')}
+                        </Button>
+                        <Button
+                            onClick={handleDeleteClick}
+                            disabled={deleteChannel.isPending}
+                            variant="destructive"
+                            className="h-11 w-full rounded-2xl"
+                        >
+                            <Trash2 className={`size-4 transition-transform ${isConfirmingDelete ? 'scale-110' : ''}`} />
+                            {deleteChannel.isPending
+                                ? t('actions.deleting')
+                                : isConfirmingDelete
+                                    ? t('actions.confirmDelete')
+                                    : t('actions.delete')}
+                        </Button>
+                    </div>
+                ) : null}
             </MorphingDialogDescription>
-
-            {/* Bottom actions belong to the whole detail panel, pinned below the scrollable content. */}
-            {!channel.managed && !isEditing ? (
-                <div className="grid shrink-0 gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
-                    <Button
-                        onClick={() => (isConfirmingDelete ? setIsConfirmingDelete(false) : setIsEditing(true))}
-                        variant={isConfirmingDelete ? 'secondary' : 'default'}
-                        className="h-11 w-full rounded-2xl"
-                    >
-                        {isConfirmingDelete ? t('actions.cancel') : t('actions.edit')}
-                    </Button>
-                    <Button
-                        onClick={handleDeleteClick}
-                        disabled={deleteChannel.isPending}
-                        variant="destructive"
-                        className="h-11 w-full rounded-2xl"
-                    >
-                        <Trash2 className={`size-4 transition-transform ${isConfirmingDelete ? 'scale-110' : ''}`} />
-                        {deleteChannel.isPending
-                            ? t('actions.deleting')
-                            : isConfirmingDelete
-                                ? t('actions.confirmDelete')
-                                : t('actions.delete')}
-                    </Button>
-                </div>
-            ) : null}
         </>
     );
 }
