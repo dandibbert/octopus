@@ -190,6 +190,24 @@ def main():
         print(f"  {provider}: {provider_count} models")
         model_count += provider_count
     
+    # 全局去重：不同 provider 可能产生相同 model_id（如 glm-5.2），
+    # Go map literal 不允许重复 key。保留第一个条目（与 map 语义一致）。
+    seen_ids = set()
+    deduped_entries = []
+    for entry in entries:
+        # entry 形如 "\t\"model_id\": {...},"，提取 key
+        key_start = entry.find('"') + 1
+        key_end = entry.find('"', key_start)
+        model_id = entry[key_start:key_end] if key_start > 0 and key_end > key_start else None
+        if model_id is None:
+            continue
+        if model_id in seen_ids:
+            continue
+        seen_ids.add(model_id)
+        deduped_entries.append(entry)
+    entries = deduped_entries
+    print(f"  Deduplicated to {len(entries)} unique model entries")
+    
     # 生成 Go 文件内容
     update_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     content = PRESETS_GO_TEMPLATE.format(
