@@ -25,7 +25,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 import { toast } from '@/components/common/Toast';
 import { cn } from '@/lib/utils';
@@ -111,17 +111,17 @@ function ModelPreview({ source }: { source: GroupAutoGroupSource }) {
     const extraCount = Math.max(0, source.models.length - MODEL_PREVIEW_LIMIT);
 
     return (
-        <HoverCard openDelay={120} closeDelay={150}>
-            <HoverCardTrigger asChild>
+        <Popover>
+            <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className="h-5 rounded-md px-1.5 text-[10px] tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="min-h-9 rounded-md px-2 text-[10px] tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-5 md:min-h-0 md:px-1.5"
                     aria-label={t('source.modelCount', { count: source.model_count })}
                 >
                     {source.model_count}
                 </button>
-            </HoverCardTrigger>
-            <HoverCardContent side="top" align="center" sideOffset={8} className="w-72 rounded-xl p-3">
+            </PopoverTrigger>
+            <PopoverContent side="top" align="center" sideOffset={8} className="w-72 rounded-xl p-3">
                 <div className="mb-2 text-xs font-medium text-foreground">
                     {t('source.modelCount', { count: source.model_count })}
                 </div>
@@ -141,8 +141,8 @@ function ModelPreview({ source }: { source: GroupAutoGroupSource }) {
                 ) : (
                     <div className="text-xs text-muted-foreground">{t('source.noModels')}</div>
                 )}
-            </HoverCardContent>
-        </HoverCard>
+            </PopoverContent>
+        </Popover>
     );
 }
 
@@ -380,7 +380,7 @@ export function GroupAutoGroupDialogContent() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-2rem)] min-h-0 w-screen max-w-full flex-col overflow-hidden md:max-w-2xl">
+        <div className="flex h-[calc(100dvh-1rem)] min-h-0 w-screen max-w-full flex-col overflow-hidden md:h-[calc(100dvh-2rem)] md:max-w-2xl">
             <MorphingDialogTitle className="shrink-0">
                 <header className="mb-3 flex items-center justify-between gap-4">
                     <h2 className="flex items-center gap-2 text-2xl font-bold text-card-foreground">
@@ -419,7 +419,7 @@ export function GroupAutoGroupDialogContent() {
                                     onValueChange={(value) => setProjectedGlobalMode(Number(value) as AutoGroupType)}
                                     disabled={isLoading || isPending}
                                 >
-                                    <SelectTrigger className="h-8 w-36 rounded-xl bg-background text-xs">
+                                    <SelectTrigger className="h-10 w-full rounded-xl bg-background text-base md:h-8 md:w-36 md:text-xs">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl">
@@ -434,7 +434,7 @@ export function GroupAutoGroupDialogContent() {
                         </div>
 
                         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-muted/30">
-                            <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/30 bg-muted/50 px-3 py-2">
+                            <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-border/30 bg-muted/50 px-3 py-2 md:h-10 md:flex-nowrap">
                                 <span className="min-w-0 truncate text-sm font-medium text-foreground">
                                     {t('sections.channels')}
                                 </span>
@@ -443,14 +443,14 @@ export function GroupAutoGroupDialogContent() {
                                         {configuredCount}
                                     </Badge>
                                 ) : null}
-                                <div className="ml-auto flex items-center gap-2">
-                                    <div className="relative w-40 sm:w-48">
+                                <div className="flex w-full items-center gap-2 md:ml-auto md:w-auto">
+                                    <div className="relative w-full md:w-48">
                                         <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                                         <input
                                             value={keyword}
                                             onChange={(event) => setKeyword(event.target.value)}
                                             placeholder={t('searchPlaceholder')}
-                                            className="h-6 w-full rounded-lg border border-border/60 bg-background/70 pl-7 pr-2 text-xs shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                            className="h-10 w-full rounded-lg border border-border/60 bg-background/70 pl-8 pr-2 text-base shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring md:h-6 md:pl-7 md:text-xs"
                                         />
                                     </div>
                                 </div>
@@ -465,14 +465,14 @@ export function GroupAutoGroupDialogContent() {
                                         transition={{ duration: 0.22, ease: 'easeOut' }}
                                         className="overflow-hidden"
                                     >
-                                        <div className="flex h-10 items-center gap-2 border-b border-primary/20 bg-primary/5 px-3 text-xs">
+                                        <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-primary/20 bg-primary/5 px-3 py-2 text-xs md:h-10 md:flex-nowrap md:py-0">
                                             <span className="font-medium text-primary">
                                                 {t('bulk.selected', { count: selection.size })}
                                             </span>
                                             <Select onValueChange={(value) => applyBulkMode(Number(value) as AutoGroupType)}>
                                                 <SelectTrigger
                                                     size="sm"
-                                                    className="!h-7 ml-auto w-36 rounded-lg border-primary/30 bg-background text-xs"
+                                                    className="ml-auto h-10 min-w-0 flex-1 rounded-lg border-primary/30 bg-background text-base md:!h-7 md:w-36 md:flex-none md:text-xs"
                                                 >
                                                     <SelectValue placeholder={t('bulk.placeholder')} />
                                                 </SelectTrigger>
@@ -487,7 +487,7 @@ export function GroupAutoGroupDialogContent() {
                                             <button
                                                 type="button"
                                                 onClick={clearSelection}
-                                                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                                className="flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:size-6"
                                                 aria-label={t('bulk.clear')}
                                             >
                                                 <X className="size-3.5" />
@@ -496,7 +496,7 @@ export function GroupAutoGroupDialogContent() {
                                     </motion.div>
                                 ) : null}
                             </AnimatePresence>
-                            <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl">
+                            <div className="m-1 min-h-0 flex-1 overflow-y-auto rounded-lg">
                                 {isLoading ? (
                                     <div className="p-6 text-center text-sm text-muted-foreground">{t('loading')}</div>
                                 ) : groups.length === 0 ? (
@@ -516,7 +516,7 @@ export function GroupAutoGroupDialogContent() {
                                                     : 'partial';
                                         return (
                                             <div key={group.key} className="border-b border-border/40 last:border-b-0">
-                                                <div className="mx-2 my-1 flex h-8 w-[calc(100%-1rem)] items-center gap-2 rounded-lg bg-muted px-2 transition-colors hover:bg-muted/80">
+                                                <div className="mx-2 my-1 flex min-h-11 w-[calc(100%-1rem)] items-center gap-2 rounded-lg bg-muted px-2 py-1.5 transition-colors hover:bg-muted/80 md:h-8 md:min-h-0 md:py-0">
                                                     <TristateCheckbox
                                                         state={groupState}
                                                         onChange={(next) => setGroupSelection(group, next)}
@@ -533,7 +533,7 @@ export function GroupAutoGroupDialogContent() {
                                                                 isExpanded ? '' : '-rotate-90',
                                                             )}
                                                         />
-                                                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
+                                                        <span className="min-w-0 flex-1 line-clamp-2 break-words text-xs font-semibold leading-4 text-foreground md:truncate md:whitespace-nowrap">
                                                             {group.label}
                                                         </span>
                                                         {groupConfigured > 0 ? (

@@ -109,7 +109,19 @@ function TooltipProvider({
     (data: TooltipData) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (currentTooltip !== null) {
-        setCurrentTooltip(data);
+        if (currentTooltip.id === data.id) {
+          setCurrentTooltip(data);
+          return;
+        }
+        // Do not let a visible tooltip instantly jump from one adjacent control
+        // to another. Close the old one first and require a deliberate hover on
+        // the next trigger; this also avoids a floating label chasing the pointer
+        // across dense toolbars/navigation.
+        setCurrentTooltip(null);
+        timeoutRef.current = window.setTimeout(
+          () => setCurrentTooltip(data),
+          openDelay,
+        );
         return;
       }
       const now = Date.now();
@@ -298,6 +310,7 @@ function TooltipOverlay() {
               top: 0,
               left: 0,
               zIndex: 50,
+              pointerEvents: 'none',
               transform: `translate3d(${x!}px, ${y!}px, 0)`,
             }}
           >

@@ -116,15 +116,15 @@ export function GroupHealthAttemptDetails({ attempt }: { attempt: GroupHealthAtt
                 {hasError ? <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" /> : null}
             </div>
             <div className="min-w-0">
-                <div className="truncate font-medium leading-5">
+                <div className="line-clamp-2 break-words font-medium leading-5 md:truncate md:whitespace-nowrap">
                     {attempt.channel_name}
                     {attempt.key_remark ? ` / ${attempt.key_remark}` : ''}
                 </div>
-                <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap leading-4 text-muted-foreground">
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 leading-4 text-muted-foreground md:flex-nowrap md:overflow-hidden md:whitespace-nowrap">
                     <span className="shrink-0">{attempt.http_status ? `HTTP ${attempt.http_status}` : t('noHttpStatus')}</span>
                     <span className="shrink-0">·</span>
                     <span className="shrink-0">{attempt.duration_ms}ms</span>
-                    {attempt.model_name ? <><span className="shrink-0">·</span><span className="min-w-0 truncate">{attempt.model_name}</span></> : null}
+                    {attempt.model_name ? <><span className="hidden shrink-0 md:inline">·</span><span className="min-w-0 basis-full break-all md:basis-auto md:truncate">{attempt.model_name}</span></> : null}
                 </div>
             </div>
             <Badge variant="outline" className={cn('shrink-0 text-[11px]', attemptBadgeTone(attempt.status))}>
@@ -190,7 +190,7 @@ export function GroupHealthBadge({ groupId }: { groupId?: number }) {
             <DialogTrigger asChild>
                 <button
                     type="button"
-                    className="flex min-h-10 w-full min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background/80 px-3 py-2 text-left text-xs shadow-none transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:w-auto"
+                    className="flex h-9 max-w-full min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background/80 px-2.5 text-left text-xs shadow-none transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
                     <span className={cn('size-2 shrink-0 rounded-full', statusDotTone(latest?.status))} />
                     <span className="sr-only">{t(`statusValue.${statusLabel(latest?.status)}`)}</span>
@@ -276,7 +276,8 @@ export function GroupHealthBadge({ groupId }: { groupId?: number }) {
                     </Card>
                 </div>
 
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                <div className="min-h-0 flex-1 p-1">
+                <div className="h-full min-h-0 space-y-2 overflow-y-auto">
                     {attempts.length ? attempts.map((attempt) => (
                         <GroupHealthAttemptDetails key={attempt.id} attempt={attempt} />
                     )) : (
@@ -284,6 +285,7 @@ export function GroupHealthBadge({ groupId }: { groupId?: number }) {
                             {t('empty')}
                         </div>
                     )}
+                </div>
                 </div>
             </DialogContent>
         </Dialog>

@@ -290,7 +290,7 @@ export function ChannelForm({
                         variant="ghost"
                         size="sm"
                         onClick={handleAddBaseUrl}
-                        className="h-6 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent"
+                        className="min-h-9 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent md:h-6 md:min-h-0"
                     >
                         <Plus className="h-3 w-3 mr-1" />
                         {t('add')}
@@ -314,7 +314,7 @@ export function ChannelForm({
                                 size="sm"
                                 onClick={() => handleRemoveBaseUrl(idx)}
                                 disabled={(formData.base_urls ?? []).length <= 1}
-                                className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-destructive disabled:opacity-40 hover:bg-transparent"
+                                className="h-10 w-10 shrink-0 p-0 rounded-xl text-muted-foreground hover:text-destructive disabled:opacity-40 hover:bg-transparent md:h-8 md:w-8"
                                 title="Remove"
                             >
                                 <X className="h-4 w-4" />
@@ -334,7 +334,7 @@ export function ChannelForm({
                         variant="ghost"
                         size="sm"
                         onClick={handleAddKey}
-                        className="h-6 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent"
+                        className="min-h-9 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent md:h-6 md:min-h-0"
                     >
                         <Plus className="h-3 w-3 mr-1" />
                         {t('add')}
@@ -342,21 +342,21 @@ export function ChannelForm({
                 </div>
                 <div className="space-y-2">
                     {(formData.keys ?? []).map((k, idx) => (
-                        <div key={k.id ?? `new-${idx}`} className="flex items-center gap-2">
+                        <div key={k.id ?? `new-${idx}`} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 md:flex">
                             <Input
                                 type="text"
                                 value={k.channel_key}
                                 onChange={(e) => handleUpdateKey(idx, { channel_key: e.target.value })}
                                 placeholder={t('apiKey')}
                                 required={idx === 0}
-                                className="rounded-xl flex-1"
+                                className="col-span-3 rounded-xl md:col-span-1 md:flex-1"
                             />
                             <Input
                                 type="text"
                                 value={k.remark ?? ''}
                                 onChange={(e) => handleUpdateKey(idx, { remark: e.target.value })}
                                 placeholder={t('remark')}
-                                className="rounded-xl w-32"
+                                className="min-w-0 rounded-xl md:w-32"
                             />
                             <Switch
                                 checked={k.enabled}
@@ -368,7 +368,7 @@ export function ChannelForm({
                                 size="sm"
                                 onClick={() => handleRemoveKey(idx)}
                                 disabled={(formData.keys ?? []).length <= 1}
-                                className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-destructive hover:bg-transparent disabled:opacity-40"
+                                className="h-10 w-10 shrink-0 p-0 rounded-xl text-muted-foreground hover:text-destructive hover:bg-transparent disabled:opacity-40 md:h-8 md:w-8"
                                 title="Remove"
                             >
                                 <X className="h-4 w-4" />
@@ -387,7 +387,7 @@ export function ChannelForm({
                         size="sm"
                         onClick={handleRefreshModels}
                         disabled={!formData.base_urls?.[0]?.url || !effectiveKey || fetchModel.isPending}
-                        className="h-6 px-2 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent"
+                        className="min-h-9 px-2 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent md:h-6 md:min-h-0"
                     >
                         <RefreshCw className={`h-3 w-3 mr-1 ${fetchModel.isPending ? 'animate-spin' : ''}`} />
                         {t('modelRefresh')}
@@ -412,7 +412,7 @@ export function ChannelForm({
                             variant="ghost"
                             size="sm"
                             onClick={() => handleAddModel(inputValue)}
-                            className="absolute rounded-lg right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                            className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-lg p-0 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:h-7 md:w-7"
                             title={t('modelAdd')}
                         >
                             <Plus className="size-4" />
@@ -433,13 +433,14 @@ export function ChannelForm({
                                 onClick={() => {
                                     updateModels([], []);
                                 }}
-                                className="h-6 px-2 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent"
+                                className="min-h-9 px-2 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-transparent md:h-6 md:min-h-0"
                             >
                                 {t('modelClearAll')}
                             </Button>
                         )}
                     </div>
-                    <div className="rounded-xl border border-border bg-muted/30 p-2.5 max-h-40 min-h-12 overflow-y-auto">
+                    <div className="min-h-12 rounded-xl border border-border bg-muted/30 p-2">
+                    <div className="md:max-h-36 md:overflow-y-auto">
                         {(autoModels.length + customModels.length) > 0 ? (
                             <div className="flex flex-wrap gap-1.5">
                                 {autoModels.map((model) => (
@@ -472,6 +473,7 @@ export function ChannelForm({
                                 {t('modelNoSelected')}
                             </div>
                         )}
+                    </div>
                     </div>
                 </div>
             </div>
@@ -632,7 +634,7 @@ export function ChannelForm({
                                     variant="ghost"
                                     size="sm"
                                     onClick={handleAddHeader}
-                                    className="h-6 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent"
+                                    className="min-h-9 px-2 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-transparent md:h-6 md:min-h-0"
                                 >
                                     <Plus className="h-3 w-3 mr-1" />
                                     {t('customHeaderAdd')}
@@ -640,20 +642,20 @@ export function ChannelForm({
                             </div>
                             <div className="space-y-2">
                                 {(formData.custom_header ?? []).map((h, idx) => (
-                                    <div key={`hdr-${idx}`} className="flex items-center gap-2">
+                                    <div key={`hdr-${idx}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:flex">
                                         <Input
                                             type="text"
                                             value={h.header_key}
                                             onChange={(e) => handleUpdateHeader(idx, { header_key: e.target.value })}
                                             placeholder={t('customHeaderKey')}
-                                            className="rounded-xl flex-1"
+                                            className="col-span-2 rounded-xl md:col-span-1 md:flex-1"
                                         />
                                         <Input
                                             type="text"
                                             value={h.header_value}
                                             onChange={(e) => handleUpdateHeader(idx, { header_value: e.target.value })}
                                             placeholder={t('customHeaderValue')}
-                                            className="rounded-xl flex-1"
+                                            className="min-w-0 rounded-xl md:flex-1"
                                         />
                                         <Button
                                             type="button"
@@ -661,7 +663,7 @@ export function ChannelForm({
                                             size="sm"
                                             onClick={() => handleRemoveHeader(idx)}
                                             disabled={(formData.custom_header ?? []).length <= 1}
-                                            className="h-8 w-8 p-0 rounded-xl text-muted-foreground hover:text-destructive hover:bg-transparent disabled:opacity-40"
+                                            className="h-10 w-10 shrink-0 p-0 rounded-xl text-muted-foreground hover:text-destructive hover:bg-transparent disabled:opacity-40 md:h-8 md:w-8"
                                             title="Remove"
                                         >
                                             <X className="h-4 w-4" />
@@ -694,7 +696,7 @@ export function ChannelForm({
                                 value={formData.param_override}
                                 onChange={(e) => onFormDataChange({ ...formData, param_override: e.target.value })}
                                 placeholder={t('paramOverridePlaceholder')}
-                                className="min-h-28 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="min-h-28 w-full rounded-xl border border-border bg-background px-3 py-2 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm"
                             />
                         </div>
                     </AccordionContent>

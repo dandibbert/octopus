@@ -1387,7 +1387,7 @@ export function Site() {
         <div className="flex items-start gap-3">
           <button
             type="button"
-            className="mt-1 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            className="relative mt-1 shrink-0 text-muted-foreground transition-colors before:absolute before:-inset-2.5 before:content-[''] hover:text-foreground"
             title={
               selectedSiteIds.includes(site.id) ? "取消选择站点" : "选择站点"
             }
@@ -1415,7 +1415,7 @@ export function Site() {
                 }}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-lg font-semibold">{site.name}</h2>
+                  <h2 className="line-clamp-2 break-words text-lg font-semibold leading-6 md:truncate md:whitespace-nowrap">{site.name}</h2>
                   {site.is_pinned ? (
                     <Badge variant="outline" className="text-amber-600">
                       <Pin className="mr-1 size-3" />
@@ -1433,13 +1433,13 @@ export function Site() {
                   </Badge>
                 </div>
 
-                <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Link2 className="size-4 shrink-0" />
+                <div className="mt-2 flex items-start gap-2 text-sm text-muted-foreground md:items-center">
+                  <Link2 className="mt-0.5 size-4 shrink-0 md:mt-0" />
                   <a
                     href={site.base_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="truncate hover:text-foreground hover:underline transition-colors"
+                    className="min-w-0 line-clamp-2 break-all leading-5 transition-colors hover:text-foreground hover:underline md:truncate md:whitespace-nowrap"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {site.base_url}
@@ -1910,7 +1910,7 @@ export function Site() {
   };
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto overscroll-contain rounded-t-3xl">
+    <div className="h-full min-h-0 touch-pan-y overflow-y-auto overscroll-y-auto rounded-t-3xl [-webkit-overflow-scrolling:touch] md:overscroll-contain">
       <PageWrapper
         className="space-y-4 pb-24 md:pb-4"
         childLayout={false}
@@ -2176,7 +2176,7 @@ export function Site() {
                   setLastImportResult(null);
                 }}
               >
-                <SelectTrigger className="rounded-xl">
+                <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

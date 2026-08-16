@@ -16,8 +16,8 @@ import { cn } from '@/lib/utils';
 
 type TooltipProviderProps = TooltipProviderPrimitiveProps;
 
-function TooltipProvider({ openDelay = 0, ...props }: TooltipProviderProps) {
-  return <TooltipProviderPrimitive openDelay={openDelay} {...props} />;
+function TooltipProvider({ openDelay = 450, closeDelay = 100, ...props }: TooltipProviderProps) {
+  return <TooltipProviderPrimitive openDelay={openDelay} closeDelay={closeDelay} {...props} />;
 }
 
 type TooltipProps = TooltipPrimitiveProps;
@@ -46,12 +46,12 @@ function TooltipContent({
   return (
     <TooltipContentPrimitive
       className={cn(
-        'z-50 w-fit bg-muted text-muted-foreground  rounded-md',
+        'z-50 w-fit max-w-[calc(100vw-1rem)] rounded-md bg-muted text-muted-foreground',
         className,
       )}
       {...props}
     >
-      <motion.div className="overflow-hidden px-3 py-1.5 text-xs text-balance">
+      <motion.div className="overflow-hidden break-words px-3 py-1.5 text-xs text-balance">
         <motion.div layout={layout}>{children}</motion.div>
       </motion.div>
       <TooltipArrowPrimitive

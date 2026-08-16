@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Copy, Eraser, RotateCcw, Send, Square, User, Wrench } from 'lucide-react';
+import { Bot, ChevronDown, Copy, Eraser, RotateCcw, Send, Square, User, Wrench } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useChannelList } from '@/api/endpoints/channel';
 import { useGroupList } from '@/api/endpoints/group';
@@ -359,8 +359,8 @@ export function Playground() {
     };
 
     return (
-        <div className="grid h-full min-h-0 gap-4 pb-24 md:grid-cols-[minmax(0,1fr)_18rem] md:pb-6">
-            <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pb-28 [-webkit-overflow-scrolling:touch] md:grid md:h-full md:grid-cols-[minmax(0,1fr)_18rem] md:overflow-hidden md:pb-6">
+            <section className="flex h-[40dvh] flex-none flex-col overflow-hidden rounded-3xl border bg-card shadow-sm md:h-full md:min-h-0">
                 <div className="flex items-center justify-between border-b px-4 py-3">
                     <div>
                         <div className="font-semibold">{t('title')}</div>
@@ -371,10 +371,18 @@ export function Playground() {
                         <Button className="min-h-10 md:min-h-8" variant="outline" size="sm" onClick={() => setMessages([])} disabled={running || messages.length === 0}><Eraser className="size-4" />{t('clear')}</Button>
                     </div>
                 </div>
-                <div ref={messageListRef} onScroll={handleMessageScroll} onWheel={handleUserScrollIntent} onTouchMove={handleUserScrollIntent} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 pb-12">
-                    {messages.length === 0 && <div className="grid h-full min-h-56 place-items-center text-center text-muted-foreground"><div><Bot className="mx-auto mb-3 size-10" /><p>{t('empty')}</p></div></div>}
-                    {messages.map((message) => <Message key={message.id} message={message} />)}
-                    <div />
+                <div className="min-h-0 flex-1 p-2">
+                    <div
+                        ref={messageListRef}
+                        onScroll={handleMessageScroll}
+                        onWheel={handleUserScrollIntent}
+                        onTouchMove={handleUserScrollIntent}
+                        className="h-full space-y-4 overflow-y-auto overscroll-contain px-2 py-2 pb-10 [-webkit-overflow-scrolling:touch]"
+                    >
+                        {messages.length === 0 && <div className="grid h-full min-h-56 place-items-center text-center text-muted-foreground"><div><Bot className="mx-auto mb-3 size-10" /><p>{t('empty')}</p></div></div>}
+                        {messages.map((message) => <Message key={message.id} message={message} />)}
+                        <div />
+                    </div>
                 </div>
                 <div className="border-t p-3">
                     <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring/30">
@@ -407,7 +415,8 @@ export function Playground() {
                 </div>
             </section>
 
-            <aside className="space-y-4 overflow-y-auto rounded-3xl border bg-card p-4 shadow-sm">
+            <aside className="min-w-0 flex-none overflow-hidden rounded-3xl border bg-card p-2 shadow-sm md:max-h-none md:min-h-0">
+                <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-3 py-3 scroll-py-3 [-webkit-overflow-scrolling:touch] md:h-full md:px-2">
                 <Setting label={t('settings.mode')} htmlFor="playground-mode">
                     <PlaygroundSelect id="playground-mode" ariaLabel={t('settings.mode')} value={mode} options={[
                         { value: 'group', label: t('settings.group') },
@@ -480,6 +489,7 @@ export function Playground() {
                     <label htmlFor="playground-streaming"><span className="block text-sm font-medium">{t('settings.streaming')}</span><span className="block text-xs text-muted-foreground">{t('settings.streamingHint')}</span></label>
                     <Switch id="playground-streaming" aria-label={t('settings.streaming')} checked={stream} onCheckedChange={setStream} />
                 </div>
+                </div>
             </aside>
         </div>
     );
@@ -504,8 +514,12 @@ function PlaygroundSelect({
 }) {
     return (
         <RadixSelect value={value} onValueChange={onChange}>
-            <SelectTrigger id={id} aria-label={ariaLabel} className="h-10 w-full rounded-xl bg-background">
-                <SelectValue placeholder={placeholder} />
+            <SelectTrigger
+                id={id}
+                aria-label={ariaLabel}
+                className="h-auto min-h-10 w-full min-w-0 overflow-hidden rounded-xl bg-background py-2 text-left data-[size=default]:h-auto data-[size=sm]:h-auto *:data-[slot=select-value]:line-clamp-2"
+            >
+                <SelectValue className="line-clamp-2 min-w-0 flex-1 whitespace-normal break-all text-left leading-5" placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent position="popper">
                 {options.filter((option) => option.value).map((option) => (
@@ -543,6 +557,7 @@ function Message({ message }: { message: ChatMessage }) {
     const copyT = useTranslations('common.copy');
     const assistant = message.role === 'assistant';
     const diagnostics = message.diagnostics;
+    const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
     const copyMessage = async () => {
         try {
             await navigator.clipboard.writeText(message.content);
@@ -569,12 +584,29 @@ function Message({ message }: { message: ChatMessage }) {
                 </div>
                 {message.error && <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{message.error}</div>}
                 {assistant && message.content && (
-                    <div className="flex items-start gap-2">
-                        <Button className="min-h-10 md:min-h-8" variant="ghost" size="sm" onClick={() => void copyMessage()}><Copy className="size-3.5" />{t('copy')}</Button>
-                        {diagnostics && (
-                            <details className="text-xs text-muted-foreground">
-                                <summary className="cursor-pointer"><Wrench className="mr-1 inline size-3.5" />{t('diagnostics.title')}</summary>
-                                <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 rounded-xl border bg-muted/30 p-3">
+                    <div className="space-y-2">
+                        <div className="flex min-h-10 items-center gap-1 md:min-h-8">
+                            <Button className="min-h-10 px-2.5 md:min-h-8" variant="ghost" size="sm" onClick={() => void copyMessage()}>
+                                <Copy className="size-3.5" />
+                                {t('copy')}
+                            </Button>
+                            {diagnostics && (
+                                <Button
+                                    type="button"
+                                    className="min-h-10 px-2.5 md:min-h-8"
+                                    variant="ghost"
+                                    size="sm"
+                                    aria-expanded={diagnosticsOpen}
+                                    onClick={() => setDiagnosticsOpen((open) => !open)}
+                                >
+                                    <Wrench className="size-3.5" />
+                                    {t('diagnostics.title')}
+                                    <ChevronDown className={cn('size-3.5 transition-transform', diagnosticsOpen && 'rotate-180')} />
+                                </Button>
+                            )}
+                        </div>
+                        {diagnostics && diagnosticsOpen && (
+                            <div className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-5 gap-y-1 rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
                                     {diagnostics.ttft !== undefined && <><span>TTFT</span><span>{Math.round(diagnostics.ttft)} ms</span></>}
                                     {diagnostics.total !== undefined && <><span>{t('diagnostics.total')}</span><span>{(diagnostics.total / 1000).toFixed(2)} s</span></>}
                                     {diagnostics.outputRate !== undefined && <><span>{t('diagnostics.outputRate')}</span><span>{diagnostics.outputRate > 1000 ? '>1000 tok/s' : `${diagnostics.outputRate.toFixed(1)} tok/s`}</span></>}
@@ -590,8 +622,7 @@ function Message({ message }: { message: ChatMessage }) {
                                     {diagnostics.remoteModel && <><span>{t('diagnostics.remoteModel')}</span><span className="break-all">{diagnostics.remoteModel}</span></>}
                                     {diagnostics.actualModel && <><span>{t('diagnostics.actualModel')}</span><span className="break-all">{diagnostics.actualModel}</span></>}
                                     {diagnostics.requestId && <><span>{t('diagnostics.requestId')}</span><span className="break-all font-mono">{diagnostics.requestId}</span></>}
-                                </div>
-                            </details>
+                            </div>
                         )}
                     </div>
                 )}

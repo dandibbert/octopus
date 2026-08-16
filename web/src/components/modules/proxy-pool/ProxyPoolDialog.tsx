@@ -339,17 +339,17 @@ export function ProxyPoolDialog() {
 
     return (
         <Dialog open={isOpen} onOpenChange={setOpen}>
-            <DialogContent className="max-h-[90vh] overflow-hidden rounded-3xl p-0 sm:max-w-5xl">
-                <div className="grid max-h-[90vh] min-h-[620px] grid-cols-1 overflow-hidden md:grid-cols-[1.1fr_0.9fr]">
+            <DialogContent className="h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] overflow-hidden rounded-3xl p-0 md:h-auto md:max-h-[90dvh] md:max-w-5xl">
+                <div className="grid h-full min-h-0 grid-cols-1 overflow-y-auto md:min-h-[620px] md:grid-cols-[1.1fr_0.9fr] md:overflow-hidden">
                     <section className="flex min-h-0 flex-col border-b md:border-b-0 md:border-r">
-                        <DialogHeader className="shrink-0 p-6 pb-3">
+                        <DialogHeader className="shrink-0 p-4 pb-3 md:p-6 md:pb-3">
                             <DialogTitle className="flex items-center gap-2 text-2xl">
                                 <Network className="size-5" />
                                 {t('title')}
                             </DialogTitle>
                             <DialogDescription>{t('description')}</DialogDescription>
                         </DialogHeader>
-                        <div className="shrink-0 px-6 pb-3">
+                        <div className="shrink-0 px-4 pb-3 md:px-6">
                             <Input
                                 value={query}
                                 onChange={(event) => setQuery(event.target.value)}
@@ -357,7 +357,7 @@ export function ProxyPoolDialog() {
                                 className="rounded-xl"
                             />
                         </div>
-                        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-6 pb-6">
+                        <div className="min-h-0 flex-1 space-y-2 overflow-visible px-4 pb-4 md:overflow-y-auto md:px-6 md:pb-6">
                             {isLoading ? (
                                 <div className="rounded-2xl border bg-muted/30 p-4 text-sm text-muted-foreground">{t('loading')}</div>
                             ) : error ? (
@@ -376,30 +376,30 @@ export function ProxyPoolDialog() {
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <h3 className="truncate font-semibold">{proxy.name}</h3>
+                                                <h3 className="line-clamp-2 break-words font-semibold leading-5 md:truncate md:whitespace-nowrap">{proxy.name}</h3>
                                                 <Badge variant={proxy.enabled ? 'default' : 'secondary'}>
                                                     {proxy.enabled ? t('enabled') : t('disabled')}
                                                 </Badge>
-                                                <button type="button" onClick={() => openReferences(proxy)} className="rounded-full" title={t('referencesTitle')}>
+                                                <button type="button" onClick={() => openReferences(proxy)} className="min-h-9 rounded-full md:min-h-0" title={t('referencesTitle')}>
                                                     <Badge variant="outline" className="cursor-pointer hover:bg-accent hover:text-accent-foreground">
                                                         <ExternalLink className="size-3" />
                                                         {t('references', { count: proxy.reference_count })}
                                                     </Badge>
                                                 </button>
                                             </div>
-                                            <div className="mt-1 truncate font-mono text-xs text-muted-foreground" title={maskProxyURL(proxy.url)}>
+                                            <div className="mt-1 line-clamp-2 break-all font-mono text-xs leading-4 text-muted-foreground md:truncate md:whitespace-nowrap" title={maskProxyURL(proxy.url)}>
                                                 {maskProxyURL(proxy.url)}
                                             </div>
                                             {proxy.remark ? <p className="mt-2 text-xs text-muted-foreground">{proxy.remark}</p> : null}
                                         </div>
                                         <div className="flex shrink-0 items-center gap-1">
-                                            <Button type="button" variant="ghost" size="icon-sm" className="rounded-xl" onClick={() => handleTest(proxy)} disabled={testingKey === `saved-${proxy.id}` || !proxy.enabled} title={proxy.enabled ? t('test') : t('disabled')}>
+                                            <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-xl md:size-8" onClick={() => handleTest(proxy)} disabled={testingKey === `saved-${proxy.id}` || !proxy.enabled} title={proxy.enabled ? t('test') : t('disabled')}>
                                                 <FlaskConical className={cn('size-4', testingKey === `saved-${proxy.id}` && 'animate-pulse')} />
                                             </Button>
-                                            <Button type="button" variant="ghost" size="icon-sm" className="rounded-xl" onClick={() => setForm(createFormFromProxy(proxy))} title={t('edit')}>
+                                            <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-xl md:size-8" onClick={() => setForm(createFormFromProxy(proxy))} title={t('edit')}>
                                                 <Pencil className="size-4" />
                                             </Button>
-                                            <Button type="button" variant="ghost" size="icon-sm" className="rounded-xl text-destructive hover:text-destructive" onClick={() => handleDelete(proxy)} disabled={deleteProxy.isPending || proxy.reference_count > 0} title={proxy.reference_count > 0 ? t('deleteBlocked') : t('delete')}>
+                                            <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-xl text-destructive hover:text-destructive md:size-8" onClick={() => handleDelete(proxy)} disabled={deleteProxy.isPending || proxy.reference_count > 0} title={proxy.reference_count > 0 ? t('deleteBlocked') : t('delete')}>
                                                 <Trash2 className="size-4" />
                                             </Button>
                                         </div>
@@ -409,13 +409,13 @@ export function ProxyPoolDialog() {
                         </div>
                     </section>
 
-                    <section className="flex min-h-0 flex-col overflow-y-auto p-6">
+                    <section className="flex min-h-0 flex-col overflow-visible p-4 md:overflow-y-auto md:p-6">
                         <div className="mb-4 flex items-center justify-between gap-3">
                             <div>
                                 <h3 className="text-lg font-semibold">{editing ? t('formTitleEdit') : t('formTitleCreate')}</h3>
                                 <p className="text-sm text-muted-foreground">{t('formDescription')}</p>
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={resetForm}>
+                            <Button type="button" variant="outline" size="sm" className="min-h-10 rounded-xl md:min-h-0" onClick={resetForm}>
                                 <Plus className="size-4" />
                                 {t('new')}
                             </Button>
@@ -463,7 +463,8 @@ export function ProxyPoolDialog() {
                             {referencesProxy ? t('referencesDescription', { name: referencesProxy.name }) : null}
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
+                    <div className="min-h-0 p-1">
+                    <div className="min-h-0 space-y-2 overflow-y-auto">
                         {referencesLoading ? (
                             <div className="rounded-2xl border bg-muted/30 p-4 text-sm text-muted-foreground">{t('loading')}</div>
                         ) : referencesError ? (
@@ -493,34 +494,34 @@ export function ProxyPoolDialog() {
                                                 <span className="w-6 shrink-0" />
                                             )}
                                             <div className="min-w-0">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex flex-wrap items-center gap-2">
                                                     <Badge variant="outline">{referenceTypeLabel(node.reference, t)}</Badge>
-                                                    <span className="truncate text-sm font-medium">{referenceTitle(node.reference, t)}</span>
+                                                    <span className="min-w-0 line-clamp-2 break-words text-sm font-medium leading-5 md:truncate md:whitespace-nowrap">{referenceTitle(node.reference, t)}</span>
                                                     {node.children.length > 0 ? (
                                                         <Badge variant="secondary" className="text-[10px]">
                                                             {t('derivedReferences', { count: node.children.length })}
                                                         </Badge>
                                                     ) : null}
                                                 </div>
-                                                <div className="mt-1 truncate text-xs text-muted-foreground">{referenceLocation(node.reference, t)}</div>
+                                                <div className="mt-1 line-clamp-2 break-all text-xs leading-4 text-muted-foreground md:truncate md:whitespace-nowrap">{referenceLocation(node.reference, t)}</div>
                                             </div>
                                         </div>
-                                        <Button type="button" variant="ghost" size="icon-sm" className="shrink-0 rounded-xl" onClick={() => jumpToReference(node.reference)} title={t('jumpToReference')}>
+                                        <Button type="button" variant="ghost" size="icon-sm" className="size-10 shrink-0 rounded-xl md:size-8" onClick={() => jumpToReference(node.reference)} title={t('jumpToReference')}>
                                             <ExternalLink className="size-4" />
                                         </Button>
                                     </div>
                                     {expanded && node.children.length > 0 ? (
-                                        <div className="mt-3 space-y-2 border-l border-dashed border-border/80 pl-6">
+                                        <div className="mt-3 space-y-2 border-l border-dashed border-border/80 pl-3 md:pl-6">
                                             {node.children.map((child, childIndex) => (
                                                 <div key={`${referenceNodeKey(child)}:${childIndex}`} className="flex items-center justify-between gap-3 rounded-xl bg-muted/20 px-3 py-2">
                                                     <div className="min-w-0">
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
                                                             <Badge variant="outline" className="text-[10px]">{referenceTypeLabel(child, t)}</Badge>
-                                                            <span className="truncate text-xs font-medium">{referenceTitle(child, t)}</span>
+                                                            <span className="min-w-0 line-clamp-2 break-words text-xs font-medium leading-4 md:truncate md:whitespace-nowrap">{referenceTitle(child, t)}</span>
                                                         </div>
-                                                        <div className="mt-1 truncate text-[11px] text-muted-foreground">{referenceLocation(child, t)}</div>
+                                                        <div className="mt-1 line-clamp-2 break-all text-[11px] leading-4 text-muted-foreground md:truncate md:whitespace-nowrap">{referenceLocation(child, t)}</div>
                                                     </div>
-                                                    <Button type="button" variant="ghost" size="icon-sm" className="shrink-0 rounded-xl" onClick={() => jumpToReference(child)} title={t('jumpToReference')}>
+                                                    <Button type="button" variant="ghost" size="icon-sm" className="size-10 shrink-0 rounded-xl md:size-8" onClick={() => jumpToReference(child)} title={t('jumpToReference')}>
                                                         <ExternalLink className="size-4" />
                                                     </Button>
                                                 </div>
@@ -530,6 +531,7 @@ export function ProxyPoolDialog() {
                                 </div>
                             );
                         })}
+                    </div>
                     </div>
                 </DialogContent>
             </Dialog>

@@ -155,47 +155,70 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
                 const prefixSwitchId = `channel-${channel.id}-model-prefix`;
 
                 return (
-                    <div key={model} className="border-b p-3 last:border-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span
-                                aria-hidden="true"
-                                className={`size-2 shrink-0 rounded-full ${
-                                    isTesting
-                                        ? 'animate-pulse bg-amber-500'
-                                        : result?.success
-                                            ? 'bg-emerald-500'
-                                            : result
-                                                ? 'bg-destructive'
-                                                : 'bg-muted-foreground/30'
-                                }`}
-                            />
-                            <code className="min-w-0 flex-1 truncate text-sm">{model}</code>
-                            {result && (
-                                <span className={result.success ? 'text-xs text-emerald-600' : 'text-xs text-destructive'}>
-                                    {result.success ? t('available_latency', { latency: result.latency_ms }) : t('unavailable')}
-                                </span>
-                            )}
-                            <Button className="min-h-10" size="sm" variant="outline" onClick={() => test(model)} disabled={isTesting}>
-                                {isTesting ? <Loader2 className="size-3.5 animate-spin" /> : <Activity className="size-3.5" />}
-                                {isTesting ? t('testing') : t('health_check')}
-                            </Button>
-                            <Button
-                                size="sm"
-                                className="min-h-10"
-                                variant="outline"
-                                onClick={() => {
-                                    onNavigate?.();
-                                    openPlayground({ type: 'channel_model', channelId: channel.id, model });
-                                }}
-                            >
-                                <MessageSquareText className="size-3.5" />
-                                {t('playground')}
-                            </Button>
-                            <Button className="min-h-10" size="sm" variant="outline" onClick={() => beginCreate(model)}>
-                                <Plus className="size-3.5" />
-                                {t('create_group')}
-                            </Button>
-                        </div>
+                    <div key={model} className="border-b px-3 py-2.5 last:border-0">
+                        <div className="space-y-2">
+                            <div className="flex min-w-0 items-start gap-2">
+                                <span
+                                    aria-hidden="true"
+                                    className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                                        isTesting
+                                            ? 'animate-pulse bg-amber-500'
+                                            : result?.success
+                                                ? 'bg-emerald-500'
+                                                : result
+                                                    ? 'bg-destructive'
+                                                    : 'bg-muted-foreground/30'
+                                    }`}
+                                />
+                                <code className="min-w-0 flex-1 line-clamp-2 break-all text-sm leading-5" title={model}>{model}</code>
+                            </div>
+
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                {result ? (
+                                    <span className={result.success
+                                        ? 'mr-auto whitespace-nowrap text-xs font-medium text-emerald-600'
+                                        : 'mr-auto whitespace-nowrap text-xs font-medium text-destructive'}>
+                                        {result.success ? t('available_latency', { latency: result.latency_ms }) : t('unavailable')}
+                                    </span>
+                                ) : <span className="mr-auto" />}
+
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button
+                                        className="size-9 px-0 md:size-8"
+                                        size="icon"
+                                        variant="outline"
+                                        onClick={() => test(model)}
+                                        disabled={isTesting}
+                                        aria-label={isTesting ? t('testing') : t('health_check')}
+                                        title={isTesting ? t('testing') : t('health_check')}
+                                    >
+                                        {isTesting ? <Loader2 className="size-4 animate-spin" /> : <Activity className="size-4" />}
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        className="size-9 px-0 md:size-8"
+                                        variant="outline"
+                                        onClick={() => {
+                                            onNavigate?.();
+                                            openPlayground({ type: 'channel_model', channelId: channel.id, model });
+                                        }}
+                                        aria-label={t('playground')}
+                                        title={t('playground')}
+                                    >
+                                        <MessageSquareText className="size-4" />
+                                    </Button>
+                                    <Button
+                                        className="size-9 px-0 text-muted-foreground hover:text-foreground md:size-8"
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => beginCreate(model)}
+                                        aria-label={t('create_group')}
+                                        title={t('create_group')}
+                                    >
+                                        <Plus className="size-4" />
+                                    </Button>
+                                </div>
+                            </div>
 
                         {result && !result.success && (result.error || result.attempts?.length) && (
                             <details className="mt-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
@@ -219,10 +242,10 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
 
                         {creating === model && (
                             <div ref={createFormRef} className="mt-3 scroll-mb-24 space-y-3 rounded-xl bg-muted/40 p-3">
-                                <div className="flex items-center justify-between">
-                                    <div>
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
                                         <div className="text-sm font-medium">{t('create_group')}</div>
-                                        <div className="text-xs text-muted-foreground">{t('source', { channel: channel.name, model })}</div>
+                                        <div className="mt-0.5 break-all text-xs leading-5 text-muted-foreground">{t('source', { channel: channel.name, model })}</div>
                                     </div>
                                     <Button className="size-10" variant="ghost" size="icon" aria-label={t('cancel')} onClick={() => setCreating(null)}>
                                         <X className="size-4" />
@@ -270,6 +293,7 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
                                 </div>
                             </div>
                         )}
+                        </div>
                     </div>
                 );
             })}

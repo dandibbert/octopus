@@ -486,7 +486,7 @@ function PriceLedgerCard({
                         </Badge>
                     </div>
                     <div className={cn(
-                        'mt-0.5 truncate text-base font-semibold tabular-nums',
+                        'mt-0.5 break-words text-base font-semibold tabular-nums md:truncate',
                         status === 'unknown' && 'text-amber-700 dark:text-amber-300',
                         status === 'conflict' && 'text-destructive',
                         status !== 'unknown' && status !== 'conflict' && 'text-foreground',
@@ -500,27 +500,27 @@ function PriceLedgerCard({
                 {kind === 'billing' ? (
                     <div className="flex min-w-0 items-baseline gap-1.5">
                         <dt className="shrink-0 text-muted-foreground">{t('billingBasisLabel')}</dt>
-                        <dd className="truncate text-foreground" title={basis || ''}>{getBillingBasisLabel(basis, t)}</dd>
+                        <dd className="min-w-0 break-words text-foreground md:truncate" title={basis || ''}>{getBillingBasisLabel(basis, t)}</dd>
                     </div>
                 ) : null}
                 <div className="flex min-w-0 items-baseline gap-1.5">
                     <dt className="shrink-0 text-muted-foreground">{t('billingSkuLabel')}</dt>
-                    <dd className="truncate font-mono text-foreground" title={sku || ''}>{sku || '—'}</dd>
+                    <dd className="min-w-0 break-all font-mono text-foreground md:truncate" title={sku || ''}>{sku || '—'}</dd>
                 </div>
                 <div className="flex min-w-0 items-baseline gap-1.5">
                     <dt className="shrink-0 text-muted-foreground">{t('billingMethodLabel')}</dt>
-                    <dd className="truncate text-foreground" title={method || ''}>
+                    <dd className="min-w-0 break-words text-foreground md:truncate" title={method || ''}>
                         {getPriceResolutionMethodLabel(method, status, t)}
                     </dd>
                 </div>
                 <div className="flex min-w-0 items-baseline gap-1.5">
                     <dt className="shrink-0 text-muted-foreground">{t('billingSourceLabel')}</dt>
-                    <dd className="truncate text-foreground" title={sourceLabel}>{sourceLabel}</dd>
+                    <dd className="min-w-0 break-words text-foreground md:truncate" title={sourceLabel}>{sourceLabel}</dd>
                 </div>
                 {kind === 'billing' ? (
                     <div className="flex min-w-0 items-baseline gap-1.5">
                         <dt className="shrink-0 text-muted-foreground">{t('billingModeLabel')}</dt>
-                        <dd className="truncate text-foreground" title={mode || ''}>{getPriceModeLabel(mode, t)}</dd>
+                        <dd className="min-w-0 break-words text-foreground md:truncate" title={mode || ''}>{getPriceModeLabel(mode, t)}</dd>
                     </div>
                 ) : null}
             </dl>
@@ -904,7 +904,50 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                         <ModelAvatar size={40} />
                         <div className="min-w-0 flex flex-col gap-3">
                             <div className="flex items-start gap-3 min-w-0">
-                                <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                                <div className="min-w-0 flex-1 md:hidden">
+                                    <div className="flex min-w-0 items-start gap-2 text-sm">
+                                        <span className="min-w-0 flex-1 line-clamp-2 break-all font-semibold leading-5 text-card-foreground" title={log.request_model_name}>
+                                            {log.request_model_name}
+                                        </span>
+                                        {log.request_source && log.request_source !== 'api' ? (
+                                            <Badge variant="outline" className="mt-0.5 shrink-0 px-1.5 py-0 text-[10px]">
+                                                {log.request_source === 'playground'
+                                                    ? sourceT('playground')
+                                                    : log.request_source === 'health_check'
+                                                        ? sourceT('health_check')
+                                                        : log.request_source}
+                                            </Badge>
+                                        ) : null}
+                                    </div>
+                                    <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                                        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/50" />
+                                        {hasMultipleAttempts ? (
+                                            <RetryBadgeWithTooltip
+                                                channelName={log.channel_name}
+                                                brandColor={brandColor}
+                                                attempts={log.attempts!}
+                                            />
+                                        ) : (
+                                            <Badge
+                                                variant="secondary"
+                                                className="shrink-0 px-1.5 py-0 text-[10px]"
+                                                style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
+                                            >
+                                                {log.channel_name}
+                                            </Badge>
+                                        )}
+                                        <span className="min-w-0 flex-1 line-clamp-1 break-all" title={displayActualModelName}>
+                                            {displayActualModelName}
+                                        </span>
+                                        {log.attempts?.some((attempt) => attempt.sticky) ? (
+                                            <Pin className="size-3.5 shrink-0 text-amber-500" />
+                                        ) : null}
+                                    </div>
+                                    <div className="mt-2">
+                                        <WSModeBadge log={log} />
+                                    </div>
+                                </div>
+                                <div className="hidden min-w-0 flex-1 items-center gap-2 text-sm md:flex">
                                     <span className="font-semibold text-card-foreground truncate" title={log.request_model_name}>
                                         {log.request_model_name}
                                     </span>
@@ -940,9 +983,11 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         <Pin className="size-3.5 shrink-0 text-amber-500" />
                                     ) : null}
                                 </div>
-                                <WSModeBadge log={log} />
+                                <div className="hidden md:block">
+                                    <WSModeBadge log={log} />
+                                </div>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs tabular-nums text-muted-foreground">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs tabular-nums text-muted-foreground lg:flex lg:flex-wrap lg:items-center lg:gap-x-8 lg:[&>div]:shrink-0 lg:[&>div]:whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
                                     <Clock className="size-3.5 shrink-0" style={{ color: brandColor }} />
                                     <span>{formatTime(log.time)}</span>
@@ -955,7 +1000,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         </span>
                                     </div>
                                 ) : null}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 whitespace-nowrap">
                                     <Zap className="size-3.5 shrink-0 text-amber-500" />
                                     <span>{t('duration')} {formatDurationCompact(log.ftut)} / {formatDurationCompact(log.use_time)}</span>
                                 </div>
@@ -1001,10 +1046,41 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                 </MorphingDialogTrigger>
 
                 <MorphingDialogContainer>
-                    <MorphingDialogContent className="relative w-[calc(100vw-2rem)] md:w-[80vw] bg-card text-card-foreground px-6 py-4 rounded-3xl h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+                    <MorphingDialogContent className="relative flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-3xl bg-card p-4 text-card-foreground md:h-[calc(100dvh-2rem)] md:w-[80vw] md:px-6 md:py-4">
                         <MorphingDialogClose className="top-4 right-5 text-muted-foreground hover:text-foreground transition-colors" />
-                        <MorphingDialogTitle className="mb-3 flex min-w-0 items-start gap-3 pr-14 text-sm md:pr-16">
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <MorphingDialogTitle className="mb-3 min-w-0 pr-12 text-sm md:flex md:items-start md:gap-3 md:pr-16">
+                            <div className="min-w-0 md:hidden">
+                                <div className="flex min-w-0 items-start gap-2">
+                                    <ModelAvatar size={28} />
+                                    <span className="min-w-0 flex-1 line-clamp-2 break-all font-semibold leading-5 text-card-foreground">{log.request_model_name}</span>
+                                </div>
+                                <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                                    <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/50" />
+                                    {hasMultipleAttempts ? (
+                                        <RetryBadgeWithTooltip
+                                            channelName={log.channel_name}
+                                            brandColor={brandColor}
+                                            attempts={log.attempts!}
+                                        />
+                                    ) : (
+                                        <Badge
+                                            variant="secondary"
+                                            className="shrink-0 px-1.5 py-0 text-[10px]"
+                                            style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
+                                        >
+                                            {log.channel_name}
+                                        </Badge>
+                                    )}
+                                    <span className="min-w-0 flex-1 line-clamp-1 break-all">{displayActualModelName}</span>
+                                    {log.attempts?.some((attempt) => attempt.sticky) ? (
+                                        <Pin className="size-3.5 shrink-0 text-amber-500" />
+                                    ) : null}
+                                </div>
+                                <div className="mt-2">
+                                    <WSModeBadge log={log} />
+                                </div>
+                            </div>
+                            <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
                                 <ModelAvatar size={28} />
                                 <span className="font-semibold text-card-foreground truncate">{log.request_model_name}</span>
                                 <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/50" />
@@ -1028,7 +1104,9 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     <Pin className="size-3.5 shrink-0 text-amber-500" />
                                 ) : null}
                             </div>
-                            <WSModeBadge log={log} />
+                            <div className="hidden md:block">
+                                <WSModeBadge log={log} />
+                            </div>
                         </MorphingDialogTitle>
 
                         <MorphingDialogDescription className="flex-1 min-h-0">
@@ -1084,7 +1162,8 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                     transition={{ duration: 0.2, ease: 'easeInOut' }}
                                                     className="overflow-hidden flex flex-col min-h-0"
                                                 >
-                                                    <div className="flex-1 overflow-auto p-2.5 md:p-3 flex flex-col gap-4">
+                                                    <div className="min-h-0 flex-1 p-2">
+                                                    <div className="flex h-full flex-col gap-4 overflow-auto p-1">
                                                         {hasError ? (
                                                             <div className="relative pl-1">
                                                                 <div className="absolute right-0 top-0">
@@ -1205,13 +1284,47 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                             </div>
                                                         ) : null}
                                                     </div>
+                                                    </div>
                                                 </motion.div>
                                             ) : null}
                                         </AnimatePresence>
                                     </div>
                                 ) : null}
 
-                                <div className="shrink-0 rounded-2xl border border-border/60 bg-muted/20 p-3 text-xs">
+                                <details className="group shrink-0 overflow-hidden rounded-2xl border border-border/60 bg-muted/20 text-xs">
+                                    <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/35 [&::-webkit-details-marker]:hidden">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-[11px] text-muted-foreground">{t('modelPath')}</div>
+                                            <div
+                                                className="mt-0.5 whitespace-normal break-all font-mono text-foreground md:truncate md:whitespace-nowrap"
+                                                title={`${displayLog.request_model_name} → ${displayLog.routed_model_name || '—'} → ${displayLog.actual_model_name || '—'}`}
+                                            >
+                                                {displayLog.request_model_name} → {displayLog.routed_model_name || '—'} → {displayLog.actual_model_name || '—'}
+                                            </div>
+                                        </div>
+                                        <div className="hidden shrink-0 items-center gap-3 text-[11px] md:flex">
+                                            <span className="text-emerald-600 dark:text-emerald-400">
+                                                {t('billingReceivable')} {getLedgerAmountLabel(
+                                                    Number.isFinite(displayLog.cost) ? displayLog.cost : undefined,
+                                                    displayLog.billing_cost_status,
+                                                    hasBillingDiagnostics(displayLog),
+                                                    true,
+                                                    t,
+                                                )}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {t('providerCost')} {getLedgerAmountLabel(
+                                                    displayLog.provider_cost != null && Number.isFinite(displayLog.provider_cost) ? displayLog.provider_cost : undefined,
+                                                    displayLog.provider_cost_status,
+                                                    hasBillingDiagnostics(displayLog),
+                                                    true,
+                                                    t,
+                                                )}
+                                            </span>
+                                        </div>
+                                        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                                    </summary>
+                                    <div className="border-t border-border/60 p-3">
                                     <div className="mb-3 min-w-0">
                                         <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
                                             <span>{t('modelPath')}</span>
@@ -1232,7 +1345,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                             ) : null}
                                         </div>
                                         <div
-                                            className="mt-0.5 truncate font-mono text-foreground"
+                                            className="mt-0.5 whitespace-normal break-all font-mono text-foreground md:truncate md:whitespace-nowrap"
                                             title={`${displayLog.request_model_name} → ${displayLog.routed_model_name || '—'} → ${displayLog.actual_model_name || '—'}`}
                                         >
                                             {displayLog.request_model_name} → {displayLog.routed_model_name || '—'} → {displayLog.actual_model_name || '—'}
@@ -1243,7 +1356,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                 title={`${displayLog.requested_canonical_id || '—'} → ${displayLog.routed_canonical_id || '—'} → ${displayLog.actual_canonical_id || '—'}`}
                                             >
                                                 <Link className="size-3 shrink-0" />
-                                                <span className="truncate font-mono">
+                                                <span className="min-w-0 whitespace-normal break-all font-mono md:truncate md:whitespace-nowrap">
                                                     {displayLog.requested_canonical_id || '—'} → {displayLog.routed_canonical_id || '—'} → {displayLog.actual_canonical_id || '—'}
                                                 </span>
                                             </div>
@@ -1251,7 +1364,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         {displayLog.request_id ? (
                                             <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                                                 <span className="shrink-0">{t('requestId')}</span>
-                                                <code className="truncate" title={displayLog.request_id}>{displayLog.request_id}</code>
+                                                <code className="min-w-0 whitespace-normal break-all md:truncate md:whitespace-nowrap" title={displayLog.request_id}>{displayLog.request_id}</code>
                                             </div>
                                         ) : null}
                                     </div>
@@ -1284,7 +1397,8 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                             t={t}
                                         />
                                     </div>
-                                </div>
+                                    </div>
+                                </details>
 
                                 <div className="flex-1 min-h-0 overflow-hidden">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full min-h-0">
@@ -1296,8 +1410,10 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                     {getHeadlineInputTokens(displayLog).toLocaleString()} {t('tokens')}
                                                 </Badge>
                                             </div>
-                                            <div className="flex-1 overflow-auto min-h-0">
-                                                <DeferredJsonContent content={displayLog.request_content} fallbackText={t('noRequestContent')} isLoading={detailLoading} />
+                                            <div className="min-h-0 flex-1 p-2">
+                                                <div className="h-full min-h-0 overflow-auto">
+                                                    <DeferredJsonContent content={displayLog.request_content} fallbackText={t('noRequestContent')} isLoading={detailLoading} />
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex flex-col rounded-2xl border border-border bg-muted/30 overflow-hidden min-h-0">
@@ -1308,8 +1424,10 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                     {displayLog.output_tokens.toLocaleString()} {t('tokens')}
                                                 </Badge>
                                             </div>
-                                            <div className="flex-1 overflow-auto min-h-0">
-                                                <DeferredJsonContent content={displayLog.response_content} fallbackText={t('noResponseContent')} isLoading={detailLoading} />
+                                            <div className="min-h-0 flex-1 p-2">
+                                                <div className="h-full min-h-0 overflow-auto">
+                                                    <DeferredJsonContent content={displayLog.response_content} fallbackText={t('noResponseContent')} isLoading={detailLoading} />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

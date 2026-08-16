@@ -302,7 +302,8 @@ export function AliasManager({
             )}
 
             {visibleAliases.length > 0 ? (
-                <div className="mt-4 max-h-[52vh] overflow-y-auto rounded-2xl border bg-background">
+                <div className="mt-4 max-h-[52vh] overflow-hidden rounded-2xl border bg-background p-2">
+                <div className="max-h-[calc(52vh-1rem)] overflow-y-auto">
                     {visibleAliases.map((alias) => {
                         const scope = alias.channel_id
                             ? t('channelScope', { id: alias.channel_id })
@@ -351,6 +352,7 @@ export function AliasManager({
                             </article>
                         );
                     })}
+                </div>
                 </div>
             ) : (
                 <div className="mt-4 flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/10 px-6 py-10 text-center">

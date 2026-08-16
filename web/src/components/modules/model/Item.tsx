@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, Copy, GitMerge } from 'lucide-react';
+import { Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, GitMerge } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useCreateModel, useUpdateModel, useDeleteModel, type LLMInfo, type PriceMode } from '@/api/endpoints/model';
@@ -12,7 +12,6 @@ import { ModelDeleteOverlay, ModelEditOverlay } from './ItemOverlays';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { AttachPriceDialog } from './AttachPriceDialog';
 import { effectivePriceMode, formatModelPrice } from './ModelIdentityCombobox';
 
@@ -232,17 +231,56 @@ export const ModelItem = memo(function ModelItem({ model, models, layout = 'grid
                 (isEditOpen || confirmDelete) && 'z-50'
             )}
         >
-            <div className={cn('flex min-w-0 items-start gap-3', model.catalog_only ? 'pr-12' : 'pr-20')}>
+            <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
                 <div className="shrink-0 rounded-2xl border bg-background p-1.5">
                     <ModelAvatar size={42} />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <Tooltip side="top" sideOffset={10} align="start">
-                        <TooltipTrigger className="line-clamp-2 break-words text-left text-base font-semibold leading-5 text-card-foreground">
-                            {model.name}
-                        </TooltipTrigger>
-                        <TooltipContent key={model.name}>{model.name}</TooltipContent>
-                    </Tooltip>
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                        <Tooltip side="top" sideOffset={10} align="start">
+                            <TooltipTrigger asChild>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyName}
+                                    className="line-clamp-2 min-w-0 flex-1 break-words text-left text-base font-semibold leading-5 text-card-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:line-clamp-1 md:break-normal"
+                                >
+                                    {model.name}
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent key={model.name}>{model.name} · {t('card.copyName')}</TooltipContent>
+                        </Tooltip>
+
+                        <div className={cn(
+                            'flex shrink-0 items-center gap-1 pt-0.5',
+                            (isEditOpen || confirmDelete) && 'invisible pointer-events-none'
+                        )}>
+                            <motion.button
+                                ref={editButtonRef}
+                                layoutId={editLayoutId}
+                                type="button"
+                                onClick={handleEditClick}
+                                disabled={isEditOpen || confirmDelete}
+                                className="flex size-10 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50 md:size-8"
+                                title={model.catalog_only ? t('card.overrideCatalog') : t('card.edit')}
+                            >
+                                <Pencil className="size-4" />
+                            </motion.button>
+
+                            {!model.catalog_only && (
+                                <motion.button
+                                    layoutId={deleteLayoutId}
+                                    type="button"
+                                    onClick={handleDeleteClick}
+                                    disabled={isEditOpen || confirmDelete}
+                                    className="flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50 md:size-8"
+                                    title={t('card.delete')}
+                                >
+                                    <Trash2 className="size-4" />
+                                </motion.button>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <Badge variant={priceMode === 'unknown' ? 'destructive' : 'secondary'}>{modeLabel}</Badge>
                         <Badge variant="outline">{isAlias ? t('card.aliasType') : t('card.standardType')}</Badge>
@@ -254,41 +292,28 @@ export const ModelItem = memo(function ModelItem({ model, models, layout = 'grid
 
             {model.canonical_model_id && (
                 <Tooltip side="top" sideOffset={8} align="start">
-                    <TooltipTrigger className="block w-full truncate rounded-xl bg-muted/25 px-3 py-2 text-left text-xs text-muted-foreground">
+                    <TooltipTrigger className="block w-full rounded-xl bg-muted/25 px-3 py-2 text-left text-xs text-muted-foreground">
                         <span className="block font-medium text-card-foreground/75">{t('card.canonical')}</span>
-                        <span className="mt-0.5 block truncate">{model.canonical_model_id}</span>
+                        <span className="mt-0.5 block whitespace-normal break-all leading-5 md:truncate md:whitespace-nowrap">{model.canonical_model_id}</span>
                     </TooltipTrigger>
                     <TooltipContent>{model.canonical_model_id}</TooltipContent>
                 </Tooltip>
             )}
 
             {priceMode === 'unknown' ? (
-                <div className="rounded-xl bg-destructive/10 px-3 py-2.5">
-                    <p className="text-sm font-medium text-destructive">{t('card.unknownPrice')}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="min-h-10 flex-1 rounded-xl bg-background px-3 sm:flex-none"
-                            onClick={handleCopyName}
-                        >
-                            <Copy className="size-4" />
-                            {t('card.copyName')}
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            className="min-h-10 flex-1 rounded-xl px-3 sm:flex-none"
-                            onClick={() => setIsAttachOpen(true)}
-                        >
-                            <GitMerge className="size-4" />
-                            {t('card.attachPrice')}
-                        </Button>
-                    </div>
+                <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl bg-destructive/10 px-3 py-2.5">
+                    <p className="min-w-0 truncate text-sm font-medium text-destructive">{t('card.unknownPrice')}</p>
+                    <button
+                        type="button"
+                        onClick={() => setIsAttachOpen(true)}
+                        className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 md:min-h-8 md:px-2"
+                    >
+                        <GitMerge className="size-3.5" />
+                        {t('card.attachPrice')}
+                    </button>
                 </div>
             ) : (
-                <div className={cn('grid gap-2', isListLayout ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2')}>
+                <div className={cn('grid gap-2', isListLayout ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2')}>
                     <PriceMetric
                         label={t('card.input')}
                         value={model.input}
@@ -319,36 +344,6 @@ export const ModelItem = memo(function ModelItem({ model, models, layout = 'grid
                     />
                 </div>
             )}
-
-            <div className={cn(
-                'absolute right-4 top-4 flex shrink-0 gap-1.5',
-                (isEditOpen || confirmDelete) && 'invisible pointer-events-none'
-            )}>
-                <motion.button
-                    ref={editButtonRef}
-                    layoutId={editLayoutId}
-                    type="button"
-                    onClick={handleEditClick}
-                    disabled={isEditOpen || confirmDelete}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                    title={model.catalog_only ? t('card.overrideCatalog') : t('card.edit')}
-                >
-                    <Pencil className="size-4" />
-                </motion.button>
-
-                {!model.catalog_only && (
-                    <motion.button
-                        layoutId={deleteLayoutId}
-                        type="button"
-                        onClick={handleDeleteClick}
-                        disabled={isEditOpen || confirmDelete}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50"
-                        title={t('card.delete')}
-                    >
-                        <Trash2 className="size-4" />
-                    </motion.button>
-                )}
-            </div>
 
             <AnimatePresence>
                 {!model.catalog_only && confirmDelete && (

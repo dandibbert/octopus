@@ -101,7 +101,7 @@ export function ModelEditOverlay({
                         value={editValues.input}
                         onChange={(e) => onChange({ ...editValues, input: e.target.value })}
                         disabled={editValues.price_mode === 'free'}
-                        className="h-9 text-sm rounded-xl"
+                        className="h-11 rounded-xl text-base md:h-9 md:text-sm"
                     />
                 </label>
                 <label className="grid gap-1 text-xs text-muted-foreground">
@@ -112,7 +112,7 @@ export function ModelEditOverlay({
                         value={editValues.output}
                         onChange={(e) => onChange({ ...editValues, output: e.target.value })}
                         disabled={editValues.price_mode === 'free'}
-                        className="h-9 text-sm rounded-xl"
+                        className="h-11 rounded-xl text-base md:h-9 md:text-sm"
                     />
                 </label>
                 <label className="grid gap-1 text-xs text-muted-foreground">
@@ -123,7 +123,7 @@ export function ModelEditOverlay({
                         value={editValues.cache_read}
                         onChange={(e) => onChange({ ...editValues, cache_read: e.target.value })}
                         disabled={editValues.price_mode === 'free'}
-                        className="h-9 text-sm rounded-xl"
+                        className="h-11 rounded-xl text-base md:h-9 md:text-sm"
                     />
                 </label>
                 <label className="grid gap-1 text-xs text-muted-foreground">
@@ -134,7 +134,7 @@ export function ModelEditOverlay({
                         value={editValues.cache_write}
                         onChange={(e) => onChange({ ...editValues, cache_write: e.target.value })}
                         disabled={editValues.price_mode === 'free'}
-                        className="h-9 text-sm rounded-xl"
+                        className="h-11 rounded-xl text-base md:h-9 md:text-sm"
                     />
                 </label>
             </div>
@@ -156,7 +156,7 @@ export function ModelEditOverlay({
                     type="button"
                     onClick={onCancel}
                     disabled={isPending}
-                    className="flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl bg-muted text-muted-foreground text-sm font-medium transition-all hover:bg-muted/80 active:scale-[0.98] disabled:opacity-50"
+                    className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-muted text-sm font-medium text-muted-foreground transition-all hover:bg-muted/80 active:scale-[0.98] disabled:opacity-50 md:h-9 md:min-h-0"
                 >
                     <X className="size-4" />
                     {t('cancel')}
@@ -165,7 +165,7 @@ export function ModelEditOverlay({
                     type="button"
                     onClick={onSave}
                     disabled={isPending}
-                    className="flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-50"
+                    className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-50 md:h-9 md:min-h-0"
                     style={{ backgroundColor: brandColor, color: '#fff' }}
                 >
                     {isPending ? <Loader className="size-4 animate-spin" /> : <Check className="size-4" />}

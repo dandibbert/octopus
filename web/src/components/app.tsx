@@ -205,13 +205,15 @@ export function AppContainer() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            className="mx-auto flex h-dvh max-w-6xl flex-col overflow-hidden px-3 md:grid md:grid-cols-[auto_1fr] md:gap-6 md:px-6"
+            className="mx-auto flex h-dvh w-full max-w-6xl flex-col overflow-hidden px-2 sm:px-3 md:grid md:grid-cols-[auto_1fr] md:gap-6 md:px-6"
         >
             <NavBar />
             <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-                <header className="my-6 flex flex-none items-start gap-x-2 px-2">
-                    <Logo size={48} />
-                    <div className="flex-1 overflow-hidden pb-2 sm:pb-0">
+                <header className="my-3 flex min-w-0 flex-none flex-wrap items-start gap-x-2 gap-y-2 px-1 sm:my-6 sm:flex-nowrap sm:px-2">
+                    <div className="shrink-0 pt-0.5 sm:pt-0">
+                        <Logo size={48} />
+                    </div>
+                    <div className="min-w-0 flex-1 overflow-hidden pb-1 sm:pb-0">
                         <AnimatePresence mode="wait" custom={direction}>
                             <motion.div
                                 key={activeItem}
@@ -234,14 +236,14 @@ export function AppContainer() {
                                 animate="animate"
                                 exit="exit"
                                 transition={{ duration: 0.3 }}
-                                className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-6"
+                                className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-6"
                             >
-                                <span className="text-3xl font-bold mt-1">{t(activeItem)}</span>
-                                {activeItem === 'channel' && <ChannelTabSwitcher />}
+                                <span className="min-w-0 truncate text-2xl font-bold sm:mt-1 sm:text-3xl">{t(activeItem)}</span>
                             </motion.div>
                         </AnimatePresence>
+                        {activeItem === 'channel' && <ChannelTabSwitcher className="mt-1" />}
                     </div>
-                    <div className="ml-auto flex items-center gap-3 relative min-h-[36px]">
+                    <div className="relative ml-auto flex min-h-9 shrink-0 items-center gap-1 sm:gap-3">
                         <Toolbar />
                     </div>
                     <ProxyPoolDialog />

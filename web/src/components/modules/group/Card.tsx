@@ -18,7 +18,6 @@ import { GroupHealthBadge } from './health';
 import { modelChannelKey, MODE_LABELS } from './utils';
 import { GroupMode, type GroupUpdateRequest } from '@/api/endpoints/group';
 import { PresetPopover } from './PresetPopover';
-import { Button } from '@/components/ui/button';
 import { openPlayground } from '@/stores/playground';
 import {
     MorphingDialog,
@@ -360,7 +359,7 @@ export function GroupCard({ group }: { group: Group }) {
                 <div className="relative flex-1 mr-2 min-w-0 group/title">
                     <Tooltip side="top" sideOffset={10} align="center">
                         <TooltipTrigger asChild>
-                            <h3 className="text-lg font-bold truncate">{group.name}</h3>
+                            <h3 className="line-clamp-2 break-words text-lg font-bold leading-6 md:truncate md:whitespace-nowrap">{group.name}</h3>
                         </TooltipTrigger>
                         <TooltipContent key={group.name}>{group.name}</TooltipContent>
                     </Tooltip>
@@ -380,6 +379,36 @@ export function GroupCard({ group }: { group: Group }) {
                     </Tooltip>
 
                     <PresetPopover group={group} />
+
+                    <Tooltip side="top" sideOffset={10} align="center">
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label={routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}
+                                disabled={!group.id || routeHealth.isPending}
+                                onClick={handleRouteHealth}
+                                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                            >
+                                <Activity className={cn('size-4', routeHealth.isPending && 'animate-pulse')} />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip side="top" sideOffset={10} align="center">
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label={t('routeHealth.playground')}
+                                disabled={!group.id}
+                                onClick={() => group.id && openPlayground({ type: 'group', groupId: group.id, group: group.name })}
+                                className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                            >
+                                <MessageSquareText className="size-4" />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('routeHealth.playground')}</TooltipContent>
+                    </Tooltip>
 
                     <MorphingDialog>
                         <MorphingDialogTrigger
@@ -409,7 +438,7 @@ export function GroupCard({ group }: { group: Group }) {
             </header>
 
             {/* Mode: quick switch (no need to enter Edit) */}
-            <div className="flex gap-1 mb-3">
+            <div className="mb-3 grid grid-cols-2 gap-1.5 md:grid-cols-4 md:gap-1">
                 {([GroupMode.RoundRobin, GroupMode.Random, GroupMode.Failover, GroupMode.Weighted] as const).map((m) => (
                     <button
                         key={m}
@@ -421,7 +450,7 @@ export function GroupCard({ group }: { group: Group }) {
                             updateGroup.mutate({ id: group.id!, mode: m }, { onSuccess, onError });
                         }}
                         className={cn(
-                            'min-h-10 flex-1 px-1 py-2 text-xs rounded-lg transition-colors',
+                            'min-h-10 min-w-0 px-2 py-2 text-xs rounded-lg transition-colors md:px-1',
                             group.mode === m ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80',
                             // Keep visuals stable (no opacity/disabled flicker) while still preventing double-submit via onClick guard.
                             (!group.id) && 'cursor-not-allowed opacity-50'
@@ -432,27 +461,7 @@ export function GroupCard({ group }: { group: Group }) {
                 ))}
             </div>
 
-            <div className="flex flex-wrap items-stretch gap-2">
-                <GroupHealthBadge groupId={group.id} />
-                <Button
-                    className="h-10 flex-1 sm:flex-none"
-                    variant="outline"
-                    disabled={!group.id || routeHealth.isPending}
-                    onClick={handleRouteHealth}
-                >
-                    <Activity className="size-3.5" />
-                    {routeHealth.isPending ? t('routeHealth.testing') : t('routeHealth.action')}
-                </Button>
-                <Button
-                    className="h-10 flex-1 sm:flex-none"
-                    variant="outline"
-                    disabled={!group.id}
-                    onClick={() => group.id && openPlayground({ type: 'group', groupId: group.id, group: group.name })}
-                >
-                    <MessageSquareText className="size-3.5" />
-                    {t('routeHealth.playground')}
-                </Button>
-            </div>
+            <GroupHealthBadge groupId={group.id} />
 
             {routeHealthResult && (
                 <div className={cn(
@@ -496,7 +505,7 @@ export function GroupCard({ group }: { group: Group }) {
                 </div>
             )}
 
-            <section className="rounded-xl border border-border/50 bg-muted/30 overflow-hidden relative h-101">
+            <section className="relative mt-3 min-h-28 overflow-visible rounded-xl border border-border/50 bg-muted/30 md:h-[25.25rem] md:min-h-0 md:overflow-hidden">
                 <MemberList
                     members={renderedMembers}
                     onReorder={setMembers}
@@ -515,8 +524,8 @@ export function GroupCard({ group }: { group: Group }) {
             {!confirmDelete && (
                 <div
                     className={cn(
-                        'absolute left-3 bottom-3 z-10 flex items-center gap-0.5 rounded-xl bg-card/95 backdrop-blur-sm border border-border/40 shadow-sm p-0.5 transition-opacity duration-200',
-                        'opacity-0 pointer-events-none group-hover/card:opacity-100 group-hover/card:pointer-events-auto group-focus-within/card:opacity-100 group-focus-within/card:pointer-events-auto',
+                        'mt-3 flex self-start items-center gap-0.5 rounded-xl border border-border/40 bg-card/95 p-0.5 shadow-sm backdrop-blur-sm transition-opacity duration-200',
+                        'opacity-100 pointer-events-auto md:absolute md:bottom-3 md:left-3 md:z-10 md:mt-0 md:opacity-0 md:pointer-events-none md:group-hover/card:opacity-100 md:group-hover/card:pointer-events-auto md:group-focus-within/card:opacity-100 md:group-focus-within/card:pointer-events-auto',
                     )}
                 >
                     <Tooltip side="top" sideOffset={6} align="center">
@@ -567,7 +576,7 @@ export function GroupCard({ group }: { group: Group }) {
                 {confirmDelete && (
                     <motion.div
                         layoutId={`delete-btn-group-${group.id}`}
-                        className="absolute left-3 bottom-3 z-10 flex items-center gap-2 bg-destructive p-2 rounded-xl shadow-md"
+                        className="mt-3 flex self-start items-center gap-2 rounded-xl bg-destructive p-2 shadow-md md:absolute md:bottom-3 md:left-3 md:z-10 md:mt-0"
                         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                     >
                         <button

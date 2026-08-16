@@ -145,14 +145,14 @@ function MemberItem({
                 <div className="flex flex-col min-w-0 flex-1">
                     <Tooltip side="top" sideOffset={10} align="start">
                         <TooltipTrigger className={cn(
-                            'text-sm font-medium truncate leading-tight',
+                            'line-clamp-2 break-all text-sm font-medium leading-tight md:truncate md:whitespace-nowrap',
                             isDisabled && 'text-muted-foreground'
                         )}>
                             {member.name}
                         </TooltipTrigger>
                         <TooltipContent key={member.name}>{member.name}</TooltipContent>
                     </Tooltip>
-                    <span className="text-[10px] text-muted-foreground truncate leading-tight">{sourceLabel}</span>
+                    <span className="line-clamp-2 break-words text-[10px] leading-tight text-muted-foreground md:truncate md:whitespace-nowrap">{sourceLabel}</span>
                     {showBilling && (
                         <div className="mt-1.5">
                             <button
@@ -174,7 +174,7 @@ function MemberItem({
                             </button>
 
                             {billingExpanded && (
-                                <div className="mt-1.5 grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-2 text-[10px] sm:grid-cols-2">
+                                <div className="mt-1.5 grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-2 text-[10px] md:grid-cols-2">
                                     <label className="grid gap-1 text-muted-foreground">
                                         {t('form.billingBasisLabel')}
                                         <select
@@ -188,7 +188,7 @@ function MemberItem({
                                                         : {}),
                                                 });
                                             }}
-                                            className="h-7 min-w-0 rounded-md border border-border bg-background px-1.5 text-[11px] text-foreground"
+                                            className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-2 text-base text-foreground md:h-7 md:text-[11px]"
                                             aria-label={t('form.billingBasisLabel')}
                                         >
                                             <option value="">{t('form.billingInherit')}</option>
@@ -206,7 +206,7 @@ function MemberItem({
                                             onChange={(event) => onBillingChange?.(member.id, {
                                                 billing_unknown_policy: event.target.value as UnknownPricePolicy,
                                             })}
-                                            className="h-7 min-w-0 rounded-md border border-border bg-background px-1.5 text-[11px] text-foreground"
+                                            className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-2 text-base text-foreground md:h-7 md:text-[11px]"
                                             aria-label={t('form.billingUnknownLabel')}
                                         >
                                             <option value="">{t('form.billingPolicyInherit')}</option>
@@ -218,14 +218,14 @@ function MemberItem({
                                     </label>
 
                                     {(billingNeedsSKU || member.billing_class_id) && (
-                                        <label className="grid gap-1 text-muted-foreground sm:col-span-2">
+                                        <label className="grid gap-1 text-muted-foreground md:col-span-2">
                                             {t('form.billingClassLabel')}
                                             <input
                                                 value={member.billing_class_id ?? ''}
                                                 onChange={(event) => onBillingChange?.(member.id, { billing_class_id: event.target.value })}
                                                 placeholder={t('form.billingClassPlaceholder')}
                                                 className={cn(
-                                                    'h-7 min-w-0 rounded-md border bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground',
+                                                    'h-10 w-full min-w-0 rounded-md border bg-background px-2 text-base text-foreground placeholder:text-muted-foreground md:h-7 md:text-[11px]',
                                                     billingSKUInvalid ? 'border-destructive' : 'border-border',
                                                 )}
                                             />
@@ -235,7 +235,7 @@ function MemberItem({
                                         </label>
                                     )}
 
-                                    <p className="text-muted-foreground sm:col-span-2">
+                                    <p className="text-muted-foreground md:col-span-2">
                                         {t('form.billingAdvancedHint')}
                                     </p>
                                 </div>
@@ -251,7 +251,7 @@ function MemberItem({
                         value={member.weight ?? 1}
                         onChange={(e) => onWeightChange?.(member.id, Math.max(1, parseInt(e.target.value) || 1))}
                         className={cn(
-                            'w-12 h-6 text-xs text-center rounded border border-border bg-muted/50 focus:outline-none focus:ring-1 focus:ring-primary',
+                            'h-10 w-14 shrink-0 rounded border border-border bg-muted/50 text-center text-base focus:outline-none focus:ring-1 focus:ring-primary md:h-6 md:w-12 md:text-xs',
                             isDisabled && 'text-muted-foreground'
                         )}
                     />
@@ -262,13 +262,13 @@ function MemberItem({
                         layoutId={`delete-btn-member-${layoutScope ?? 'default'}-${member.id}`}
                         type="button"
                         onClick={() => showConfirmDelete ? setConfirmDelete(true) : onRemove(member.id)}
-                        className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive transition-colors md:h-auto md:w-auto md:p-1"
                         initial={false}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.15 }}
                         style={{ pointerEvents: 'auto' }}
                     >
-                        <X className="size-3" />
+                        <X className="size-4 md:size-3" />
                     </motion.button>
                 )}
 
@@ -282,16 +282,16 @@ function MemberItem({
                             <button
                                 type="button"
                                 onClick={() => setConfirmDelete(false)}
-                                className="flex h-6 w-6 items-center justify-center rounded-md bg-destructive-foreground/20 text-destructive-foreground transition-all hover:bg-destructive-foreground/30 active:scale-95"
+                                className="flex h-9 w-9 items-center justify-center rounded-md bg-destructive-foreground/20 text-destructive-foreground transition-all hover:bg-destructive-foreground/30 active:scale-95 md:h-6 md:w-6"
                             >
-                                <X className="h-3 w-3" />
+                                <X className="size-4 md:size-3" />
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onRemove(member.id)}
-                                className="flex-1 h-6 flex items-center justify-center gap-1.5 rounded-md bg-destructive-foreground text-destructive text-xs font-semibold transition-all hover:bg-destructive-foreground/90 active:scale-[0.98]"
+                                className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-destructive-foreground text-xs font-semibold text-destructive transition-all hover:bg-destructive-foreground/90 active:scale-[0.98] md:h-6"
                             >
-                                <Trash2 className="h-3 w-3" />
+                                <Trash2 className="size-4 md:size-3" />
                             </button>
                         </motion.div>
                     )}
@@ -406,7 +406,7 @@ export function MemberList({
     };
 
     return (
-        <div className="relative h-full min-h-0">
+        <div className="relative min-h-28 md:h-full md:min-h-0 md:p-2">
             <div
                 className={cn(
                     'absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground',
@@ -420,7 +420,7 @@ export function MemberList({
 
             <div
                 className={cn(
-                    'h-full overflow-y-auto transition-opacity duration-200',
+                    'min-h-28 touch-pan-y overflow-visible transition-opacity duration-200 md:h-full md:min-h-0 md:overflow-y-auto',
                     isEmpty ? 'opacity-0' : 'opacity-100'
                 )}
                 ref={scrollContainerRef}
@@ -434,7 +434,7 @@ export function MemberList({
                             <div
                                 ref={droppableProvided.innerRef}
                                 {...droppableProvided.droppableProps}
-                                className="p-2 flex flex-col space-y-1.5"
+                                className="flex flex-col space-y-1.5 p-2 md:p-0"
                             >
                                 {members.map((member, index) => (
                                     <Draggable

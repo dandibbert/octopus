@@ -156,6 +156,17 @@ html.dark,
 }
 
 @layer base {
+  html,
+  body {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  html {
+    min-height: 100%;
+  }
+
   * {
     @apply border-border outline-ring/50;
     scrollbar-width: none;
@@ -164,17 +175,19 @@ html.dark,
 
   body {
     @apply bg-background text-foreground;
+    min-height: 100dvh;
     isolation: isolate;
   }
 
   body::before,
   body::after {
     content: '';
-    position: absolute;
+    position: fixed;
     border-radius: 9999px;
     filter: blur(40px);
     opacity: 0.6;
     z-index: -1;
+    pointer-events: none;
   }
 
   body::before {
@@ -192,4 +205,30 @@ html.dark,
     bottom: 10%;
     left: 5%;
   }
+}
+
+/* iOS Safari zooms the page when a focused form control renders below 16px.
+   Keep phone-sized controls readable even for legacy/raw inputs that do not use
+   the shared Input/Select components. Desktop/tablet density remains unchanged. */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="search"],
+  input[type="url"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* custom-shadow: the design system's card elevation. Defined via the shadow
+   tokens (--shadow-x/y/blur/spread/opacity/color) so light/dark each keep
+   their intended depth; color-mix applies the opacity token to the color. */
+.custom-shadow {
+  box-shadow: var(--shadow-x, 0) var(--shadow-y, 1px) var(--shadow-blur, 3px) var(--shadow-spread, 0px)
+    color-mix(in srgb, var(--shadow-color, #000) var(--shadow-opacity, 0.1), transparent);
 }

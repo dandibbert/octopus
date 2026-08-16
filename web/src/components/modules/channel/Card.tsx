@@ -55,7 +55,7 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
                         <div className="min-w-0 flex-1">
                             <Tooltip side="top" sideOffset={10} align="center">
                                 <TooltipTrigger asChild>
-                                    <h3 className="text-lg font-bold truncate min-w-0">{channel.name}</h3>
+                                    <h3 className="min-w-0 line-clamp-2 break-words text-lg font-bold leading-6 md:truncate md:whitespace-nowrap">{channel.name}</h3>
                                 </TooltipTrigger>
                                 <TooltipContent key={channel.name}>{channel.name}</TooltipContent>
                             </Tooltip>
@@ -161,7 +161,16 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
             </MorphingDialogTrigger>
 
             <MorphingDialogContainer>
-                <MorphingDialogContent className="w-full md:max-w-xl bg-card text-card-foreground px-4 py-2 rounded-3xl max-h-[90vh] overflow-y-auto">
+                <MorphingDialogContent
+                    disableLayoutAnimation
+                    variants={{
+                        initial: { opacity: 0, scale: 0.96, y: 10 },
+                        animate: { opacity: 1, scale: 1, y: 0 },
+                        exit: { opacity: 0, scale: 0.97, y: 6 },
+                    }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-3xl bg-card p-3 text-card-foreground md:h-[min(90dvh,52rem)] md:max-h-[90dvh] md:max-w-xl md:p-4"
+                >
                     <CardContent channel={channel} stats={stats} />
                 </MorphingDialogContent>
             </MorphingDialogContainer>

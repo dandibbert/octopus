@@ -560,7 +560,7 @@ function APIKeyKeyItem({
             transition={{ type: 'spring', stiffness: 500, damping: 30 }}
             className="group relative flex items-center justify-between gap-3 p-3 rounded-xl bg-muted/50 overflow-hidden origin-top"
         >
-            <span className="text-sm font-medium truncate">{apiKey.name}</span>
+            <span className="min-w-0 line-clamp-2 break-words text-sm font-medium leading-5 md:truncate md:whitespace-nowrap">{apiKey.name}</span>
 
             <div className="flex items-center gap-1.5">
                 <motion.button
@@ -795,6 +795,7 @@ function APIKeyPanelBase({
                 )}
             </AnimatePresence>
 
+            <div className="min-h-0 p-1">
             <div className={listClassName}>
                 {apiKeysLoading ? (
                     <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -843,6 +844,7 @@ function APIKeyPanelBase({
                     </AnimatePresence>
                 )}
             </div>
+            </div>
         </div>
     );
 }
@@ -853,7 +855,7 @@ function APIKeyDialogPanel() {
         <APIKeyPanelBase
             idPrefix="apikey-dialog"
             containerClassName="rounded-3xl border border-border bg-card p-6 space-y-5 relative w-screen max-w-full md:max-w-xl"
-            listClassName="space-y-2 h-[calc(100vh-10rem)] overflow-y-auto"
+            listClassName="space-y-2 max-h-[calc(100dvh-10rem)] overflow-y-auto"
             renderHeaderExtra={() => (
                 <button
                     type="button"
@@ -873,7 +875,7 @@ export function SettingAPIKey() {
         <APIKeyPanelBase
             idPrefix="apikey"
             containerClassName="rounded-3xl border border-border bg-card p-6 space-y-5 relative"
-            listClassName="space-y-2 h-36 overflow-y-auto"
+            listClassName="space-y-2 md:h-36 md:overflow-y-auto"
             renderHeaderExtra={() => (
                 <MorphingDialog>
                     <MorphingDialogTrigger className="h-9 w-9 flex items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors hover:bg-muted">

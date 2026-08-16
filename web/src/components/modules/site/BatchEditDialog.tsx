@@ -147,7 +147,7 @@ export function BatchEditDialog({
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
                 showCloseButton={false}
-                className="w-screen max-w-full md:max-w-xl bg-card text-card-foreground px-6 py-4 rounded-3xl flex flex-col gap-0 border-0 sm:max-w-xl max-h-[min(calc(100vh-2rem),52rem)] overflow-hidden"
+                className="w-screen max-w-full md:max-w-xl bg-card text-card-foreground px-4 py-3 rounded-3xl flex flex-col gap-0 border-0 sm:max-w-xl max-h-[min(calc(100dvh-1rem),52rem)] overflow-hidden sm:px-6 sm:py-4"
             >
                 <header className="mb-4 flex items-start justify-between gap-4 shrink-0">
                     <div className="min-w-0 flex-1">

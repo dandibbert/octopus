@@ -134,7 +134,7 @@ function DateTimePicker({ value, placeholder, defaultTime, disabledRange, onChan
                         value={timeString}
                         onChange={(e) => handleTimeChange(e.target.value)}
                         disabled={!selectedDate}
-                        className="h-7 flex-1 rounded-md border border-border bg-background px-2 text-xs tabular-nums outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        className="h-10 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-base tabular-nums outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:h-7 md:text-xs"
                     />
                 </div>
             </PopoverContent>
@@ -472,7 +472,7 @@ export function LogFilterPopover() {
                                                 <button
                                                     type="button"
                                                     onClick={() => toggleExpanded(group.key)}
-                                                    className="flex size-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                                                    className="flex size-9 items-center justify-center rounded text-muted-foreground hover:text-foreground md:size-5"
                                                 >
                                                     <ChevronDown
                                                         className={cn('size-3.5 transition-transform', isExpanded ? '' : '-rotate-90')}
@@ -481,7 +481,7 @@ export function LogFilterPopover() {
                                                 <button
                                                     type="button"
                                                     onClick={() => toggleGroup(group)}
-                                                    className="flex flex-1 items-center gap-2 text-left"
+                                                    className="flex min-h-10 flex-1 items-center gap-2 text-left md:min-h-0"
                                                 >
                                                     <span
                                                         className={cn(

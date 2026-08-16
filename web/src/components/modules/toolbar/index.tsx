@@ -268,7 +268,7 @@ export function Toolbar() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.2 }}
-                className="flex items-center gap-2"
+                className="flex min-w-0 items-center gap-1 sm:gap-2"
             >
                 {/* 搜索框 - 始终可见 */}
                 <div className="relative h-9 w-9">
@@ -340,7 +340,7 @@ export function Toolbar() {
                             align="center"
                             side="bottom"
                             sideOffset={8}
-                            className="w-64 rounded-2xl border border-border/60 bg-card p-3 shadow-xl"
+                            className="w-[min(16rem,calc(100vw-1rem))] rounded-2xl border border-border/60 bg-card p-3 shadow-xl"
                         >
                             <div className="grid gap-3">
                                 {showLayoutOptions && (
@@ -553,7 +553,7 @@ export function Toolbar() {
                             </button>
                         </MorphingDialogTrigger>
                         <MorphingDialogContainer>
-                            <MorphingDialogContent className="w-fit max-w-full bg-card text-card-foreground px-6 py-4 rounded-3xl custom-shadow max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+                            <MorphingDialogContent className="w-fit max-w-full bg-card text-card-foreground px-4 py-3 rounded-3xl custom-shadow max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden sm:px-6 sm:py-4">
                                 <CreateDialogContent activeItem={toolbarItem} />
                             </MorphingDialogContent>
                         </MorphingDialogContainer>
@@ -569,7 +569,7 @@ export function Toolbar() {
                             </button>
                         </MorphingDialogTrigger>
                         <MorphingDialogContainer>
-                            <MorphingDialogContent className="w-fit max-w-full bg-card text-card-foreground px-6 py-4 rounded-3xl custom-shadow max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+                            <MorphingDialogContent className="w-fit max-w-full bg-card text-card-foreground px-4 py-3 rounded-3xl custom-shadow max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden sm:px-6 sm:py-4">
                                 <GroupAutoGroupDialogContent />
                             </MorphingDialogContent>
                         </MorphingDialogContainer>
@@ -585,7 +585,7 @@ export function Toolbar() {
                             </button>
                         </MorphingDialogTrigger>
                         <MorphingDialogContainer>
-                            <MorphingDialogContent className="w-fit max-w-full rounded-3xl bg-card px-6 py-4 text-card-foreground custom-shadow max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+                            <MorphingDialogContent className="w-fit max-w-full rounded-3xl bg-card px-4 py-3 text-card-foreground custom-shadow max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden sm:px-6 sm:py-4">
                                 <AliasDialogContent />
                             </MorphingDialogContent>
                         </MorphingDialogContainer>

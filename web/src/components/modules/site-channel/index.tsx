@@ -73,6 +73,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/common/Toast';
 import { cn, formatCount, formatMoney } from '@/lib/utils';
 import { getModelIcon } from '@/lib/model-icons';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { ToolbarSortField, ToolbarSortOrder } from '@/components/modules/toolbar/view-options-store';
 import { useSettingStore } from '@/stores/setting';
 import {
@@ -336,8 +337,8 @@ function UnifiedCompletionDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[min(92vw,72rem)] rounded-[2rem] p-0 sm:max-w-[min(92vw,72rem)]">
-                <div className="flex max-h-[88vh] flex-col overflow-hidden">
+            <DialogContent className="max-w-[calc(100vw-1rem)] rounded-[2rem] p-0 sm:max-w-[min(92vw,72rem)]">
+                <div className="flex max-h-[calc(100dvh-1rem)] flex-col overflow-hidden sm:max-h-[88dvh]">
                     <DialogHeader className="gap-3 border-b border-border/70 px-5 py-4 text-left sm:px-6">
                         <DialogTitle className="flex items-center gap-2 text-xl">
                             <KeyRound className="size-5 text-primary" />
@@ -362,7 +363,7 @@ function UnifiedCompletionDialog({
                                         <div className="flex flex-col gap-3 border-b border-border/60 pb-4 md:flex-row md:items-start md:justify-between">
                                             <div className="min-w-0 space-y-2">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <div className="truncate text-lg font-semibold text-foreground">{site.site_name}</div>
+                                                    <div className="line-clamp-2 break-words text-lg font-semibold leading-6 text-foreground md:truncate md:whitespace-nowrap">{site.site_name}</div>
                                                     <Badge variant="outline" className="h-6 px-2 text-[11px]">
                                                         {platformLabel(site.platform)}
                                                     </Badge>
@@ -438,13 +439,13 @@ function UnifiedCompletionDialog({
                                                                     <div className="grid gap-3 lg:grid-cols-[minmax(0,15rem)_minmax(0,14rem)_1fr]">
                                                                         <div className="space-y-1">
                                                                             <div className="text-xs text-muted-foreground">分组</div>
-                                                                            <div className="truncate text-sm font-medium text-foreground">{item.group_name || item.group_key}</div>
-                                                                            <div className="text-[11px] text-muted-foreground">{item.group_key}</div>
+                                                                            <div className="line-clamp-2 break-words text-sm font-medium leading-5 text-foreground md:truncate md:whitespace-nowrap">{item.group_name || item.group_key}</div>
+                                                                            <div className="break-all text-[11px] text-muted-foreground">{item.group_key}</div>
                                                                         </div>
                                                                         <div className="space-y-1">
                                                                             <div className="text-xs text-muted-foreground">Key</div>
-                                                                            <div className="truncate text-sm font-medium text-foreground">{item.key_name || `站点 Key #${item.key_id}`}</div>
-                                                                            <div className="text-[11px] text-muted-foreground">当前值：{item.token_masked || item.token}</div>
+                                                                            <div className="line-clamp-2 break-words text-sm font-medium leading-5 text-foreground md:truncate md:whitespace-nowrap">{item.key_name || `站点 Key #${item.key_id}`}</div>
+                                                                            <div className="break-all text-[11px] text-muted-foreground">当前值：{item.token_masked || item.token}</div>
                                                                         </div>
                                                                         <label className="grid gap-1.5 text-xs text-muted-foreground">
                                                                             输入完整 Key
@@ -735,10 +736,10 @@ function HistorySummary({ model }: { model: SiteModelView }) {
     };
 
     return (
-        <div className="w-[24rem] space-y-3 p-4 text-left">
+        <div className="w-[min(24rem,calc(100vw-2rem))] space-y-3 p-3 text-left sm:p-4">
             <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                    <div className="truncate text-sm font-semibold text-foreground">{model.model_name}</div>
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 line-clamp-2 break-all text-sm font-semibold leading-5 text-foreground md:truncate md:whitespace-nowrap">{model.model_name}</div>
                     <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
                         {routeTypeLabel(model.route_type)}
                     </Badge>
@@ -945,6 +946,172 @@ function MoveRoutePopover({
     );
 }
 
+function SiteChannelMobileModelCard({
+    model,
+    isSelected,
+    isPending,
+    onToggleSelection,
+    onMove,
+    onToggleDisabled,
+    onDeleteManualModel,
+    onNavigateToChannel,
+}: {
+    model: SiteModelView;
+    isSelected: boolean;
+    isPending: boolean;
+    onToggleSelection: (checked: boolean) => void;
+    onMove: (routeType: SiteModelRouteType) => void;
+    onToggleDisabled: () => void;
+    onDeleteManualModel: () => void;
+    onNavigateToChannel: (channelId: number) => void;
+}) {
+    const { Avatar: ModelAvatar } = getModelIcon(model.model_name);
+    const historyCount = getModelHistoryCount(model);
+
+    return (
+        <article
+            className={cn(
+                'min-w-0 rounded-2xl border border-border/70 bg-card p-3 shadow-sm',
+                isSelected && 'bg-muted/40 ring-1 ring-primary/20',
+                model.disabled && 'opacity-70',
+                isPending && 'pointer-events-none opacity-60',
+            )}
+        >
+            <header className="flex min-w-0 items-start gap-2.5">
+                <SelectionCheckbox
+                    checked={isSelected}
+                    disabled={isPending}
+                    ariaLabel={`选择模型 ${model.model_name}`}
+                    onCheckedChange={onToggleSelection}
+                    className="mt-1 size-5 shrink-0"
+                />
+                <div className="mt-0.5 shrink-0 rounded-lg border border-border/60 bg-background p-1">
+                    <ModelAvatar size={24} />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="line-clamp-2 break-words text-sm font-semibold leading-5 text-foreground">{model.model_name}</div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {model.group_name || model.group_key}
+                    </div>
+                </div>
+                <Badge
+                    variant="outline"
+                    className={cn(
+                        'h-6 shrink-0 px-2 text-[11px]',
+                        model.disabled
+                            ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                            : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+                    )}
+                >
+                    {model.disabled ? '已禁用' : '已启用'}
+                </Badge>
+            </header>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+                <Badge variant="outline" className={cn('h-6 px-2 text-[11px]', getRouteTypeTone(model.route_type))}>
+                    {routeTypeLabel(model.route_type)}
+                </Badge>
+                <Badge variant="outline" className={cn('h-6 px-2 text-[11px]', getRouteSourceTone(model.route_source))}>
+                    {routeSourceLabel(model.route_source)}
+                </Badge>
+                {model.source === 'manual' ? (
+                    <Badge variant="outline" className="h-6 border-primary/30 bg-primary/10 px-2 text-[11px] text-primary">
+                        自定义
+                    </Badge>
+                ) : null}
+                {modelNeedsAttention(model) ? (
+                    <Badge variant="outline" className="h-6 border-amber-500/30 bg-amber-500/10 px-2 text-[11px] text-amber-700 dark:text-amber-300">
+                        待处理
+                    </Badge>
+                ) : null}
+            </div>
+
+            <dl className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs">
+                <div className="min-w-0 rounded-xl bg-muted/25 px-2.5 py-2">
+                    <dt className="text-muted-foreground">Key</dt>
+                    <dd className="mt-0.5 font-medium text-foreground">
+                        {model.enabled_key_count}/{model.key_count}
+                        {!model.has_keys ? <span className="ml-1 text-amber-700 dark:text-amber-300">缺少</span> : null}
+                    </dd>
+                </div>
+                <div className="min-w-0 rounded-xl bg-muted/25 px-2.5 py-2">
+                    <dt className="text-muted-foreground">最近请求</dt>
+                    <dd className="mt-0.5 truncate font-medium text-foreground">{formatHistoryTime(getModelLastRequestAt(model))}</dd>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">{historyCount} 次记录</div>
+                </div>
+                <div className="min-w-0 rounded-xl bg-muted/25 px-2.5 py-2">
+                    <dt className="text-muted-foreground">映射方式</dt>
+                    <dd className="mt-0.5 truncate font-medium text-foreground">{model.manual_override ? '手动覆盖' : '自动映射'}</dd>
+                </div>
+                <div className="min-w-0 rounded-xl bg-muted/25 px-2.5 py-2">
+                    <dt className="text-muted-foreground">渠道</dt>
+                    <dd className="mt-0.5">
+                        {model.projected_channel_id ? (
+                            <button
+                                type="button"
+                                onClick={() => onNavigateToChannel(model.projected_channel_id!)}
+                                className="min-h-10 rounded-lg border border-border px-2 font-medium text-foreground"
+                            >
+                                #{model.projected_channel_id}
+                            </button>
+                        ) : (
+                            <span className="text-muted-foreground">—</span>
+                        )}
+                    </dd>
+                </div>
+            </dl>
+
+            <footer className="mt-3 flex items-center justify-end gap-1 border-t border-border/60 pt-2">
+                <MoveRoutePopover
+                    currentRouteType={model.route_type}
+                    disabled={isPending || model.disabled}
+                    buttonClassName="flex size-10 items-center justify-center p-0"
+                    onMove={onMove}
+                />
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button
+                            type="button"
+                            className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                            aria-label={`查看 ${model.model_name} 请求历史`}
+                        >
+                            <History className="size-4" />
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" side="top" className="w-auto rounded-2xl border border-border/70 bg-card p-0 shadow-xl">
+                        <HistorySummary model={model} />
+                    </PopoverContent>
+                </Popover>
+                {model.source === 'manual' ? (
+                    <button
+                        type="button"
+                        onClick={onDeleteManualModel}
+                        disabled={isPending}
+                        className="flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        aria-label={`删除自定义模型 ${model.model_name}`}
+                    >
+                        <Trash2 className="size-4" />
+                    </button>
+                ) : null}
+                <button
+                    type="button"
+                    onClick={onToggleDisabled}
+                    disabled={isPending}
+                    className={cn(
+                        'flex size-10 items-center justify-center rounded-lg transition disabled:opacity-50',
+                        model.disabled
+                            ? 'text-destructive hover:bg-destructive/10'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                    aria-label={model.disabled ? `启用 ${model.model_name}` : `停用 ${model.model_name}`}
+                >
+                    <CircleOff className="size-4" />
+                </button>
+            </footer>
+        </article>
+    );
+}
+
 type SiteChannelTableHandle = { scrollToModelKey: (key: string) => void };
 
 // 10 columns: checkbox / 模型 / 分组 / 端点格式 / 来源 / Key / 状态 / 最近请求 / 渠道 / 操作.
@@ -999,13 +1166,14 @@ const SiteChannelTableView = forwardRef<
     'use no memo';
 
     const scrollRef = useRef<HTMLDivElement | null>(null);
+    const isMobile = useIsMobile();
 
     // eslint-disable-next-line react-hooks/incompatible-library
     const rowVirtualizer = useVirtualizer({
         count: models.length,
         getScrollElement: () => scrollRef.current,
         getItemKey: (index) => makeModelKey(models[index].group_key, models[index].model_name),
-        estimateSize: () => (compactMode ? 44 : 64),
+        estimateSize: () => isMobile ? (compactMode ? 196 : 220) : (compactMode ? 44 : 64),
         measureElement: measureRowHeight,
         overscan: 8,
     });
@@ -1030,7 +1198,7 @@ const SiteChannelTableView = forwardRef<
     // re-measured automatically via measureElement.
     useEffect(() => {
         rowVirtualizer.measure();
-    }, [compactMode, rowVirtualizer]);
+    }, [compactMode, isMobile, rowVirtualizer]);
 
     const renderSortHead = (field: SiteChannelTableSortField, label: string) => (
         <button
@@ -1044,6 +1212,103 @@ const SiteChannelTableView = forwardRef<
     );
 
     const cellPaddingClass = compactMode ? 'py-2' : 'py-3';
+
+    if (isMobile) {
+        const mobileSortLabel: Record<SiteChannelTableSortField, string> = {
+            model_name: '模型',
+            group_name: '分组',
+            route_type: '端点格式',
+            last_request_at: '最近请求',
+        };
+
+        return (
+            <div className="h-full min-h-0 w-full p-2">
+            <div
+                ref={scrollRef}
+                role="list"
+                className="h-full w-full touch-pan-y overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+            >
+                <div className="sticky top-0 z-20 mb-2 flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border/70 bg-card/95 px-3 py-2 shadow-sm backdrop-blur">
+                    <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+                        <SelectionCheckbox
+                            checked={allVisibleSelected}
+                            disabled={models.length === 0}
+                            ariaLabel="选择当前可见模型"
+                            onCheckedChange={onToggleAllVisible}
+                            className="size-5 shrink-0"
+                        />
+                        <span className="truncate">全选当前 {models.length} 个</span>
+                    </label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <button
+                                type="button"
+                                className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-border/70 bg-background px-3 text-xs font-medium text-foreground"
+                            >
+                                <ArrowUpDown className="size-3.5" />
+                                {mobileSortLabel[tableSort.field]}
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-52 rounded-2xl border border-border/70 bg-card p-2 shadow-xl">
+                            <div className="grid gap-1">
+                                {(Object.entries(mobileSortLabel) as [SiteChannelTableSortField, string][]).map(([field, label]) => (
+                                    <button
+                                        key={field}
+                                        type="button"
+                                        onClick={() => onSortChange(field)}
+                                        className={cn(
+                                            'flex min-h-11 items-center justify-between rounded-xl px-3 text-left text-sm transition hover:bg-muted',
+                                            tableSort.field === field && 'bg-muted/60 font-medium text-foreground',
+                                        )}
+                                    >
+                                        <span>{label}</span>
+                                        {tableSort.field === field ? (
+                                            <span className="text-xs text-muted-foreground">{tableSort.order === 'asc' ? '升序' : '降序'}</span>
+                                        ) : null}
+                                    </button>
+                                ))}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const model = models[virtualRow.index];
+                        const modelKey = makeModelKey(model.group_key, model.model_name);
+                        const isPending = pendingModelKeys.has(modelKey);
+                        const isSelected = selectedModelKeys.has(modelKey);
+
+                        return (
+                            <div
+                                key={modelKey}
+                                data-index={virtualRow.index}
+                                ref={rowVirtualizer.measureElement}
+                                role="listitem"
+                                className={cn(
+                                    'absolute left-0 w-full pb-2',
+                                    highlightedModelKey === modelKey && 'rounded-2xl ring-2 ring-primary/35 ring-offset-1 ring-offset-background',
+                                )}
+                                style={{ top: `${virtualRow.start}px` }}
+                            >
+                                <SiteChannelMobileModelCard
+                                    model={model}
+                                    isSelected={isSelected}
+                                    isPending={isPending}
+                                    onToggleSelection={(checked) => onToggleModelSelection(modelKey, checked)}
+                                    onMove={(routeType) => onMoveModel(model, routeType)}
+                                    onToggleDisabled={() => onToggleDisabled(model)}
+                                    onDeleteManualModel={() => onDeleteManualModel(model)}
+                                    onNavigateToChannel={onNavigateToChannel}
+                                />
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            </div>
+        );
+    }
 
     return (
         <div
@@ -1938,7 +2203,7 @@ function SiteAccountPanel({
                             }
                             disabled={enableSiteAccount.isPending}
                             className={cn(
-                                'inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition hover:opacity-80',
+                                'inline-flex min-h-10 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition hover:opacity-80 md:h-7 md:min-h-0',
                                 account.enabled
                                     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                                     : 'border-destructive/30 bg-destructive/10 text-destructive',
@@ -1951,9 +2216,9 @@ function SiteAccountPanel({
                 ) : null}
 
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                    <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center">
                         <Select value={activeGroupValue} onValueChange={handleGroupFilterChange}>
-                            <SelectTrigger className="h-8 w-full rounded-2xl border-border/70 bg-background/80 sm:w-[18rem]">
+                            <SelectTrigger className="h-11 w-full rounded-2xl border-border/70 bg-background/80 md:h-8 md:w-[18rem]">
                                 <div className="flex min-w-0 items-center gap-2">
                                     <span className="text-xs text-muted-foreground">分组</span>
                                     <span className="truncate text-sm font-medium">{activeGroupLabel}</span>
@@ -1997,7 +2262,7 @@ function SiteAccountPanel({
                                 value={modelSearchTerm}
                                 onChange={(event) => setModelSearchTerm(event.target.value)}
                                 placeholder="搜索模型名称、分组..."
-                                className="h-8 rounded-2xl pl-9"
+                                className="h-11 rounded-2xl pl-9 md:h-8"
                             />
                         </div>
                     </div>
@@ -2028,7 +2293,7 @@ function SiteAccountPanel({
                         <Button
                             type="button"
                             variant="outline"
-                            className="h-8 rounded-2xl px-3"
+                            className="min-h-10 rounded-2xl px-3 md:h-8 md:min-h-0"
                             onClick={() => activeGroup && handleOpenAddManualModels(activeGroup)}
                             disabled={!activeGroup}
                             title={activeGroup ? undefined : '请先选择具体分组'}
@@ -2041,7 +2306,7 @@ function SiteAccountPanel({
                             type="button"
                             variant="outline"
                             className={cn(
-                                'h-8 rounded-2xl px-3',
+                                'min-h-10 rounded-2xl px-3 md:h-8 md:min-h-0',
                                 activeGroup?.projection_disabled && 'border-amber-500/30 bg-amber-500/10 text-amber-800 hover:bg-amber-500/15 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100',
                                 activeGroupProjectionSuspended && 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15',
                             )}
@@ -2055,7 +2320,7 @@ function SiteAccountPanel({
 
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button type="button" variant="outline" className="h-8 rounded-2xl px-3">
+                                <Button type="button" variant="outline" className="min-h-10 rounded-2xl px-3 md:h-8 md:min-h-0">
                                     <SlidersHorizontal className="size-4" />
                                     {activeQuickFilterCount > 0 ? `筛选(${activeQuickFilterCount})` : '筛选'}
                                 </Button>
@@ -2102,7 +2367,7 @@ function SiteAccountPanel({
                         <Button
                             type="button"
                             variant="outline"
-                            className="h-8 rounded-2xl px-3"
+                            className="min-h-10 rounded-2xl px-3 md:h-8 md:min-h-0"
                             onClick={() => activeGroup && handleOpenAdvancedSettings(activeGroup)}
                             disabled={!activeGroup || activeGroup.projected_channels.length === 0}
                             title={!activeGroup ? '请先选择具体分组' : activeGroup.projected_channels.length === 0 ? '当前分组暂无投影渠道' : undefined}
@@ -2113,7 +2378,7 @@ function SiteAccountPanel({
 
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button type="button" variant="outline" className="h-8 rounded-2xl px-3">
+                                <Button type="button" variant="outline" className="min-h-10 rounded-2xl px-3 md:h-8 md:min-h-0">
                                     <MoreHorizontal className="size-4" />
                                     更多
                                 </Button>
@@ -2243,10 +2508,10 @@ function SiteAccountPanel({
                         ) : null}
 
                         {selectedVisibleCount > 0 ? (
-                            <div className="ml-auto flex flex-wrap items-center gap-2">
+                            <div className="flex w-full flex-wrap items-center gap-2 md:ml-auto md:w-auto">
                                 <span className="text-xs font-medium text-foreground">已选 {selectedVisibleCount} 个</span>
                                 <Select value={bulkMoveTarget} onValueChange={(value) => setBulkMoveTarget(value as SiteModelRouteType)}>
-                                    <SelectTrigger className="h-7 w-[10rem] rounded-xl text-xs">
+                                    <SelectTrigger className="h-10 min-w-0 flex-1 rounded-xl text-base md:h-7 md:w-[10rem] md:flex-none md:text-xs">
                                         <SelectValue placeholder="目标端点" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl">
@@ -2257,16 +2522,16 @@ function SiteAccountPanel({
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <Button type="button" size="sm" className="h-7 rounded-xl px-2 text-xs" onClick={() => applyRouteChange(selectedModels, bulkMoveTarget)} disabled={hasPendingChanges}>
+                                <Button type="button" size="sm" className="min-h-10 rounded-xl px-3 text-xs md:h-7 md:min-h-0 md:px-2" onClick={() => applyRouteChange(selectedModels, bulkMoveTarget)} disabled={hasPendingChanges}>
                                     移动
                                 </Button>
-                                <Button type="button" variant="outline" size="sm" className="h-7 rounded-xl px-2 text-xs" onClick={() => applyDisabledChange(selectedModels, false)} disabled={hasPendingChanges}>
+                                <Button type="button" variant="outline" size="sm" className="min-h-10 rounded-xl px-3 text-xs md:h-7 md:min-h-0 md:px-2" onClick={() => applyDisabledChange(selectedModels, false)} disabled={hasPendingChanges}>
                                     启用
                                 </Button>
-                                <Button type="button" variant="outline" size="sm" className="h-7 rounded-xl px-2 text-xs" onClick={() => applyDisabledChange(selectedModels, true)} disabled={hasPendingChanges}>
+                                <Button type="button" variant="outline" size="sm" className="min-h-10 rounded-xl px-3 text-xs md:h-7 md:min-h-0 md:px-2" onClick={() => applyDisabledChange(selectedModels, true)} disabled={hasPendingChanges}>
                                     停用
                                 </Button>
-                                <Button type="button" variant="ghost" size="sm" className="h-7 rounded-xl px-2 text-xs" onClick={() => setSelectedModelKeys(new Set())}>
+                                <Button type="button" variant="ghost" size="sm" className="min-h-10 rounded-xl px-3 text-xs md:h-7 md:min-h-0 md:px-2" onClick={() => setSelectedModelKeys(new Set())}>
                                     清空
                                 </Button>
                             </div>
@@ -2419,13 +2684,13 @@ function SiteAccountPanel({
                                 value={manualModelsInput}
                                 onChange={(event) => setManualModelsInput(event.target.value)}
                                 placeholder={"gpt-4o\ngpt-4.1-mini"}
-                                className="min-h-36 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="min-h-36 rounded-xl border border-border bg-background px-3 py-2 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm"
                             />
                         </label>
                         <label className="grid gap-1.5 text-xs text-muted-foreground">
                             端点格式
                             <Select value={manualModelRouteType} onValueChange={(value) => setManualModelRouteType(value as SiteModelRouteType)}>
-                                <SelectTrigger className="h-10 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-10 w-full rounded-xl bg-background"><SelectValue /></SelectTrigger>
                                 <SelectContent className="rounded-xl">
                                     {SITE_ROUTE_COLUMN_ORDER.map((routeType) => (
                                         <SelectItem key={routeType} value={routeType}>{routeTypeLabel(routeType)}</SelectItem>
@@ -2711,14 +2976,14 @@ function SiteChannelDialog({
     }, [jumpRequest, card.site_id, activeAccountId, onJumpHandled]);
 
     return (
-        <div className="flex h-[88vh] flex-col overflow-hidden">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden md:h-[88dvh]">
             <header className="flex flex-none items-center gap-2 border-b border-border/70 px-5 py-3 text-left sm:px-6">
                 <MorphingDialogDescription className="sr-only">
                     站点渠道管理面板
                 </MorphingDialogDescription>
 
                 <MorphingDialogTitle className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-lg font-semibold sm:text-xl">
-                    <span className="truncate">{card.site_name}</span>
+                    <span className="min-w-0 line-clamp-2 break-words leading-6 md:truncate md:whitespace-nowrap">{card.site_name}</span>
                     <Badge variant="outline" className="h-6 px-2 text-[11px]">
                         {platformLabel(card.platform)}
                     </Badge>
@@ -2914,7 +3179,7 @@ function SiteCardImpl({
                     <article
                         className="flex h-full w-full flex-col gap-4 rounded-3xl border border-border/70 bg-card p-4 text-left transition hover:border-primary/20 hover:bg-card/90"
                     >
-                        <header className="flex items-center justify-between gap-3">
+                        <header className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex min-w-0 flex-1 items-center gap-2">
                                 <span
                                     className={cn(
@@ -2925,9 +3190,9 @@ function SiteCardImpl({
                                     )}
                                     title={tCard(card.enabled ? 'statusEnabled' : 'statusDisabled')}
                                 />
-                                <div className="truncate text-lg font-bold">{card.site_name}</div>
+                                <div className="line-clamp-2 break-words text-lg font-bold leading-6 md:truncate md:whitespace-nowrap">{card.site_name}</div>
                             </div>
-                            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                            <div className="flex w-full shrink-0 flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
                                 <Badge variant="outline" className="h-6 px-2 text-[11px]">
                                     {platformLabel(card.platform)}
                                 </Badge>
@@ -2939,7 +3204,7 @@ function SiteCardImpl({
                             </div>
                         </header>
 
-                        <dl className={cn('grid gap-2', layout === 'list' ? 'grid-cols-5' : 'grid-cols-2')}>
+                        <dl className={cn('grid gap-2 *:min-w-0', layout === 'list' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' : 'grid-cols-2')}>
                             {layout === 'list' ? (
                                 <div className="rounded-2xl border border-border/70 bg-background/80 p-2">
                                     <dt className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
@@ -3018,7 +3283,7 @@ function SiteCardImpl({
             </div>
 
             <MorphingDialogContainer>
-                <MorphingDialogContent className="max-w-[min(96vw,92rem)] w-[min(96vw,92rem)] overflow-hidden rounded-[2rem] bg-background max-h-[90vh]">
+                <MorphingDialogContent className="h-[calc(100dvh-1rem)] w-full max-w-[92rem] overflow-hidden rounded-[2rem] bg-background md:h-auto md:max-h-[90dvh] md:w-[min(96vw,92rem)]">
                     <SiteChannelDialog
                         card={card}
                         jumpRequest={jumpRequest?.target.siteId === card.site_id ? jumpRequest : null}

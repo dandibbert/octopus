@@ -64,7 +64,7 @@ function GroupHealthCard({
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
                         <FolderTree className="size-4 text-primary" />
-                        <h3 className="truncate text-sm font-semibold">{view.group_name}</h3>
+                        <h3 className="line-clamp-2 break-words text-sm font-semibold leading-5 md:truncate md:whitespace-nowrap">{view.group_name}</h3>
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
                         {t('lastRun', { time: formatDateTime(latest?.finished_at ?? latest?.started_at ?? null, t('never')) })}
@@ -81,7 +81,7 @@ function GroupHealthCard({
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-7 rounded-xl px-2 text-xs"
+                        className="min-h-10 rounded-xl px-2 text-xs md:h-7 md:min-h-0"
                         disabled={isRunningMutation || latest?.status === 'running'}
                         onClick={() => onRun(view.group_id)}
                     >
@@ -92,7 +92,7 @@ function GroupHealthCard({
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-7 rounded-xl px-2 text-xs"
+                        className="min-h-10 rounded-xl px-2 text-xs md:h-7 md:min-h-0"
                         disabled={isRunningMutation || latest?.status === 'running'}
                         onClick={() => onRun(view.group_id, 'full')}
                     >
@@ -125,7 +125,7 @@ function GroupHealthCard({
                     </button>
 
                     {expanded ? (
-                        <div className="flex max-h-[22rem] flex-col gap-2 overflow-y-auto pr-1">
+                        <div className="flex flex-col gap-2 md:max-h-[21rem] md:overflow-y-auto">
                             {attempts.map((attempt) => (
                                 <GroupHealthAttemptDetails key={attempt.id} attempt={attempt} />
                             ))}
@@ -157,7 +157,7 @@ export function GroupHealthOverview() {
     }, [views]);
 
     return (
-        <section className="flex h-full min-h-0 flex-col space-y-4">
+        <section className="flex min-h-0 flex-col space-y-4 md:h-full">
             <header className="flex shrink-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <div className="flex items-center gap-2 text-lg font-semibold">
@@ -195,7 +195,7 @@ export function GroupHealthOverview() {
                 </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <div className="min-h-0 flex-1 md:overflow-y-auto">
                 <div className="flex flex-col gap-3">
                     {views.map((view) => (
                         <GroupHealthCard

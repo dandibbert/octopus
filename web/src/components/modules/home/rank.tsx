@@ -49,7 +49,7 @@ export function Rank() {
             );
         }
         return (
-            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            <div className="space-y-3 md:max-h-[292px] md:overflow-y-auto">
                 {channels.map((channel, index) => {
                     const rank = index + 1;
                     const medal = getMedalEmoji(rank);
@@ -64,7 +64,7 @@ export function Rank() {
                             </div>
 
                             <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{channel.raw.name}</p>
+                                <p className="line-clamp-2 break-words text-sm font-medium leading-5 md:truncate md:whitespace-nowrap">{channel.raw.name}</p>
                                 {mode === 'count' && (() => {
                                     const successCount = channel.formatted.request_success.raw;
                                     const failedCount = channel.formatted.request_failed.raw;

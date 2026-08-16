@@ -19,9 +19,10 @@ export function NavBar() {
             <motion.nav
                 aria-label={t('label')}
                 className={cn(
-                    "fixed bottom-6 left-1/2 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 touch-pan-x scroll-px-3 items-center gap-1 overflow-x-auto overscroll-x-contain p-3",
+                    "fixed left-1/2 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 touch-pan-x scroll-px-2 items-center gap-1 overflow-x-auto overscroll-x-contain p-2.5",
+                    "bottom-[max(0.75rem,env(safe-area-inset-bottom))]",
                     "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-                    "md:sticky md:top-30 md:left-auto md:bottom-auto md:w-auto md:max-w-none md:translate-x-0 md:flex-col md:gap-3 md:overflow-visible",
+                    "md:sticky md:top-30 md:left-auto md:bottom-auto md:w-auto md:max-w-none md:translate-x-0 md:flex-col md:gap-3 md:overflow-visible md:p-3",
                     "bg-sidebar text-sidebar-foreground border border-sidebar-border rounded-3xl",
                     "custom-shadow"
                 )}

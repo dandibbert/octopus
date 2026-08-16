@@ -200,12 +200,22 @@ export type MorphingDialogContentProps = {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  disableLayoutAnimation?: boolean;
+  variants?: {
+    initial: Variant;
+    animate: Variant;
+    exit: Variant;
+  };
+  transition?: Transition;
 };
 
 function MorphingDialogContent({
   children,
   className,
   style,
+  disableLayoutAnimation,
+  variants,
+  transition,
 }: MorphingDialogContentProps) {
   const { setIsOpen, isOpen, uniqueId, triggerRef } = useMorphingDialog();
   const containerRef = useRef<HTMLDivElement>(null!);
@@ -296,13 +306,18 @@ function MorphingDialogContent({
   return (
     <motion.div
       ref={containerRef}
-      layoutId={`dialog-${uniqueId}`}
+      layoutId={disableLayoutAnimation ? undefined : `dialog-${uniqueId}`}
       className={cn('overflow-hidden', className)}
       style={style}
       role='dialog'
       aria-modal='true'
       aria-labelledby={`motion-ui-morphing-dialog-title-${uniqueId}`}
       aria-describedby={`motion-ui-morphing-dialog-description-${uniqueId}`}
+      variants={variants}
+      initial={variants ? 'initial' : undefined}
+      animate={variants ? 'animate' : undefined}
+      exit={variants ? 'exit' : undefined}
+      transition={transition}
     >
       {children}
     </motion.div>
@@ -341,7 +356,7 @@ function MorphingDialogContainer({ children }: MorphingDialogContainerProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           />
-          <div className='fixed inset-0 z-50 flex items-center justify-center'>
+          <div className='fixed inset-0 z-50 flex min-w-0 items-center justify-center overflow-hidden p-2 sm:p-4'>
             {children}
           </div>
         </>
@@ -355,21 +370,23 @@ export type MorphingDialogTitleProps = {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  disableLayoutAnimation?: boolean;
 };
 
 function MorphingDialogTitle({
   children,
   className,
   style,
+  disableLayoutAnimation,
 }: MorphingDialogTitleProps) {
   const { uniqueId } = useMorphingDialog();
 
   return (
     <motion.div
-      layoutId={`dialog-title-container-${uniqueId}`}
+      layoutId={disableLayoutAnimation ? undefined : `dialog-title-container-${uniqueId}`}
       className={className}
       style={style}
-      layout
+      layout={!disableLayoutAnimation}
     >
       {children}
     </motion.div>

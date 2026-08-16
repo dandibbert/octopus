@@ -205,7 +205,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
 
     return (
         <>
-            <MorphingDialogTitle>
+            <MorphingDialogTitle disableLayoutAnimation>
                 <header className="mb-6 flex items-center justify-between">
                     <h2 className="text-2xl font-bold text-card-foreground">
                         {isEditing ? t('title.edit') : t('title.view')}
@@ -226,11 +226,12 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                 </header>
             </MorphingDialogTitle>
 
-            <MorphingDialogDescription>
+            <MorphingDialogDescription className="min-h-0 flex-1 overflow-hidden rounded-2xl p-2">
+                <div className="h-full overflow-y-auto overscroll-contain px-1 py-2 [-webkit-overflow-scrolling:touch]">
                 <Tabs value={currentView}>
                     <TabsContents>
                         <TabsContent value="viewing" >
-                            <div className="max-h-[60vh] overflow-y-auto space-y-4 pb-24 sm:space-y-5">
+                            <div className="space-y-4 pb-2 lg:space-y-5">
                                 {channel.managed ? (
                                     <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
                                         <div>
@@ -260,11 +261,6 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                         ) : null}
                                     </section>
                                 ) : null}
-
-                                <section className="space-y-3">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{tModelActions('section_title')}</h4>
-                                    <ChannelModelActions channel={channel} onNavigate={() => setIsOpen(false)} />
-                                </section>
 
                                 <dl className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                                     <div className="rounded-2xl border bg-linear-to-br from-chart-1/10 to-chart-1/5 p-3 sm:p-4">
@@ -404,7 +400,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                         {channel.base_urls?.map((url, i) => (
                                             <div key={i} className="flex items-center justify-between p-3 sm:p-4 border-b last:border-0 hover:bg-accent/5 transition-colors">
                                                 <div className="flex flex-col gap-1 min-w-0">
-                                                    <span className="font-mono text-sm truncate select-all">{url.url}</span>
+                                                    <span className="font-mono text-sm whitespace-normal break-all select-all md:truncate md:whitespace-nowrap">{url.url}</span>
                                                 </div>
                                                 <Badge
                                                     variant="secondary"
@@ -452,7 +448,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
 
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     {key.last_use_time_stamp > 0 && (
-                                                        <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline-block">
+                                                        <span className="hidden whitespace-nowrap text-xs text-muted-foreground md:inline-block">
                                                             {new Date(key.last_use_time_stamp * 1000).toLocaleString()}
                                                         </span>
                                                     )}
@@ -502,31 +498,10 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                 </dl>
                             </div>
 
-                            {/* 操作按钮 */}
-                            {!channel.managed ? (
-                                <div className="grid gap-3 sm:grid-cols-2 pt-2">
-                                    <Button
-                                        onClick={() => (isConfirmingDelete ? setIsConfirmingDelete(false) : setIsEditing(true))}
-                                        variant={isConfirmingDelete ? 'secondary' : 'default'}
-                                        className="w-full rounded-2xl h-12"
-                                    >
-                                        {isConfirmingDelete ? t('actions.cancel') : t('actions.edit')}
-                                    </Button>
-                                    <Button
-                                        onClick={handleDeleteClick}
-                                        disabled={deleteChannel.isPending}
-                                        variant="destructive"
-                                        className="w-full rounded-2xl h-12"
-                                    >
-                                        <Trash2 className={`size-4 transition-transform ${isConfirmingDelete ? 'scale-110' : ''}`} />
-                                        {deleteChannel.isPending
-                                            ? t('actions.deleting')
-                                            : isConfirmingDelete
-                                                ? t('actions.confirmDelete')
-                                                : t('actions.delete')}
-                                    </Button>
-                                </div>
-                            ) : null}
+                            <section className="space-y-3 border-t border-border/60 pt-4">
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{tModelActions('section_title')}</h4>
+                                <ChannelModelActions channel={channel} onNavigate={() => setIsOpen(false)} />
+                            </section>
                         </TabsContent>
 
                         <TabsContent value="editing">
@@ -544,7 +519,34 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                         </TabsContent>
                     </TabsContents>
                 </Tabs>
+                </div>
             </MorphingDialogDescription>
+
+            {/* Bottom actions belong to the whole detail panel, pinned below the scrollable content. */}
+            {!channel.managed && !isEditing ? (
+                <div className="grid shrink-0 gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
+                    <Button
+                        onClick={() => (isConfirmingDelete ? setIsConfirmingDelete(false) : setIsEditing(true))}
+                        variant={isConfirmingDelete ? 'secondary' : 'default'}
+                        className="h-11 w-full rounded-2xl"
+                    >
+                        {isConfirmingDelete ? t('actions.cancel') : t('actions.edit')}
+                    </Button>
+                    <Button
+                        onClick={handleDeleteClick}
+                        disabled={deleteChannel.isPending}
+                        variant="destructive"
+                        className="h-11 w-full rounded-2xl"
+                    >
+                        <Trash2 className={`size-4 transition-transform ${isConfirmingDelete ? 'scale-110' : ''}`} />
+                        {deleteChannel.isPending
+                            ? t('actions.deleting')
+                            : isConfirmingDelete
+                                ? t('actions.confirmDelete')
+                                : t('actions.delete')}
+                    </Button>
+                </div>
+            ) : null}
         </>
     );
 }
