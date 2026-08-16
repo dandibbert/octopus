@@ -114,7 +114,9 @@ export function Playground() {
     const [stream, setStream] = useState(true);
     const [running, setRunning] = useState(false);
     const abortRef = useRef<AbortController | null>(null);
+    const pageScrollRef = useRef<HTMLDivElement | null>(null);
     const messageListRef = useRef<HTMLDivElement | null>(null);
+    const mobileFollowAnchorRef = useRef<HTMLDivElement | null>(null);
     const draftRef = useRef<HTMLTextAreaElement | null>(null);
     const shouldFollowOutputRef = useRef(true);
     const nextScrollBehaviorRef = useRef<ScrollBehavior>('auto');
@@ -128,12 +130,19 @@ export function Playground() {
         }
     }, [setStoredTarget]);
     useEffect(() => {
-        if (!shouldFollowOutputRef.current) return;
+        if (messages.length === 0 || !shouldFollowOutputRef.current) return;
         const behavior = nextScrollBehaviorRef.current;
         nextScrollBehaviorRef.current = 'auto';
         if (behavior === 'smooth') programmaticScrollUntilRef.current = performance.now() + 600;
         const element = messageListRef.current;
-        element?.scrollTo({ top: element.scrollHeight, behavior });
+        if (window.matchMedia('(min-width: 1024px)').matches) {
+            element?.scrollTo({ top: element.scrollHeight, behavior });
+            return;
+        }
+        // 移动端只有页面这一层主滚动。锚点放在输入区之后，才能在追随
+        // 流式输出时同时保留最后一条消息和停止/发送操作，而不是把输入区
+        // 推到视口下方。
+        mobileFollowAnchorRef.current?.scrollIntoView({ behavior, block: 'end' });
     }, [messages]);
 
     const mode = target?.type ?? 'group';
@@ -185,6 +194,16 @@ export function Playground() {
         if (!element || performance.now() < programmaticScrollUntilRef.current) return;
         const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
         shouldFollowOutputRef.current = distanceFromBottom <= 64;
+    };
+
+    const handlePageScroll = () => {
+        const container = pageScrollRef.current;
+        const end = mobileFollowAnchorRef.current;
+        if (!container || !end || performance.now() < programmaticScrollUntilRef.current) return;
+        const containerRect = container.getBoundingClientRect();
+        const endRect = end.getBoundingClientRect();
+        shouldFollowOutputRef.current = endRect.bottom <= containerRect.bottom + 64
+            && endRect.bottom >= containerRect.top;
     };
 
     const handleUserScrollIntent = () => {
@@ -359,25 +378,49 @@ export function Playground() {
     };
 
     return (
-        <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pb-28 [-webkit-overflow-scrolling:touch] md:grid md:h-full md:grid-cols-[minmax(0,1fr)_18rem] md:overflow-hidden md:pb-6">
-            <section className="flex h-[40dvh] flex-none flex-col overflow-hidden rounded-3xl border bg-card shadow-sm md:h-full md:min-h-0">
+        <div
+            ref={pageScrollRef}
+            onScroll={handlePageScroll}
+            onWheel={handleUserScrollIntent}
+            onTouchMove={handleUserScrollIntent}
+            className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto pb-28 [-webkit-overflow-scrolling:touch] lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_18rem] lg:overflow-hidden lg:pb-6"
+        >
+            <section className="flex min-h-[30rem] flex-none flex-col overflow-hidden rounded-3xl border bg-card shadow-sm lg:h-full lg:min-h-0">
                 <div className="flex items-center justify-between border-b px-4 py-3">
                     <div>
                         <div className="font-semibold">{t('title')}</div>
                         <div className="text-xs text-muted-foreground">{t('subtitle')}</div>
                     </div>
                     <div className="flex gap-2">
-                        <Button className="min-h-10 md:min-h-8" variant="outline" size="sm" onClick={regenerate} disabled={running || messages.length === 0 || !requestTarget || parametersInvalid}><RotateCcw className="size-4" />{t('regenerate')}</Button>
-                        <Button className="min-h-10 md:min-h-8" variant="outline" size="sm" onClick={() => setMessages([])} disabled={running || messages.length === 0}><Eraser className="size-4" />{t('clear')}</Button>
+                        <Button
+                            className="min-h-10 w-10 px-0 sm:w-auto sm:px-3 lg:min-h-8"
+                            variant="outline"
+                            size="sm"
+                            aria-label={t('regenerate')}
+                            onClick={regenerate}
+                            disabled={running || messages.length === 0 || !requestTarget || parametersInvalid}
+                        >
+                            <RotateCcw className="size-4" />
+                            <span className="sr-only sm:not-sr-only">{t('regenerate')}</span>
+                        </Button>
+                        <Button
+                            className="min-h-10 w-10 px-0 sm:w-auto sm:px-3 lg:min-h-8"
+                            variant="outline"
+                            size="sm"
+                            aria-label={t('clear')}
+                            onClick={() => setMessages([])}
+                            disabled={running || messages.length === 0}
+                        >
+                            <Eraser className="size-4" />
+                            <span className="sr-only sm:not-sr-only">{t('clear')}</span>
+                        </Button>
                     </div>
                 </div>
-                <div className="min-h-0 flex-1 p-2">
+                <div className="flex-1 p-2 lg:min-h-0">
                     <div
                         ref={messageListRef}
                         onScroll={handleMessageScroll}
-                        onWheel={handleUserScrollIntent}
-                        onTouchMove={handleUserScrollIntent}
-                        className="h-full space-y-4 overflow-y-auto overscroll-contain px-2 py-2 pb-10 [-webkit-overflow-scrolling:touch]"
+                        className="min-h-56 space-y-4 px-2 py-2 pb-10 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[-webkit-overflow-scrolling:touch]"
                     >
                         {messages.length === 0 && <div className="grid h-full min-h-56 place-items-center text-center text-muted-foreground"><div><Bot className="mx-auto mb-3 size-10" /><p>{t('empty')}</p></div></div>}
                         {messages.map((message) => <Message key={message.id} message={message} />)}
@@ -408,15 +451,16 @@ export function Playground() {
                             placeholder={t('inputPlaceholder')}
                         />
                         {running
-                            ? <Button className="size-10 md:size-9" size="icon" variant="destructive" aria-label={t('stop')} onClick={() => abortRef.current?.abort()}><Square className="size-4" /></Button>
-                            : <Button className="size-10 md:size-9" size="icon" aria-label={t('send')} onClick={send} disabled={!draft.trim() || !requestTarget || parametersInvalid}><Send className="size-4" /></Button>}
+                            ? <Button className="size-10 lg:size-9" size="icon" variant="destructive" aria-label={t('stop')} onClick={() => abortRef.current?.abort()}><Square className="size-4" /></Button>
+                            : <Button className="size-10 lg:size-9" size="icon" aria-label={t('send')} onClick={send} disabled={!draft.trim() || !requestTarget || parametersInvalid}><Send className="size-4" /></Button>}
                     </div>
                     {!requestTarget && <p id="playground-target-error" className="mt-2 text-xs text-destructive" role="alert">{t('errors.selectTarget')}</p>}
                 </div>
+                <div ref={mobileFollowAnchorRef} className="h-px shrink-0 lg:hidden" aria-hidden="true" />
             </section>
 
-            <aside className="min-w-0 flex-none overflow-hidden rounded-3xl border bg-card p-2 shadow-sm md:max-h-none md:min-h-0">
-                <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-3 py-3 scroll-py-3 [-webkit-overflow-scrolling:touch] md:h-full md:px-2">
+            <aside className="min-w-0 flex-none rounded-3xl border bg-card p-2 shadow-sm lg:min-h-0 lg:overflow-hidden">
+                <div className="space-y-4 px-3 py-3 scroll-py-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:px-2 lg:[-webkit-overflow-scrolling:touch]">
                 <Setting label={t('settings.mode')} htmlFor="playground-mode">
                     <PlaygroundSelect id="playground-mode" ariaLabel={t('settings.mode')} value={mode} options={[
                         { value: 'group', label: t('settings.group') },
@@ -585,15 +629,15 @@ function Message({ message }: { message: ChatMessage }) {
                 {message.error && <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{message.error}</div>}
                 {assistant && message.content && (
                     <div className="space-y-2">
-                        <div className="flex min-h-10 items-center gap-1 md:min-h-8">
-                            <Button className="min-h-10 px-2.5 md:min-h-8" variant="ghost" size="sm" onClick={() => void copyMessage()}>
+                        <div className="flex min-h-10 items-center gap-1 lg:min-h-8">
+                            <Button className="min-h-10 px-2.5 lg:min-h-8" variant="ghost" size="sm" onClick={() => void copyMessage()}>
                                 <Copy className="size-3.5" />
                                 {t('copy')}
                             </Button>
                             {diagnostics && (
                                 <Button
                                     type="button"
-                                    className="min-h-10 px-2.5 md:min-h-8"
+                                    className="min-h-10 px-2.5 lg:min-h-8"
                                     variant="ghost"
                                     size="sm"
                                     aria-expanded={diagnosticsOpen}
