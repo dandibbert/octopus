@@ -2131,6 +2131,7 @@ function SiteAccountPanel({
         () => visibleModels.filter((model) => !isSupportedRouteType(model.route_type)).length,
         [visibleModels],
     );
+    const hasModelResultFilters = modelSearchTerm.trim().length > 0 || panelPreferences.quickFilters.length > 0;
 
     const handleGroupFilterChange = useCallback((value: string) => {
         setActiveFilter(value === SITE_GROUP_FILTER_ALL_VALUE ? SITE_GROUP_FILTER_ALL : createGroupFilter(value));
@@ -2844,8 +2845,41 @@ function SiteAccountPanel({
             </Dialog>
 
             {visibleModels.length === 0 ? (
-                <div className="flex min-h-[18rem] flex-1 items-center justify-center rounded-3xl border border-dashed border-border/70 bg-muted/20 px-6 text-center text-sm text-muted-foreground">
-                    当前筛选和搜索条件下没有匹配模型
+                <div
+                    role="status"
+                    className="flex min-h-[18rem] flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-border/70 bg-muted/20 px-6 text-center"
+                >
+                    {hasModelResultFilters ? (
+                        <Search className="size-9 text-muted-foreground/60" />
+                    ) : (
+                        <CircleOff className="size-9 text-muted-foreground/60" />
+                    )}
+                    <p className="mt-3 text-sm font-medium text-foreground">
+                        {hasModelResultFilters
+                            ? t('siteChannel.empty.models.noMatchTitle')
+                            : activeFilter.kind === 'group'
+                                ? t('siteChannel.empty.models.groupTitle')
+                                : t('siteChannel.empty.models.accountTitle')}
+                    </p>
+                    <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+                        {hasModelResultFilters
+                            ? t('siteChannel.empty.models.noMatchDescription')
+                            : t('siteChannel.empty.models.dataDescription')}
+                    </p>
+                    {hasModelResultFilters ? (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-4 rounded-xl"
+                            onClick={() => {
+                                setModelSearchTerm('');
+                                handleClearQuickFilters();
+                            }}
+                        >
+                            {t('siteChannel.empty.models.clear')}
+                        </Button>
+                    ) : null}
                 </div>
             ) : (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/70">
@@ -3495,6 +3529,10 @@ export function SiteChannelSection({
                 return sortOrder === 'asc' ? diff : -diff;
             });
     }, [data, searchTerm, sortField, sortOrder, forcedSiteId]);
+    const availableCardCount = useMemo(
+        () => (data ?? []).filter((card) => card.account_count > 0).length,
+        [data],
+    );
     useEffect(() => {
         if (!pendingSiteChannelJump) return;
         const node = siteCardRefs.current.get(pendingSiteChannelJump.target.siteId);
@@ -3537,7 +3575,7 @@ export function SiteChannelSection({
 
     return (
         <>
-            {cards.length > 0 && (
+            {cards.length > 0 ? (
                 <SiteChannelGrid
                     cards={cards}
                     layout={layout}
@@ -3547,6 +3585,27 @@ export function SiteChannelSection({
                     clearPending={clearPending}
                     requestJump={requestJump}
                 />
+            ) : (
+                <section
+                    role="status"
+                    className="flex h-full min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-border/70 bg-card/60 px-6 py-10 text-center"
+                >
+                    {availableCardCount > 0 ? (
+                        <Search className="size-10 text-muted-foreground/60" />
+                    ) : (
+                        <Globe2 className="size-10 text-muted-foreground/60" />
+                    )}
+                    <h2 className="mt-4 text-base font-semibold text-foreground">
+                        {availableCardCount > 0
+                            ? t('siteChannel.empty.sites.noMatchTitle')
+                            : t('siteChannel.empty.sites.title')}
+                    </h2>
+                    <p className="mt-1 max-w-md text-sm leading-6 text-muted-foreground">
+                        {availableCardCount > 0
+                            ? t('siteChannel.empty.sites.noMatchDescription', { term: searchTerm.trim() })
+                            : t('siteChannel.empty.sites.description')}
+                    </p>
+                </section>
             )}
             <UnifiedCompletionDialog
                 open={completionDialogOpen && totalPendingCompletionCount > 0}

@@ -107,6 +107,11 @@
                     "empty": "No channels found"
                 }
             }
+        },
+        "search": {
+            "open": "Search this page",
+            "placeholder": "Search…",
+            "close": "Close search"
         }
     },
     "common": {
@@ -1064,6 +1069,7 @@
             "create_failed": "Failed to create group",
             "name_conflict": "Group “{name}” already exists. Choose another name.",
             "health_check": "Health check",
+            "more_actions": "More actions",
             "playground": "Playground",
             "testing": "Testing…",
             "health_available": "Model available",
@@ -1222,6 +1228,22 @@
         }
     },
     "siteChannel": {
+        "empty": {
+            "models": {
+                "noMatchTitle": "No models match the current search and filters",
+                "noMatchDescription": "Clear the search term or quick filters to see all models in the current scope.",
+                "groupTitle": "No models in this group",
+                "accountTitle": "No manageable models for this account",
+                "dataDescription": "Models will appear here after an upstream sync or after you add them manually.",
+                "clear": "Clear search and filters"
+            },
+            "sites": {
+                "noMatchTitle": "No matching site channels",
+                "noMatchDescription": "No site or account matches “{term}”. Try another search term.",
+                "title": "No site channels yet",
+                "description": "Add an account on the Sites page and sync it. Synced site channels will appear here."
+            }
+        },
         "card": {
             "statusEnabled": "Enabled",
             "statusDisabled": "Disabled",

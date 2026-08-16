@@ -107,6 +107,11 @@
                     "empty": "未找到渠道"
                 }
             }
+        },
+        "search": {
+            "open": "搜索当前页面",
+            "placeholder": "搜索…",
+            "close": "关闭搜索"
         }
     },
     "common": {
@@ -1064,6 +1069,7 @@
             "create_failed": "分组创建失败",
             "name_conflict": "分组“{name}”已存在，请修改分组名称。",
             "health_check": "测活",
+            "more_actions": "更多操作",
             "playground": "测试场",
             "testing": "测试中…",
             "health_available": "模型可用",
@@ -1222,6 +1228,22 @@
         }
     },
     "siteChannel": {
+        "empty": {
+            "models": {
+                "noMatchTitle": "没有匹配当前搜索和筛选条件的模型",
+                "noMatchDescription": "清除搜索词或快速筛选后，可重新查看当前范围内的全部模型。",
+                "groupTitle": "当前分组暂无模型",
+                "accountTitle": "当前账号暂无可管理模型",
+                "dataDescription": "同步上游模型或手动添加模型后，模型会显示在这里。",
+                "clear": "清除搜索和筛选"
+            },
+            "sites": {
+                "noMatchTitle": "没有匹配的站点渠道",
+                "noMatchDescription": "没有找到与“{term}”匹配的站点或账号，请尝试其他关键词。",
+                "title": "暂无站点渠道",
+                "description": "请先在站点页面添加账号并完成同步，已同步的站点渠道会显示在这里。"
+            }
+        },
         "card": {
             "statusEnabled": "启用",
             "statusDisabled": "停用",

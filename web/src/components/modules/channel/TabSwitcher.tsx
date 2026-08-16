@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion } from 'motion/react';
 import { useChannelList } from '@/api/endpoints/channel';
@@ -14,9 +14,15 @@ const TABS: { value: ChannelTab; key: 'site' | 'manual' }[] = [
     { value: 'manual', key: 'manual' },
 ];
 
-type Props = { className?: string };
+type Props = {
+    className?: string;
+    underlineLayoutId?: string;
+};
 
-export function ChannelTabSwitcher({ className }: Props) {
+export function ChannelTabSwitcher({
+    className,
+    underlineLayoutId = 'channel-tab-underline',
+}: Props) {
     const t = useTranslations('channel.tabs');
     const activeTab = useChannelTabStore((s) => s.activeTab);
     const setActiveTab = useChannelTabStore((s) => s.setActiveTab);
@@ -31,17 +37,42 @@ export function ChannelTabSwitcher({ className }: Props) {
         [channelsData, siteChannelsData],
     );
 
+    const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
+        let nextIndex = currentIndex;
+        if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % TABS.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = TABS.length - 1;
+        else return;
+
+        event.preventDefault();
+        const nextTab = TABS[nextIndex].value;
+        setActiveTab(nextTab);
+        event.currentTarget.parentElement
+            ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+            .item(nextIndex)
+            .focus();
+    };
+
     return (
-        <div className={cn('flex items-baseline gap-5', className)}>
-            {TABS.map(({ value, key }) => {
+        <div
+            role="tablist"
+            aria-label={`${t('site')} / ${t('manual')}`}
+            className={cn('flex items-center gap-3 sm:gap-5', className)}
+        >
+            {TABS.map(({ value, key }, index) => {
                 const active = activeTab === value;
                 return (
                     <button
                         key={value}
                         type="button"
+                        role="tab"
+                        aria-selected={active}
+                        tabIndex={active ? 0 : -1}
                         onClick={() => setActiveTab(value)}
+                        onKeyDown={(event) => handleKeyDown(event, index)}
                         className={cn(
-                            'relative inline-flex items-baseline gap-1.5 pb-1 text-sm font-medium transition-colors',
+                            'relative inline-flex min-h-11 items-center gap-1.5 px-1 text-sm font-medium transition-colors sm:min-h-8 sm:items-baseline sm:pb-1',
                             active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                         )}
                     >
@@ -56,7 +87,7 @@ export function ChannelTabSwitcher({ className }: Props) {
                         </span>
                         {active && (
                             <motion.span
-                                layoutId="channel-tab-underline"
+                                layoutId={underlineLayoutId}
                                 className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-primary"
                                 transition={{ type: 'spring', stiffness: 320, damping: 30, mass: 0.8 }}
                             />

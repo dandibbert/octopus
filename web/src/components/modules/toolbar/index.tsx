@@ -268,13 +268,22 @@ export function Toolbar() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.2 }}
-                className="flex min-w-0 items-center gap-1 sm:gap-2"
+                className="flex max-w-full min-w-0 items-center gap-1 sm:gap-2"
             >
                 {/* 搜索框 - 始终可见 */}
-                <div className="relative h-9 w-9">
+                <div
+                    role="search"
+                    className={cn(
+                        'relative h-9 shrink-0 transition-[width] duration-200',
+                        searchExpanded ? 'w-36 sm:w-44' : 'w-9',
+                    )}
+                >
                     {!searchExpanded ? (
                         <motion.button
+                            type="button"
                             layoutId="search-box"
+                            aria-label={t('search.open')}
+                            title={t('search.open')}
                             onClick={() => setExpandedSearchItem(toolbarItem)}
                             className={buttonVariants({
                                 variant: 'ghost',
@@ -290,20 +299,30 @@ export function Toolbar() {
                     ) : (
                         <motion.div
                             layoutId="search-box"
-                            className="absolute right-0 top-0 flex items-center gap-2 h-9 px-3 rounded-xl border"
+                            className="absolute inset-0 flex h-9 min-w-0 items-center gap-2 rounded-xl border bg-background px-3"
                             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                         >
                             <motion.span layout="position">
                                 <Search className="size-4 text-muted-foreground shrink-0" />
                             </motion.span>
                             <input
-                                type="text"
+                                type="search"
+                                aria-label={t('search.open')}
+                                placeholder={t('search.placeholder')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(toolbarItem, e.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Escape') {
+                                        event.preventDefault();
+                                        setExpandedSearchItem(null);
+                                    }
+                                }}
                                 autoFocus
-                                className="w-20 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                             />
                             <button
+                                type="button"
+                                aria-label={t('search.close')}
                                 onClick={() => {
                                     setSearchTerm(toolbarItem, '');
                                     setExpandedSearchItem(null);
@@ -317,10 +336,10 @@ export function Toolbar() {
                 </div>
 
                 {/* 日志页面的筛选按钮 */}
-                {isLogToolbar && <LogFilterPopover />}
+                {!searchExpanded && isLogToolbar && <LogFilterPopover />}
 
                 {/* 设置按钮 - 始终可见（除了日志页面） */}
-                {!isLogToolbar && (
+                {!searchExpanded && !isLogToolbar && (
                     <Popover open={viewOptionsOpen} onOpenChange={setViewOptionsOpen}>
                         <PopoverTrigger asChild>
                             <button
@@ -537,7 +556,7 @@ export function Toolbar() {
                 )}
 
                 {/* 统一的工具按钮菜单（新增 + 按钮位于最右侧） */}
-                <ToolbarMenu actions={actions} />
+                {!searchExpanded && <ToolbarMenu actions={actions} />}
             </motion.div>
         </AnimatePresence>
 

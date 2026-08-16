@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from "motion/react"
+import { motion, AnimatePresence, MotionConfig } from "motion/react"
 import { useAuth } from '@/api/endpoints/user';
 import { LoginForm } from '@/components/modules/login';
 import { APIKeyDashboard } from '@/components/modules/apikey-dashboard';
@@ -200,20 +200,19 @@ export function AppContainer() {
 
     // 主界面
     return (
-        <motion.div
-            key="main-app"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="mx-auto flex h-dvh w-full max-w-6xl flex-col overflow-hidden px-2 sm:px-3 md:grid md:grid-cols-[auto_1fr] md:gap-6 md:px-6"
-        >
+        <MotionConfig reducedMotion="user">
+            <motion.div
+                key="main-app"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="mx-auto flex h-dvh w-full max-w-6xl flex-col overflow-hidden px-3 md:grid md:grid-cols-[auto_1fr] md:gap-6 md:px-6"
+            >
             <NavBar />
             <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-                <header className="my-3 flex min-w-0 flex-none flex-wrap items-start gap-x-2 gap-y-2 px-1 sm:my-6 sm:flex-nowrap sm:px-2">
-                    <div className="shrink-0 pt-0.5 sm:pt-0">
-                        <Logo size={48} />
-                    </div>
-                    <div className="min-w-0 flex-1 overflow-hidden pb-1 sm:pb-0">
+                <header className="my-6 grid min-w-0 flex-none grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 px-2">
+                    <Logo size={48} />
+                    <div className="min-w-0 overflow-hidden pb-2 sm:pb-0">
                         <AnimatePresence mode="wait" custom={direction}>
                             <motion.div
                                 key={activeItem}
@@ -236,16 +235,27 @@ export function AppContainer() {
                                 animate="animate"
                                 exit="exit"
                                 transition={{ duration: 0.3 }}
-                                className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-6"
+                                className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-baseline sm:gap-6"
                             >
-                                <span className="min-w-0 truncate text-2xl font-bold sm:mt-1 sm:text-3xl">{t(activeItem)}</span>
+                                <span className="mt-1 min-w-0 truncate text-3xl font-bold">{t(activeItem)}</span>
+                                {activeItem === 'channel' && (
+                                    <ChannelTabSwitcher
+                                        className="hidden w-fit max-w-full sm:flex"
+                                        underlineLayoutId="channel-tab-underline-desktop"
+                                    />
+                                )}
                             </motion.div>
                         </AnimatePresence>
-                        {activeItem === 'channel' && <ChannelTabSwitcher className="mt-1" />}
                     </div>
-                    <div className="relative ml-auto flex min-h-9 shrink-0 items-center gap-1 sm:gap-3">
+                    <div className="relative ml-auto flex min-h-9 min-w-0 shrink-0 items-center gap-1 sm:gap-3">
                         <Toolbar />
                     </div>
+                    {activeItem === 'channel' && (
+                        <ChannelTabSwitcher
+                            className="col-start-2 col-end-4 row-start-2 w-fit max-w-full sm:hidden"
+                            underlineLayoutId="channel-tab-underline-mobile"
+                        />
+                    )}
                     <ProxyPoolDialog />
                 </header>
                 <AnimatePresence mode="wait" initial={false}>
@@ -265,7 +275,7 @@ export function AppContainer() {
                     </motion.div>
                 </AnimatePresence>
             </main>
-        </motion.div>
+            </motion.div>
+        </MotionConfig>
     );
 }
-

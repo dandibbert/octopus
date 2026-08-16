@@ -107,6 +107,11 @@
                     "empty": "找不到供應源"
                 }
             }
+        },
+        "search": {
+            "open": "搜尋目前頁面",
+            "placeholder": "搜尋…",
+            "close": "關閉搜尋"
         }
     },
     "common": {
@@ -1064,6 +1069,7 @@
             "create_failed": "分組建立失敗",
             "name_conflict": "分組「{name}」已存在，請修改分組名稱。",
             "health_check": "測活",
+            "more_actions": "更多操作",
             "playground": "測試場",
             "testing": "測試中…",
             "health_available": "模型可用",
@@ -1222,6 +1228,22 @@
         }
     },
     "siteChannel": {
+        "empty": {
+            "models": {
+                "noMatchTitle": "沒有符合目前搜尋與篩選條件的模型",
+                "noMatchDescription": "清除搜尋詞或快速篩選後，可重新查看目前範圍內的全部模型。",
+                "groupTitle": "目前分組暫無模型",
+                "accountTitle": "目前帳號暫無可管理模型",
+                "dataDescription": "同步上游模型或手動新增模型後，模型會顯示在這裡。",
+                "clear": "清除搜尋與篩選"
+            },
+            "sites": {
+                "noMatchTitle": "沒有符合的站點供應源",
+                "noMatchDescription": "找不到與「{term}」相符的站點或帳號，請嘗試其他關鍵字。",
+                "title": "暫無站點供應源",
+                "description": "請先在站點頁面新增帳號並完成同步，已同步的站點供應源會顯示在這裡。"
+            }
+        },
         "card": {
             "statusEnabled": "啟用",
             "statusDisabled": "停用",

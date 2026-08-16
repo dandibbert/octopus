@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
 import { useNavStore, type NavItem } from "@/components/modules/navbar"
@@ -13,16 +14,27 @@ export function NavBar() {
     const { activeItem, setActiveItem } = useNavStore()
     const { preload } = usePreload()
     const t = useTranslations('navbar')
+    const navRef = useRef<HTMLElement | null>(null)
+    const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+    useEffect(() => {
+        const nav = navRef.current
+        const activeButton = itemRefs.current[activeItem]
+        if (!nav || !activeButton || window.matchMedia('(min-width: 768px)').matches) return
+
+        const targetLeft = activeButton.offsetLeft - (nav.clientWidth - activeButton.offsetWidth) / 2
+        nav.scrollTo({ left: targetLeft, behavior: 'smooth' })
+    }, [activeItem])
 
     return (
-        <div className="relative z-50 md:min-h-screen">
+        <div className="relative z-40 md:min-h-screen">
             <motion.nav
+                ref={navRef}
                 aria-label={t('label')}
                 className={cn(
                     "fixed left-1/2 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 touch-pan-x scroll-px-2 items-center gap-1 overflow-x-auto overscroll-x-contain p-2.5",
                     "bottom-[max(0.75rem,env(safe-area-inset-bottom))]",
-                    "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-                    "md:sticky md:top-30 md:left-auto md:bottom-auto md:w-auto md:max-w-none md:translate-x-0 md:flex-col md:gap-3 md:overflow-visible md:p-3",
+                    "md:sticky md:top-30 md:left-auto md:bottom-auto md:max-h-[calc(100dvh-8.25rem)] md:w-auto md:max-w-none md:translate-x-0 md:touch-pan-y md:flex-col md:gap-3 md:overflow-x-visible md:overflow-y-auto md:overscroll-y-contain md:p-3",
                     "bg-sidebar text-sidebar-foreground border border-sidebar-border rounded-3xl",
                     "custom-shadow"
                 )}
@@ -37,6 +49,7 @@ export function NavBar() {
                         <Tooltip key={route.id} side="top" sideOffset={10} align="center">
                             <TooltipTrigger asChild>
                                 <motion.button
+                                    ref={(node) => { itemRefs.current[route.id] = node }}
                                     type="button"
                                     aria-label={label}
                                     aria-current={isActive ? 'page' : undefined}
