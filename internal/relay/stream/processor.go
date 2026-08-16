@@ -59,6 +59,12 @@ type StreamConfig struct {
 	// Callbacks
 	OnFirstToken func()                                            // Called when first payload written
 	OnFinish     func(ctx context.Context, rawStream []byte) error // Called on stream end
+	// TerminalReached reports whether the event that was just successfully
+	// written completes the logical response. When true, Run finalizes
+	// immediately instead of waiting for upstream EOF. This avoids classifying
+	// a client context cancellation that happens just after a terminal marker
+	// (for example OpenAI's data: [DONE]) as a failed relay.
+	TerminalReached func() bool
 
 	// Passthrough-specific
 	BufferRawStream bool                // Enable raw stream buffering for metrics
@@ -196,6 +202,16 @@ func (p *StreamProcessor) Run() error {
 					firstTokenTimer = nil
 					firstTokenC = nil
 				}
+			}
+
+			// A protocol terminal marker is the logical end of the response. Once
+			// that marker has been transformed and successfully written downstream,
+			// do not wait for the upstream transport to close: clients commonly
+			// cancel their request context immediately after receiving the terminal
+			// marker, which would otherwise turn a complete response into a false
+			// "context canceled" failure in relay logs.
+			if p.config.TerminalReached != nil && p.config.TerminalReached() {
+				return p.finalize()
 			}
 		}
 	}

@@ -290,6 +290,89 @@ func TestHandleStreamResponsePassthroughOpenAIResponsesClientCancelMidStream(t *
 	}
 }
 
+// 回归：普通 OpenAI Chat transform 流在 [DONE] 已成功写给客户端后，客户端
+// 立即结束请求、而上游 transport 尚未 EOF。完整 tool_calls / usage 已经收到，
+// 这时应判定为成功，不能再被后续 request context cancellation 覆盖成失败日志。
+func TestHandleStreamResponseOpenAIChatClientCancelAfterDone(t *testing.T) {
+	rawSSE := strings.Join([]string{
+		`data: {"id":"chatcmpl-terminal","object":"chat.completion.chunk","created":0,"model":"kimi-k3","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"terminal_62","type":"function","function":{"name":"terminal","arguments":"{\"background\":true}"}}]},"finish_reason":null}]}`,
+		"",
+		`data: {"id":"chatcmpl-terminal","object":"chat.completion.chunk","created":0,"model":"kimi-k3","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+		"",
+		`data: {"id":"chatcmpl-terminal","object":"chat.completion.chunk","created":0,"model":"kimi-k3","choices":[],"usage":{"prompt_tokens":658,"completion_tokens":65,"total_tokens":723,"prompt_tokens_details":{"cached_tokens":563}}}`,
+		"",
+		`data: [DONE]`,
+		"",
+	}, "\n") + "\n"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	writer := &notifyStreamWriter{header: http.Header{}}
+	writer.onWrite = func(p []byte) {
+		if bytes.Contains(p, []byte(`[DONE]`)) {
+			cancel()
+		}
+	}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+	internalReq := &transformerModel.InternalLLMRequest{
+		Model:        "kimi-k3",
+		Stream:       boolPtr(true),
+		RawAPIFormat: transformerModel.APIFormatOpenAIChatCompletion,
+	}
+	req := &relayRequest{
+		c:               c,
+		inAdapter:       inbound.Get(inbound.InboundTypeOpenAIChat),
+		internalRequest: internalReq,
+		metrics:         NewRelayMetrics(1, internalReq.Model, nil, internalReq),
+		apiKeyID:        1,
+		requestModel:    internalReq.Model,
+		streamWriter:    writer,
+	}
+	ra := &relayAttempt{
+		relayRequest: req,
+		outAdapter:   outbound.Get(outbound.OutboundTypeOpenAIChat),
+		channel:      &model.Channel{Type: outbound.OutboundTypeOpenAIChat},
+	}
+
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       &stallUntilCancelBody{ctx: ctx, data: []byte(rawSSE)},
+	}
+
+	if err := ra.handleStreamResponseV2(ctx, response); err != nil {
+		t.Fatalf("expected [DONE] stream to finish successfully, got error: %v", err)
+	}
+	if !ra.streamTerminalReached.Load() {
+		t.Fatal("expected transformed [DONE] to mark terminal completion")
+	}
+	if !bytes.Contains(writer.buf.Bytes(), []byte(`data: [DONE]`)) {
+		t.Fatalf("expected terminal payload to be written, got %q", writer.buf.String())
+	}
+
+	// collectResponse runs after the stream handler in the successful attempt
+	// path. The request context is already canceled here, so this also guards
+	// context.WithoutCancel collection of the completed local aggregator.
+	ra.collectResponse()
+	internalResp := req.metrics.InternalResponse
+	if internalResp == nil {
+		t.Fatal("expected completed internal response to be collected after client cancellation")
+	}
+	if internalResp.Usage == nil || internalResp.Usage.PromptTokens != 658 || internalResp.Usage.CompletionTokens != 65 {
+		t.Fatalf("expected usage prompt=658 completion=65, got %+v", internalResp.Usage)
+	}
+	if len(internalResp.Choices) == 0 || internalResp.Choices[0].Message == nil || len(internalResp.Choices[0].Message.ToolCalls) != 1 {
+		t.Fatalf("expected aggregated tool call response, got %+v", internalResp.Choices)
+	}
+	toolCall := internalResp.Choices[0].Message.ToolCalls[0]
+	if toolCall.ID != "terminal_62" || toolCall.Function.Name != "terminal" {
+		t.Fatalf("unexpected aggregated tool call: %+v", toolCall)
+	}
+}
+
 // 回归：Anthropic 直通同场景——客户端收到 message_stop 后立即断连，应按正常结束处理。
 func TestHandleStreamResponsePassthroughAnthropicClientCancelAfterTerminal(t *testing.T) {
 	gin.SetMode(gin.TestMode)

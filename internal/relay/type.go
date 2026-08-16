@@ -123,12 +123,13 @@ func (r *relayRequest) requestContext() context.Context {
 type relayAttempt struct {
 	*relayRequest // 嵌入请求级上下文
 
-	outAdapter           model.Outbound
-	channel              *dbmodel.Channel
-	usedKey              dbmodel.ChannelKey
-	firstTokenTimeOutSec int
-	firstTokenBudget     *firstTokenBudget
-	retryAfter           time.Duration // forward() 提取后暂存
+	outAdapter            model.Outbound
+	channel               *dbmodel.Channel
+	usedKey               dbmodel.ChannelKey
+	firstTokenTimeOutSec  int
+	firstTokenBudget      *firstTokenBudget
+	retryAfter            time.Duration // forward() 提取后暂存
+	streamTerminalReached atomic.Bool
 }
 
 // attemptResult 封装单次尝试的结果

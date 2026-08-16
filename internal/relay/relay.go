@@ -1184,6 +1184,7 @@ func (ra *relayAttempt) handleStreamResponseV2(ctx context.Context, response *ht
 		Context:           ctx,
 		FirstTokenTimeout: firstTokenTimeout,
 		HeartbeatInterval: streamHeartbeatInterval(),
+		TerminalReached:   func() bool { return ra.streamTerminalReached.Load() },
 		OnFirstToken: func() {
 			ra.metrics.SetFirstTokenTime(time.Now())
 			ra.stopFirstTokenTimer()
@@ -1347,6 +1348,12 @@ func (ra *relayAttempt) transformStreamData(ctx context.Context, data string) ([
 		return nil, err
 	}
 	if ok {
+		for _, event := range events {
+			if event.Kind == model.StreamEventKindDone {
+				ra.streamTerminalReached.Store(true)
+				break
+			}
+		}
 		return ra.encodeInboundStreamEvents(ctx, events)
 	}
 
@@ -1357,6 +1364,9 @@ func (ra *relayAttempt) transformStreamData(ctx context.Context, data string) ([
 	}
 	if internalStream == nil {
 		return nil, nil
+	}
+	if internalStream.Object == "[DONE]" {
+		ra.streamTerminalReached.Store(true)
 	}
 
 	return ra.encodeInboundStreamResponse(ctx, internalStream)
@@ -1491,7 +1501,18 @@ func (ra *relayAttempt) collectResponse() {
 	if !ra.responseCollected.CompareAndSwap(false, true) {
 		return
 	}
-	internalResponse, err := ra.inAdapter.GetInternalResponse(ra.requestContext())
+	collectCtx := ra.requestContext()
+	if collectCtx == nil {
+		collectCtx = context.Background()
+	} else {
+		// Response collection only reads the already-built local stream
+		// aggregator. Once payload has been received, a downstream client
+		// cancellation must not erase usage/tool-call diagnostics that are
+		// already available locally. Keep request-scoped values while removing
+		// cancellation/deadline propagation.
+		collectCtx = context.WithoutCancel(collectCtx)
+	}
+	internalResponse, err := ra.inAdapter.GetInternalResponse(collectCtx)
 	if err != nil {
 		log.Debugf("collectResponse: failed to get internal response: %v", err)
 		return

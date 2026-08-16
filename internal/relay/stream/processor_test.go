@@ -220,6 +220,48 @@ func TestStreamProcessor_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestStreamProcessor_TransformedTerminalCompletesWithoutEOF(t *testing.T) {
+	// Simulate an upstream that sends a logical terminal marker but keeps the
+	// transport open. This is the race that used to produce false
+	// "context canceled" relay failures when the client closed immediately
+	// after receiving the terminal payload.
+	source := &cancelTestSource{first: []byte(`done`)}
+	writer := newMockStreamWriter()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	terminalReached := false
+	processor := NewStreamProcessor(StreamConfig{
+		Source:  source,
+		Writer:  writer,
+		Context: ctx,
+		Transform: func(ctx context.Context, data []byte) ([]byte, error) {
+			terminalReached = string(data) == "done"
+			return []byte("data: [DONE]\n\n"), nil
+		},
+		TerminalReached: func() bool { return terminalReached },
+	})
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- processor.Run() }()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("expected terminal marker to finish stream successfully, got %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("processor waited for upstream EOF after terminal marker")
+	}
+
+	if got := writer.buffer.String(); got != "data: [DONE]\n\n" {
+		t.Fatalf("unexpected terminal output: %q", got)
+	}
+	if !source.closed {
+		t.Fatal("source was not closed after terminal completion")
+	}
+}
+
 // cancelTestSource emits one chunk then blocks until context is cancelled.
 type cancelTestSource struct {
 	first  []byte
