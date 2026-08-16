@@ -303,6 +303,7 @@ export function useUpdateChannel() {
         onSuccess: (data) => {
             logger.log('渠道更新成功:', data);
             queryClient.invalidateQueries({ queryKey: ['channels', 'list'] });
+            queryClient.invalidateQueries({ queryKey: ['models', 'list'] });
             queryClient.invalidateQueries({ queryKey: ['models', 'channel'] });
             queryClient.invalidateQueries({ queryKey: ['proxy-pool'] });
             queryClient.invalidateQueries({ queryKey: ['groups', 'list'] });
@@ -331,6 +332,7 @@ export function useDeleteChannel() {
         onSuccess: () => {
             logger.log('渠道删除成功');
             queryClient.invalidateQueries({ queryKey: ['channels', 'list'] });
+            queryClient.invalidateQueries({ queryKey: ['models', 'list'] });
             queryClient.invalidateQueries({ queryKey: ['models', 'channel'] });
             queryClient.invalidateQueries({ queryKey: ['proxy-pool'] });
             queryClient.invalidateQueries({ queryKey: ['groups', 'list'] });

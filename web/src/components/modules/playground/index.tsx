@@ -24,7 +24,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/common/Toast';
 import { targetFromLocation, usePlaygroundStore, type PlaygroundTarget } from '@/stores/playground';
-import { cn } from '@/lib/utils';
+import { cn, copyText } from '@/lib/utils';
 
 type Diagnostics = {
     ttft?: number;
@@ -604,7 +604,7 @@ function Message({ message }: { message: ChatMessage }) {
     const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
     const copyMessage = async () => {
         try {
-            await navigator.clipboard.writeText(message.content);
+            await copyText(message.content);
             toast.success(copyT('success'));
         } catch {
             toast.error(copyT('failed'));

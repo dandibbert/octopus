@@ -9,7 +9,7 @@ import { getModelIcon } from '@/lib/model-icons';
 import { toast } from '@/components/common/Toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 import { ModelDeleteOverlay, ModelEditOverlay } from './ItemOverlays';
-import { cn } from '@/lib/utils';
+import { cn, copyText } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { Badge } from '@/components/ui/badge';
 import { AttachPriceDialog } from './AttachPriceDialog';
@@ -153,7 +153,7 @@ export const ModelItem = memo(function ModelItem({ model, models, layout = 'grid
 
     const handleCopyName = async () => {
         try {
-            await navigator.clipboard.writeText(model.name);
+            await copyText(model.name);
             toast.success(copyT('success'));
         } catch (error) {
             toast.error(copyT('failed'), {
