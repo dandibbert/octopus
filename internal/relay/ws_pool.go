@@ -463,16 +463,15 @@ func buildUpstreamWSHeaders(clientHeaders http.Header, channel *dbmodel.Channel,
 		headers["User-Agent"] = values[:1]
 	}
 	if channel != nil {
-		for _, header := range channel.CustomHeader {
-			if strings.TrimSpace(header.HeaderKey) == "" {
-				continue
-			}
-			headers.Set(header.HeaderKey, header.HeaderValue)
-		}
+		helper.ApplyCustomHeaders(headers, channel.CustomHeader)
 	}
 	headers.Set("Authorization", "Bearer "+key)
 	headers.Set("OpenAI-Beta", "responses_websockets=2026-02-06")
 	return headers
+}
+
+func mergeUpstreamCustomHeaders(groupHeaders, channelHeaders []dbmodel.CustomHeader) []dbmodel.CustomHeader {
+	return helper.MergeCustomHeaders(groupHeaders, channelHeaders)
 }
 
 func shouldProxyUpstreamWSHeader(name string) bool {

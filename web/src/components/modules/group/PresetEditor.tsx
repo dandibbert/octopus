@@ -84,6 +84,8 @@ export function PresetEditorContent({ preset }: PresetEditorContentProps) {
                     session_keep_time: values.session_keep_time,
                     retry_enabled: values.retry_enabled,
                     max_retries: values.max_retries,
+                    custom_header: values.custom_header,
+                    param_override: values.param_override,
                     items,
                 },
             },
@@ -128,6 +130,8 @@ export function PresetEditorContent({ preset }: PresetEditorContentProps) {
                         session_keep_time: preset.session_keep_time ?? 0,
                         retry_enabled: preset.retry_enabled ?? false,
                         max_retries: preset.max_retries ?? 3,
+                        custom_header: preset.custom_header ?? [],
+                        param_override: preset.param_override ?? '',
                         members: initialMembers,
                     }}
                     submitText={t('preset.save')}

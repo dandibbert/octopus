@@ -994,6 +994,105 @@ func TestHandlerAppliesChannelParamOverride(t *testing.T) {
 	}
 }
 
+func TestHandlerAppliesGroupThenChannelRequestOptions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx := setupRelayTestDB(t)
+
+	var capturedBody []byte
+	var capturedHeader http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeader = r.Header.Clone()
+		capturedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_group_opts","object":"chat.completion","created":1,"model":"options-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer server.Close()
+
+	groupOverride := `{"temperature":null,"top_p":0.8,"presence_penalty":0.1}`
+	channelOverride := `{"temperature":0.2,"top_p":null}`
+	channel := &model.Channel{
+		Name: "relay-options-channel", Type: outbound.OutboundTypeOpenAIChat, Enabled: true,
+		BaseUrls: []model.BaseUrl{{URL: server.URL + "/v1"}}, Model: "options-model",
+		Keys: []model.ChannelKey{{Enabled: true, ChannelKey: "options-key"}}, ParamOverride: &channelOverride,
+		CustomHeader: []model.CustomHeader{{HeaderKey: "X-Shared", HeaderValue: "channel"}, {HeaderKey: "X-Delete", Delete: true}},
+	}
+	if err := op.ChannelCreate(channel, ctx); err != nil {
+		t.Fatal(err)
+	}
+	group := &model.Group{
+		Name: "relay-options-group", Mode: model.GroupModeFailover, ParamOverride: &groupOverride,
+		CustomHeader: []model.CustomHeader{{HeaderKey: "X-Shared", HeaderValue: "group"}, {HeaderKey: "X-Delete", HeaderValue: "group"}},
+	}
+	if err := op.GroupCreate(group, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := op.GroupItemAdd(&model.GroupItem{GroupID: group.ID, ChannelID: channel.ID, ModelName: "options-model", Priority: 1, Weight: 1}, ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"relay-options-group","messages":[{"role":"user","content":"hello"}],"temperature":1,"top_p":1}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	Handler(inbound.InboundTypeOpenAIChat, c)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(capturedBody, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["temperature"] != 0.2 || payload["presence_penalty"] != 0.1 {
+		t.Fatalf("unexpected overrides: %#v", payload)
+	}
+	if _, ok := payload["top_p"]; ok {
+		t.Fatalf("top_p should be deleted: %#v", payload)
+	}
+	if got := capturedHeader.Get("X-Shared"); got != "channel" {
+		t.Fatalf("X-Shared=%q", got)
+	}
+	if _, ok := capturedHeader["X-Delete"]; ok {
+		t.Fatalf("X-Delete should be removed: %#v", capturedHeader)
+	}
+}
+
+func TestHandlerDirectChannelModelRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx := setupRelayTestDB(t)
+	var upstreamModel string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		upstreamModel, _ = payload["model"].(string)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_direct","object":"chat.completion","created":1,"model":"direct-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer server.Close()
+	channel := &model.Channel{
+		Name: "direct-channel", Type: outbound.OutboundTypeOpenAIChat, Enabled: true,
+		BaseUrls: []model.BaseUrl{{URL: server.URL + "/v1"}}, Model: "direct-model",
+		Keys: []model.ChannelKey{{Enabled: true, ChannelKey: "direct-key"}},
+	}
+	if err := op.ChannelCreate(channel, ctx); err != nil { t.Fatal(err) }
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"direct-channel/direct-model","messages":[{"role":"user","content":"hello"}]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	Handler(inbound.InboundTypeOpenAIChat, c)
+	if recorder.Code != http.StatusOK { t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String()) }
+	if upstreamModel != "direct-model" { t.Fatalf("upstream model=%q", upstreamModel) }
+
+	blocked := httptest.NewRecorder()
+	blockedCtx, _ := gin.CreateTestContext(blocked)
+	blockedCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"direct-channel/direct-model","messages":[{"role":"user","content":"hello"}]}`))
+	blockedCtx.Request.Header.Set("Content-Type", "application/json")
+	blockedCtx.Set("supported_models", "allowed-group")
+	Handler(inbound.InboundTypeOpenAIChat, blockedCtx)
+	if blocked.Code != http.StatusBadRequest { t.Fatalf("restricted direct route status=%d, want 400", blocked.Code) }
+}
+
 func TestRelayMetricsUsesResponseModelForCostLookup(t *testing.T) {
 	metrics := NewRelayMetrics(0, "alias-model", nil, &transformerModel.InternalLLMRequest{Model: "alias-model"})
 	metrics.StartTime = time.Now()

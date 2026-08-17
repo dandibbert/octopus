@@ -28,7 +28,7 @@ func GroupPresetList(groupID int, ctx context.Context) ([]model.GroupPreset, err
 }
 
 // groupPresetSnapshotFromCache 从缓存中的 Group 取当前实时状态的快照
-func groupPresetSnapshotFromCache(groupID int) (mode model.GroupMode, matchRegex string, firstTokenTimeOut, sessionKeepTime, maxRetries int, retryEnabled bool, items []model.GroupPresetItem, err error) {
+func groupPresetSnapshotFromCache(groupID int) (mode model.GroupMode, matchRegex string, firstTokenTimeOut, sessionKeepTime, maxRetries int, retryEnabled bool, customHeader []model.CustomHeader, paramOverride *string, items []model.GroupPresetItem, err error) {
 	group, ok := groupCache.Get(groupID)
 	if !ok {
 		err = fmt.Errorf("group not found")
@@ -40,6 +40,8 @@ func groupPresetSnapshotFromCache(groupID int) (mode model.GroupMode, matchRegex
 	sessionKeepTime = group.SessionKeepTime
 	maxRetries = group.MaxRetries
 	retryEnabled = group.RetryEnabled
+	customHeader = append([]model.CustomHeader(nil), group.CustomHeader...)
+	paramOverride = group.ParamOverride
 	items = make([]model.GroupPresetItem, 0, len(group.Items))
 	for _, it := range group.Items {
 		items = append(items, model.GroupPresetItem{
@@ -61,7 +63,7 @@ func GroupPresetCreate(groupID int, name string, ctx context.Context) (*model.Gr
 	if name == "" {
 		return nil, fmt.Errorf("preset name required")
 	}
-	mode, matchRegex, fto, skt, mr, re, items, err := groupPresetSnapshotFromCache(groupID)
+	mode, matchRegex, fto, skt, mr, re, customHeader, paramOverride, items, err := groupPresetSnapshotFromCache(groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +76,8 @@ func GroupPresetCreate(groupID int, name string, ctx context.Context) (*model.Gr
 		SessionKeepTime:   skt,
 		RetryEnabled:      re,
 		MaxRetries:        mr,
+		CustomHeader:      customHeader,
+		ParamOverride:     paramOverride,
 		Items:             items,
 	}
 	if err := db.GetDB().WithContext(ctx).Create(&preset).Error; err != nil {
@@ -143,6 +147,8 @@ func GroupPresetClone(presetID int, newName string, ctx context.Context) (*model
 		SessionKeepTime:   source.SessionKeepTime,
 		RetryEnabled:      source.RetryEnabled,
 		MaxRetries:        source.MaxRetries,
+		CustomHeader:      append([]model.CustomHeader(nil), source.CustomHeader...),
+		ParamOverride:     source.ParamOverride,
 		Items:             items,
 	}
 	if err := db.GetDB().WithContext(ctx).Create(&clone).Error; err != nil {
@@ -204,6 +210,8 @@ func mirrorPresetToActiveGroupTx(tx *gorm.DB, preset *model.GroupPreset) (groupI
 			"session_keep_time":    preset.SessionKeepTime,
 			"retry_enabled":        preset.RetryEnabled,
 			"max_retries":          maxRetries,
+			"custom_header":        preset.CustomHeader,
+			"param_override":       preset.ParamOverride,
 		}).Error; err != nil {
 		return group.ID, ids, fmt.Errorf("failed to mirror preset to group: %w", err)
 	}
@@ -281,6 +289,8 @@ func syncActivePresetTx(tx *gorm.DB, groupID int) error {
 	preset.SessionKeepTime = group.SessionKeepTime
 	preset.RetryEnabled = group.RetryEnabled
 	preset.MaxRetries = group.MaxRetries
+	preset.CustomHeader = append([]model.CustomHeader(nil), group.CustomHeader...)
+	preset.ParamOverride = group.ParamOverride
 	preset.Items = presetItems
 
 	if err := tx.Save(&preset).Error; err != nil {
@@ -324,6 +334,12 @@ func GroupPresetUpdate(presetID int, req *model.GroupPresetUpdateRequest, ctx co
 				v = 3
 			}
 			preset.MaxRetries = v
+		}
+		if req.CustomHeader != nil {
+			preset.CustomHeader = append([]model.CustomHeader(nil), (*req.CustomHeader)...)
+		}
+		if req.ParamOverride != nil {
+			preset.ParamOverride = req.ParamOverride
 		}
 		if req.Items != nil {
 			preset.Items = *req.Items
@@ -459,6 +475,8 @@ func GroupPresetActivate(presetID int, ctx context.Context) error {
 			"session_keep_time":    preset.SessionKeepTime,
 			"retry_enabled":        preset.RetryEnabled,
 			"max_retries":          maxRetries,
+			"custom_header":        preset.CustomHeader,
+			"param_override":       preset.ParamOverride,
 			"active_preset_id":     preset.ID,
 		}).Error; err != nil {
 		tx.Rollback()

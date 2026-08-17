@@ -61,6 +61,8 @@ function EditDialogContent({ group, displayMembers, isSubmitting, onSubmit }: Ed
                         session_keep_time: group.session_keep_time ?? 0,
                         retry_enabled: group.retry_enabled ?? false,
                         max_retries: group.max_retries ?? 3,
+                        custom_header: group.custom_header ?? [],
+                        param_override: group.param_override ?? '',
                         members: displayMembers,
                     }}
                     submitText={t('detail.actions.save')}
@@ -328,6 +330,8 @@ export function GroupCard({ group }: { group: Group }) {
         if (nextSessionKeepTime !== (group.session_keep_time ?? 0)) payload.session_keep_time = nextSessionKeepTime;
         if (values.retry_enabled !== (group.retry_enabled ?? false)) payload.retry_enabled = values.retry_enabled;
         if (values.max_retries !== (group.max_retries ?? 3)) payload.max_retries = values.max_retries;
+        if (JSON.stringify(values.custom_header) !== JSON.stringify(group.custom_header ?? [])) payload.custom_header = values.custom_header;
+        if (values.param_override !== (group.param_override ?? '')) payload.param_override = values.param_override;
         if (items_to_add.length) payload.items_to_add = items_to_add;
         if (items_to_update.length) payload.items_to_update = items_to_update;
         if (items_to_delete.length) payload.items_to_delete = items_to_delete;
@@ -344,7 +348,7 @@ export function GroupCard({ group }: { group: Group }) {
             },
             onError,
         });
-    }, [group.first_token_time_out, group.session_keep_time, group.retry_enabled, group.max_retries, group.id, group.items, group.match_regex, group.mode, group.name, onSuccess, onError, updateGroup]);
+    }, [group.first_token_time_out, group.session_keep_time, group.retry_enabled, group.max_retries, group.custom_header, group.param_override, group.id, group.items, group.match_regex, group.mode, group.name, onSuccess, onError, updateGroup]);
 
     return (
         <article className="group/card relative flex flex-col rounded-3xl border border-border bg-card p-4 text-card-foreground custom-shadow">

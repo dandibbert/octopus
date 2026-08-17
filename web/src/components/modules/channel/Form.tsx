@@ -655,8 +655,16 @@ export function ChannelForm({
                                             value={h.header_value}
                                             onChange={(e) => handleUpdateHeader(idx, { header_value: e.target.value })}
                                             placeholder={t('customHeaderValue')}
+                                            disabled={h.delete === true}
                                             className="min-w-0 rounded-xl md:flex-1"
                                         />
+                                        <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                                            <Switch
+                                                checked={h.delete === true}
+                                                onCheckedChange={(checked) => handleUpdateHeader(idx, { delete: checked })}
+                                            />
+                                            {t('customHeaderDelete')}
+                                        </label>
                                         <Button
                                             type="button"
                                             variant="ghost"

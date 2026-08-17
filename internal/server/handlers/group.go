@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/bestruirui/octopus/internal/apperror"
 	"github.com/bestruirui/octopus/internal/model"
@@ -14,6 +17,17 @@ import (
 	"github.com/dlclark/regexp2"
 	"github.com/gin-gonic/gin"
 )
+
+func validateGroupParamOverride(raw *string) error {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil
+	}
+	var value map[string]any
+	if err := json.Unmarshal([]byte(*raw), &value); err != nil {
+		return fmt.Errorf("param_override must be a valid JSON object")
+	}
+	return nil
+}
 
 func init() {
 	router.NewGroupRouter("/api/v1/group").
@@ -59,6 +73,10 @@ func createGroup(c *gin.Context) {
 			return
 		}
 	}
+	if err := validateGroupParamOverride(group.ParamOverride); err != nil {
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := op.GroupCreate(&group, c.Request.Context()); err != nil {
 		if errors.Is(err, op.ErrInvalidGroupBilling) {
 			resp.Error(c, http.StatusBadRequest, err.Error())
@@ -82,6 +100,10 @@ func updateGroup(c *gin.Context) {
 			resp.ErrorWithAppError(c, http.StatusBadRequest, apperror.New(apperror.CodeCommonValidationFailed, err.Error()).WithStatus(http.StatusBadRequest))
 			return
 		}
+	}
+	if err := validateGroupParamOverride(req.ParamOverride); err != nil {
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
 	}
 	group, err := op.GroupUpdate(&req, c.Request.Context())
 	if err != nil {

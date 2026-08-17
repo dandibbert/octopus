@@ -93,6 +93,8 @@ type relayRequest struct {
 	requestModel        string
 	groupID             int
 	groupSessionTTL     int
+	groupCustomHeader   []dbmodel.CustomHeader
+	groupParamOverride  *string
 	requireKnownBilling bool
 	directExecution     bool // 后台 Direct Channel：复用转换与转发，但隔离生产路由状态
 	iter                *balancer.Iterator

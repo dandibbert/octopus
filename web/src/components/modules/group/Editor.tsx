@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
-import { Check, ChevronDownIcon, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { Check, ChevronDownIcon, Plus, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { useModelChannelList, type LLMChannel } from '@/api/endpoints/model';
@@ -13,6 +13,7 @@ import { Accordion, AccordionContent, AccordionItem } from '@/components/ui/acco
 import { cn } from '@/lib/utils';
 import { getModelIcon } from '@/lib/model-icons';
 import type { GroupMode } from '@/api/endpoints/group';
+import type { CustomHeader } from '@/api/endpoints/channel';
 import type { MemberBillingPatch, SelectedMember } from './ItemList';
 import { MemberList } from './ItemList';
 import { matchesGroupName, memberKey, normalizeKey, MODE_LABELS } from './utils';
@@ -29,6 +30,8 @@ export type GroupEditorValues = {
     session_keep_time: number;
     retry_enabled: boolean;
     max_retries: number;
+    custom_header: CustomHeader[];
+    param_override: string;
     members: SelectedMember[];
 };
 
@@ -281,6 +284,8 @@ export function GroupEditor({
     const [sessionKeepTime, setSessionKeepTime] = useState<number>(initial?.session_keep_time ?? 0);
     const [retryEnabled, setRetryEnabled] = useState<boolean>(initial?.retry_enabled ?? false);
     const [maxRetries, setMaxRetries] = useState<number>(initial?.max_retries ?? 3);
+    const [customHeader, setCustomHeader] = useState<CustomHeader[]>(initial?.custom_header ?? []);
+    const [paramOverride, setParamOverride] = useState<string>(initial?.param_override ?? '');
     const [selectedMembers, setSelectedMembers] = useState<SelectedMember[]>(initial?.members ?? []);
     const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
 
@@ -370,9 +375,21 @@ export function GroupEditor({
         (member.billing_basis === 'requested' || member.billing_basis === 'fixed_sku')
         && !member.billing_class_id?.trim(),
     );
+    const paramOverrideError = useMemo(() => {
+        const raw = paramOverride.trim();
+        if (!raw) return '';
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') return t('form.paramOverrideInvalid');
+            return '';
+        } catch {
+            return t('form.paramOverrideInvalid');
+        }
+    }, [paramOverride, t]);
     const isValid = groupKey.length > 0
         && selectedMembers.length > 0
         && !regexError
+        && !paramOverrideError
         && invalidBillingMembers.length === 0;
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -386,6 +403,10 @@ export function GroupEditor({
             session_keep_time: sessionKeepTime,
             retry_enabled: retryEnabled,
             max_retries: maxRetries,
+            custom_header: customHeader
+                .map((header) => ({ ...header, header_key: header.header_key.trim() }))
+                .filter((header) => header.header_key.length > 0),
+            param_override: paramOverride.trim(),
             members: selectedMembers,
         });
     };
@@ -552,6 +573,87 @@ export function GroupEditor({
                             </TooltipProvider>
                         )}
                     </div>
+
+                    <details className="shrink-0 rounded-xl border border-border/50 bg-muted/20">
+                        <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-foreground">
+                            {t('form.requestOptions')}
+                        </summary>
+                        <div className="space-y-4 border-t border-border/40 p-3">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                        <div className="text-sm font-medium">{t('form.customHeader')}</div>
+                                        <div className="text-xs text-muted-foreground">{t('form.customHeaderHint')}</div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="rounded-lg"
+                                        onClick={() => setCustomHeader((current) => [...current, { header_key: '', header_value: '' }])}
+                                    >
+                                        <Plus className="mr-1 size-3.5" />
+                                        {t('form.customHeaderAdd')}
+                                    </Button>
+                                </div>
+                                <div className="space-y-2">
+                                    {customHeader.length === 0 && (
+                                        <div className="rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                                            {t('form.customHeaderEmpty')}
+                                        </div>
+                                    )}
+                                    {customHeader.map((header, index) => (
+                                        <div key={`group-header-${index}`} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-center gap-2">
+                                            <Input
+                                                value={header.header_key}
+                                                onChange={(event) => setCustomHeader((current) => current.map((item, i) => i === index ? { ...item, header_key: event.target.value } : item))}
+                                                placeholder={t('form.customHeaderKey')}
+                                                className="rounded-lg"
+                                            />
+                                            <Input
+                                                value={header.header_value}
+                                                disabled={header.delete === true}
+                                                onChange={(event) => setCustomHeader((current) => current.map((item, i) => i === index ? { ...item, header_value: event.target.value } : item))}
+                                                placeholder={header.delete ? t('form.customHeaderDeleteValue') : t('form.customHeaderValue')}
+                                                className="rounded-lg disabled:opacity-50"
+                                            />
+                                            <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                                                <Switch
+                                                    checked={header.delete === true}
+                                                    onCheckedChange={(checked) => setCustomHeader((current) => current.map((item, i) => i === index ? { ...item, delete: checked } : item))}
+                                                />
+                                                {t('form.customHeaderDelete')}
+                                            </label>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-9 rounded-lg text-muted-foreground hover:text-destructive"
+                                                onClick={() => setCustomHeader((current) => current.filter((_, i) => i !== index))}
+                                                aria-label={t('form.customHeaderRemove')}
+                                            >
+                                                <X className="size-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div>
+                                    <div className="text-sm font-medium">{t('form.paramOverride')}</div>
+                                    <div className="text-xs text-muted-foreground">{t('form.paramOverrideHint')}</div>
+                                </div>
+                                <textarea
+                                    value={paramOverride}
+                                    onChange={(event) => setParamOverride(event.target.value)}
+                                    placeholder={t('form.paramOverridePlaceholder')}
+                                    className="min-h-28 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                                {paramOverrideError && <p className="text-xs text-destructive">{paramOverrideError}</p>}
+                            </div>
+                        </div>
+                    </details>
 
                     <div className="shrink-0 md:min-h-0 md:flex-1">
                         <div className="grid min-h-0 grid-cols-1 gap-4 md:h-full md:grid-cols-2">

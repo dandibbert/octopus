@@ -5,12 +5,57 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/bestruirui/octopus/internal/client"
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/utils/log"
 )
+
+// MergeCustomHeaders merges header rules left-to-right, case-insensitively.
+// Later scopes replace earlier rules while preserving the later key spelling.
+func MergeCustomHeaders(scopes ...[]model.CustomHeader) []model.CustomHeader {
+	merged := make([]model.CustomHeader, 0)
+	indexByKey := make(map[string]int)
+	for _, scope := range scopes {
+		for _, header := range scope {
+			key := strings.TrimSpace(header.HeaderKey)
+			if key == "" {
+				continue
+			}
+			header.HeaderKey = key
+			normalized := strings.ToLower(key)
+			if index, ok := indexByKey[normalized]; ok {
+				merged[index] = header
+				continue
+			}
+			indexByKey[normalized] = len(merged)
+			merged = append(merged, header)
+		}
+	}
+	return merged
+}
+
+// ApplyCustomHeaders applies set/delete header rules after protocol authentication
+// has been configured. Empty string is a valid set value; Delete=true removes the
+// header entirely, which is intentionally distinct from setting it to an empty value.
+func ApplyCustomHeaders(headers http.Header, customHeaders []model.CustomHeader) {
+	if headers == nil {
+		return
+	}
+	for _, header := range customHeaders {
+		key := strings.TrimSpace(header.HeaderKey)
+		if key == "" {
+			continue
+		}
+		if header.Delete {
+			headers.Del(key)
+			continue
+		}
+		headers.Set(key, header.HeaderValue)
+	}
+}
 
 func ChannelHttpClient(channel *model.Channel) (*http.Client, error) {
 	return ChannelHTTPClientWithContext(context.Background(), channel)

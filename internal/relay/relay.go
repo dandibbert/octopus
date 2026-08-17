@@ -63,6 +63,7 @@ func writeSSEHeartbeat(writer streamHeartbeatWriter) error {
 const (
 	executionGroupOverrideKey = "octopus_execution_group_override"
 	executionDirectKey        = "octopus_execution_direct"
+	executionPreferredKeyKey  = "octopus_execution_preferred_key_id"
 	executionErrorKey         = "octopus_execution_error"
 	executionAttemptsKey      = "octopus_execution_attempts"
 )
@@ -81,6 +82,12 @@ func ExecuteDirectWithGroup(inboundType inbound.InboundType, c *gin.Context, gro
 	c.Set(executionGroupOverrideKey, group)
 	c.Set(executionDirectKey, true)
 	Handler(inboundType, c)
+}
+
+func SetExecutionPreferredKey(c *gin.Context, keyID int) {
+	if c != nil && keyID > 0 {
+		c.Set(executionPreferredKeyKey, keyID)
+	}
 }
 
 // ExecutionError returns the detailed internal execution error captured for an
@@ -135,7 +142,7 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 			return
 		}
 	} else {
-		group, err = op.GroupGetEnabledMap(requestModel, c.Request.Context())
+		group, err = op.ResolveEnabledGroupOrDirect(requestModel, supportedModels, c.Request.Context())
 		if err != nil {
 			resp.ErrorWithCode(c, http.StatusNotFound, CodeRelayModelNotFound, "model not found")
 			return
@@ -223,6 +230,8 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		requestModel:        requestModel,
 		groupID:             group.ID,
 		groupSessionTTL:     group.SessionKeepTime,
+		groupCustomHeader:   append([]dbmodel.CustomHeader(nil), group.CustomHeader...),
+		groupParamOverride:  group.ParamOverride,
 		requireKnownBilling: c.GetBool("billing_require_known"),
 		directExecution:     directExecution,
 		iter:                iter,
@@ -312,6 +321,11 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		selectOpts := dbmodel.ChannelKeySelectOptions{
 			ExcludeKeyIDs:  make(map[int]struct{}),
 			PreferredKeyID: iter.StickyKeyID(),
+		}
+		if directExecution {
+			if preferredKeyID := c.GetInt(executionPreferredKeyKey); preferredKeyID > 0 {
+				selectOpts.PreferredKeyID = preferredKeyID
+			}
 		}
 		var usedKey dbmodel.ChannelKey
 		for {
@@ -669,6 +683,22 @@ func (ra *relayAttempt) forwardViaWS(ctx context.Context) (int, error) {
 		wsUpstreamPool.Put(pc)
 		return -1, nil // fall through to HTTP
 	}
+	wsRequest := &http.Request{
+		Header: http.Header{"Content-Type": []string{"application/json"}},
+		Body:   io.NopCloser(bytes.NewReader(reqBody)),
+	}
+	if err := helper.ApplyParamOverrides(wsRequest, ra.groupParamOverride, ra.channel.ParamOverride); err != nil {
+		wsUpstreamPool.Put(pc)
+		return 0, err
+	}
+	if wsRequest.Body != nil {
+		if overriddenBody, readErr := io.ReadAll(wsRequest.Body); readErr == nil {
+			reqBody = overriddenBody
+		} else {
+			wsUpstreamPool.Put(pc)
+			return 0, readErr
+		}
+	}
 	ra.metrics.SetTransportRequestPayload(reqBody, ra.internalRequest.Model)
 
 	// Send response.create message
@@ -792,10 +822,19 @@ func isContinuationTransportFailure(err error) bool {
 }
 
 func (ra *relayAttempt) clientRequestHeaders() http.Header {
-	if ra == nil || ra.c == nil || ra.c.Request == nil {
+	if ra == nil {
 		return nil
 	}
-	return ra.c.Request.Header
+	headers := make(http.Header)
+	if ra.c != nil && ra.c.Request != nil && ra.c.Request.Header != nil {
+		headers = ra.c.Request.Header.Clone()
+	}
+	var channelHeaders []dbmodel.CustomHeader
+	if ra.channel != nil {
+		channelHeaders = ra.channel.CustomHeader
+	}
+	helper.ApplyCustomHeaders(headers, helper.MergeCustomHeaders(ra.groupCustomHeader, channelHeaders))
+	return headers
 }
 
 func (ra *relayAttempt) handleWSStreamResponseV2(ctx context.Context, reader *wsUpstreamReader) error {
@@ -1051,9 +1090,9 @@ func (ra *relayAttempt) getStreamWriter() StreamWriter {
 	return ra.c.Writer
 }
 
-// applyParamOverride merges channel-level JSON request overrides and records the final upstream payload.
+// applyParamOverride merges group->channel JSON request overrides and records the final upstream payload.
 func (ra *relayAttempt) applyParamOverride(outboundRequest *http.Request) error {
-	if err := helper.ApplyParamOverride(outboundRequest, ra.channel.ParamOverride); err != nil {
+	if err := helper.ApplyParamOverrides(outboundRequest, ra.groupParamOverride, ra.channel.ParamOverride); err != nil {
 		return err
 	}
 	if requestBody, readErr := readOutboundRequestBody(outboundRequest); readErr == nil {
@@ -1090,11 +1129,7 @@ func (ra *relayAttempt) copyHeaders(outboundRequest *http.Request) {
 	if outboundRequest.Header.Get("User-Agent") == "" {
 		outboundRequest.Header.Set("User-Agent", "")
 	}
-	if len(ra.channel.CustomHeader) > 0 {
-		for _, header := range ra.channel.CustomHeader {
-			outboundRequest.Header.Set(header.HeaderKey, header.HeaderValue)
-		}
-	}
+	helper.ApplyCustomHeaders(outboundRequest.Header, helper.MergeCustomHeaders(ra.groupCustomHeader, ra.channel.CustomHeader))
 }
 
 // mergeBetaHeader 合并两个逗号分隔的 anthropic-beta 字段值，去重并保留先后顺序。

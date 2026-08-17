@@ -9,10 +9,13 @@ import (
 	"strings"
 )
 
-// ApplyParamOverride merges a JSON-object override into an outbound JSON request body.
-// Empty overrides, nil bodies, and non-object request bodies are ignored.
-func ApplyParamOverride(request *http.Request, paramOverride *string) error {
-	if request == nil || request.Body == nil || paramOverride == nil || strings.TrimSpace(*paramOverride) == "" {
+// ApplyParamOverrides merges JSON-object overrides into an outbound JSON request body.
+// Overrides are applied left-to-right, so later scopes win. JSON null means delete the
+// final request field, but remains an ordinary merge value until the final application;
+// this lets a later scope restore a value deleted by an earlier scope.
+// Empty/invalid overrides, nil bodies, and non-object request bodies are ignored.
+func ApplyParamOverrides(request *http.Request, paramOverrides ...*string) error {
+	if request == nil || request.Body == nil || len(paramOverrides) == 0 {
 		return nil
 	}
 
@@ -35,13 +38,31 @@ func ApplyParamOverride(request *http.Request, paramOverride *string) error {
 		return nil
 	}
 
-	var override map[string]any
-	if err := json.Unmarshal([]byte(*paramOverride), &override); err != nil {
+	merged := make(map[string]any)
+	configured := false
+	for _, raw := range paramOverrides {
+		if raw == nil || strings.TrimSpace(*raw) == "" {
+			continue
+		}
+		var override map[string]any
+		if err := json.Unmarshal([]byte(*raw), &override); err != nil {
+			continue
+		}
+		for key, value := range override {
+			merged[key] = value
+		}
+		configured = true
+	}
+	if !configured {
 		restoreBody()
 		return nil
 	}
 
-	for key, value := range override {
+	for key, value := range merged {
+		if value == nil {
+			delete(bodyMap, key)
+			continue
+		}
 		bodyMap[key] = value
 	}
 
@@ -56,4 +77,9 @@ func ApplyParamOverride(request *http.Request, paramOverride *string) error {
 		return io.NopCloser(bytes.NewReader(modifiedBody)), nil
 	}
 	return nil
+}
+
+// ApplyParamOverride keeps the legacy single-scope API for callers outside relay.
+func ApplyParamOverride(request *http.Request, paramOverride *string) error {
+	return ApplyParamOverrides(request, paramOverride)
 }

@@ -157,6 +157,10 @@ func updateGroupPreset(c *gin.Context) {
 			return
 		}
 	}
+	if err := validateGroupParamOverride(req.ParamOverride); err != nil {
+		resp.ErrorWithAppError(c, http.StatusBadRequest, apperror.New(apperror.CodeCommonValidationFailed, err.Error()).WithStatus(http.StatusBadRequest))
+		return
+	}
 	preset, err := op.GroupPresetUpdate(id, &req, c.Request.Context())
 	if err != nil {
 		resp.ErrorWithAppError(c, http.StatusInternalServerError, groupError(codeGroupPresetUpdateFailed, "group preset update failed", err))

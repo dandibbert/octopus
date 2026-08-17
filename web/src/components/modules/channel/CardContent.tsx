@@ -129,8 +129,8 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
 
         if (!headersEqual(formData.custom_header, channel.custom_header)) {
             req.custom_header = (formData.custom_header ?? [])
-                .map((h) => ({ header_key: h.header_key.trim(), header_value: h.header_value }))
-                .filter((h) => h.header_key && h.header_value !== '');
+                .map((h) => ({ header_key: h.header_key.trim(), header_value: h.header_value, delete: h.delete === true }))
+                .filter((h) => h.header_key);
         }
 
 
