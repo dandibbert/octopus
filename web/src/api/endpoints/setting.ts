@@ -25,6 +25,7 @@ export const SettingKey = {
     CircuitBreakerThreshold: 'circuit_breaker_threshold',
     CircuitBreakerCooldown: 'circuit_breaker_cooldown',
     CircuitBreakerMaxCooldown: 'circuit_breaker_max_cooldown',
+    CircuitBreakerEnabled: 'circuit_breaker_enabled',
     ResponsesWSEnabled: 'responses_ws_enabled',
     ResponsesWSDefaultMode: 'responses_ws_default_mode',
     SSEHeartbeatInterval: 'sse_heartbeat_interval',
@@ -50,6 +51,33 @@ export const SettingKey = {
     WebDAVRetentionCount: 'webdav_retention_count',
     WebDAVIncludeStats: 'webdav_include_stats',
 } as const;
+
+export interface CircuitBreakerStatus {
+    channel_id: number;
+    channel_name: string;
+    key_id: number;
+    model_name: string;
+    state: 'open' | 'half_open';
+    consecutive_failures: number;
+    trip_count: number;
+    remaining_cooldown: number;
+}
+
+export function useCircuitBreakerStatus() {
+    return useQuery({
+        queryKey: ['circuit', 'status'],
+        queryFn: () => apiClient.get<CircuitBreakerStatus[]>('/api/v1/circuit/status'),
+        refetchInterval: 15000,
+    });
+}
+
+export function useResetCircuitBreaker() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: () => apiClient.post<null>('/api/v1/circuit/reset', {}),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['circuit', 'status'] }),
+    });
+}
 
 /**
  * 获取 Setting 列表 Hook

@@ -86,3 +86,31 @@ func TestHalfOpenDoesNotRemainTrippedForeverWithoutResult(t *testing.T) {
 		t.Fatalf("expected half-open timestamp to be cleared, got %v", entry.HalfOpenSince)
 	}
 }
+
+func TestListTrippedAndResetAll(t *testing.T) {
+	Reset()
+	globalBreaker.Store(circuitKey(7, 8, "gpt-4o"), &circuitEntry{
+		State:               StateOpen,
+		ConsecutiveFailures: 5,
+		LastFailureTime:     time.Now(),
+		TripCount:           2,
+	})
+	globalBreaker.Store(circuitKey(9, 10, "closed"), &circuitEntry{State: StateClosed})
+
+	statuses := ListTripped()
+	if len(statuses) != 1 {
+		t.Fatalf("ListTripped() returned %d entries, want 1: %#v", len(statuses), statuses)
+	}
+	got := statuses[0]
+	if got.ChannelID != 7 || got.KeyID != 8 || got.ModelName != "gpt-4o" || got.State != "open" {
+		t.Fatalf("unexpected circuit status: %#v", got)
+	}
+	if got.TripCount != 2 || got.ConsecutiveFailures != 5 || got.RemainingCooldown <= 0 {
+		t.Fatalf("unexpected circuit counters: %#v", got)
+	}
+
+	ResetAll()
+	if statuses := ListTripped(); len(statuses) != 0 {
+		t.Fatalf("ResetAll() left active breakers: %#v", statuses)
+	}
+}
