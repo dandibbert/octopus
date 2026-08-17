@@ -141,7 +141,7 @@ func processWSResponseCreate(
 	rewriteWSPreviousResponseID(reqBody, conversationState)
 	preferredSticky := wsConversationStateToSticky(conversationState)
 	if preferredSticky == nil && requestedPreviousResponseID != "" {
-		if group, err := op.GroupGetEnabledMap(requestModel, ctx); err == nil {
+		if group, err := op.ResolveEnabledGroupOrDirect(requestModel, "", ctx); err == nil {
 			scope := wsAffinityScope{APIKeyID: apiKeyID, GroupID: group.ID, RequestModel: requestModel, ResponseID: requestedPreviousResponseID}
 			if entry, ok := getWSAffinityStore().Get(ctx, scope); ok {
 				preferredSticky = &balancer.SessionEntry{ChannelID: entry.ChannelID, ChannelKeyID: entry.ChannelKeyID, Timestamp: time.Now()}
@@ -222,7 +222,7 @@ func processWSResponseCreate(
 	}
 
 	requestModel = executionRequest.Model
-	req, group, err := newWSRelayRequest(ctx, conn, inAdapter, apiKeyID, requestModel, cloneInternalRequest(executionRequest), originalRequest, preferredSticky, bodyBytes)
+	req, group, err := newWSRelayRequest(ctx, conn, inAdapter, apiKeyID, requestModel, supportedModels, cloneInternalRequest(executionRequest), originalRequest, preferredSticky, bodyBytes)
 	if err != nil {
 		status := 404
 		code := "model_not_found"
@@ -256,7 +256,7 @@ func processWSResponseCreate(
 			apiKeyID, requestModel, failedPreviousResponseID, result.ResetConversation)
 		balancer.DeleteSticky(apiKeyID, requestModel)
 		replayedRequest := conversationState.BuildReplayRequest(originalRequest)
-		replayReq, replayGroup, replayErr := newWSRelayRequest(ctx, conn, inAdapter, apiKeyID, requestModel, replayedRequest, originalRequest, preferredSticky, bodyBytes)
+		replayReq, replayGroup, replayErr := newWSRelayRequest(ctx, conn, inAdapter, apiKeyID, requestModel, supportedModels, replayedRequest, originalRequest, preferredSticky, bodyBytes)
 		if replayErr == nil {
 			replayReq.metrics.SetWSMode(dbmodel.RelayLogWSModeReplay)
 			replayReq.metrics.SetWSRecovery(dbmodel.RelayLogWSRecoveryReplay)
@@ -323,7 +323,7 @@ func bestEffortWarmupUpstreamWS(
 		}
 	}
 
-	group, err := op.GroupGetEnabledMap(requestModel, ctx)
+	group, err := op.ResolveEnabledGroupOrDirect(requestModel, supportedModels, ctx)
 	if err != nil {
 		return fmt.Errorf("model not found")
 	}
@@ -412,12 +412,13 @@ func newWSRelayRequest(
 	inAdapter transformerModel.Inbound,
 	apiKeyID int,
 	requestModel string,
+	supportedModels string,
 	executionRequest *transformerModel.InternalLLMRequest,
 	metricsRequest *transformerModel.InternalLLMRequest,
 	preferredSticky *balancer.SessionEntry,
 	rawBody []byte,
 ) (*relayRequest, *dbmodel.Group, error) {
-	group, err := op.GroupGetEnabledMap(requestModel, ctx)
+	group, err := op.ResolveEnabledGroupOrDirect(requestModel, supportedModels, ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("model not found")
 	}
@@ -442,6 +443,8 @@ func newWSRelayRequest(
 		requestModel:        requestModel,
 		groupID:             group.ID,
 		groupSessionTTL:     group.SessionKeepTime,
+		groupCustomHeader:   append([]dbmodel.CustomHeader(nil), group.CustomHeader...),
+		groupParamOverride:  group.ParamOverride,
 		requireKnownBilling: requireKnownBilling,
 		iter:                iter,
 		streamWriter:        NewWSStreamWriter(ctx, conn),

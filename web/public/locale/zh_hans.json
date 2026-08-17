@@ -16,7 +16,13 @@
     "button": {
       "loading": "登录中...",
       "submit": "登录"
-    }
+    },
+    "totpPlaceholder": "6 位验证码（如已启用）",
+    "totpHint": "未启用两步验证时留空即可。",
+    "totp": "身份验证器验证码",
+    "totpRequired": "请输入 6 位身份验证器验证码后再继续。",
+    "totpPlaceholderRequired": "6 位身份验证器验证码",
+    "totpHintRequired": "已启用两步验证，请输入当前 6 位验证码。"
   },
   "apiKeyDashboard": {
     "error": "加载数据失败",
@@ -262,7 +268,24 @@
         "label": "最大冷却时间（秒）",
         "placeholder": "请输入最大冷却时间"
       },
-      "hint": "当渠道连续失败达到阈值后触发熔断，冷却时间按指数退避增长，上限为最大冷却时间"
+      "hint": "当渠道连续失败达到阈值后触发熔断，冷却时间按指数退避增长，上限为最大冷却时间",
+      "enabled": {
+        "label": "启用熔断器",
+        "description": "关闭后不会新建、命中或更新熔断状态；现有状态会保留，重新开启后继续生效。"
+      },
+      "status": {
+        "title": "当前熔断状态",
+        "empty": "当前没有处于熔断或半开状态的模型线路",
+        "count": "当前有 {count} 条线路处于熔断或半开状态",
+        "reset": "全部重置",
+        "resetSuccess": "熔断状态已重置",
+        "resetFailed": "重置熔断状态失败",
+        "open": "熔断中",
+        "half_open": "半开探测",
+        "tripCount": "已触发 {count} 次",
+        "remaining": "{seconds}s 后探测",
+        "probing": "可探测"
+      }
     },
     "outlierRetirement": {
       "title": "被动离群退役",
@@ -420,6 +443,22 @@
         "change": "修改密码",
         "success": "密码修改成功",
         "failed": "密码修改失败"
+      },
+      "twoFactor": {
+        "label": "两步验证",
+        "enabled": "已启用",
+        "disabled": "未启用",
+        "setup": "绑定身份验证器",
+        "setupFailed": "启动两步验证绑定失败",
+        "scanHint": "使用身份验证器 App 扫描二维码，或手动输入下方密钥，然后输入当前 6 位验证码确认启用。",
+        "qrAlt": "TOTP 绑定二维码",
+        "codePlaceholder": "6 位验证码",
+        "enable": "启用",
+        "enableSuccess": "两步验证已启用",
+        "enableFailed": "启用两步验证失败",
+        "disable": "关闭",
+        "disableSuccess": "两步验证已关闭",
+        "disableFailed": "关闭两步验证失败"
       }
     },
     "info": {
@@ -745,7 +784,21 @@
       "unknownUseRouted": "改用路由模型价格",
       "unknownUseActual": "改用实际模型价格",
       "billingAdvancedHint": "普通情况保持“跟随渠道”即可。只有你要把这个模型当作单独产品或套餐计费时，才需要填写 SKU。",
-      "billingValidationError": "有 {count} 个模型选择了需要 SKU 的计费方式，但尚未填写 SKU。"
+      "billingValidationError": "有 {count} 个模型选择了需要 SKU 的计费方式，但尚未填写 SKU。",
+      "paramOverridePlaceholder": "例如：{\"temperature\":0.2,\"top_p\":null}",
+      "requestOptions": "请求覆盖",
+      "paramOverrideInvalid": "请求参数覆盖必须是合法的 JSON 对象。",
+      "customHeaderEmpty": "当前没有分组级 Header 规则。",
+      "customHeader": "自定义 Header",
+      "paramOverrideHint": "填写 JSON 对象。分组先应用、渠道后覆盖；值为 null 表示从最终请求中删除该字段。",
+      "customHeaderAdd": "添加 Header",
+      "paramOverride": "请求参数覆盖",
+      "customHeaderHint": "分组 Header 先应用，渠道 Header 后应用并覆盖同名项；删除与设置为空值是两种不同操作。",
+      "customHeaderKey": "Header 名称",
+      "customHeaderValue": "Header 值",
+      "customHeaderDelete": "删除",
+      "customHeaderDeleteValue": "将删除该 Header",
+      "customHeaderRemove": "移除此规则"
     },
     "mode": {
       "roundRobin": "轮询",
@@ -1121,7 +1174,13 @@
       "restore_auto_name": "恢复自动名称",
       "cancel": "取消",
       "create": "创建",
-      "creating": "创建中…"
+      "creating": "创建中…",
+      "test_all": "全部测活",
+      "test_key": "测试 Key",
+      "testing_all": "全部测试中…",
+      "test_key_auto": "自动选择 Key",
+      "test_timeout": "测试超时",
+      "test_all_summary": "{available} 个可用，{unavailable} 个不可用"
     },
     "tabs": {
       "site": "站点渠道",
@@ -1259,7 +1318,8 @@
       "wsModeOff": "关闭",
       "matchRegex": "匹配正则",
       "matchRegexPlaceholder": "可选：用于匹配请求模型名称的正则表达式",
-      "remark": "备注"
+      "remark": "备注",
+      "customHeaderDelete": "删除"
     }
   },
   "siteChannel": {

@@ -680,6 +680,80 @@ func ChannelGetByName(name string, ctx context.Context) (*model.Channel, error) 
 	return &channel, nil
 }
 
+func ChannelSupportsModel(channel *model.Channel, modelName string) bool {
+	if channel == nil || modelName == "" {
+		return false
+	}
+	for _, raw := range []string{channel.Model, channel.CustomModel} {
+		for _, candidate := range strings.Split(raw, ",") {
+			if strings.TrimSpace(candidate) == modelName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func channelByNameFromCache(name string) (*model.Channel, bool) {
+	for _, cached := range channelCache.GetAll() {
+		if cached.Name != name {
+			continue
+		}
+		channel := cached
+		normalizeChannelProxyFields(&channel)
+		return &channel, true
+	}
+	return nil, false
+}
+
+// ResolveDirectChannelGroup maps "channelName/modelName" onto a temporary
+// failover group. Restricted API keys (supported_models set) cannot use this
+// escape hatch — they must go through a real group name.
+func ResolveDirectChannelGroup(requestModel, supportedModels string, ctx context.Context) (model.Group, bool) {
+	if strings.TrimSpace(supportedModels) != "" {
+		return model.Group{}, false
+	}
+	channelName, remoteModel, ok := strings.Cut(requestModel, "/")
+	if !ok || channelName == "" || remoteModel == "" {
+		return model.Group{}, false
+	}
+	channel, found := channelByNameFromCache(channelName)
+	if !found {
+		var err error
+		channel, err = ChannelGetByName(channelName, ctx)
+		if err != nil || channel == nil {
+			return model.Group{}, false
+		}
+	}
+	if !channel.Enabled || !ChannelSupportsModel(channel, remoteModel) {
+		return model.Group{}, false
+	}
+	return model.Group{
+		ID:   -channel.ID,
+		Name: requestModel,
+		Mode: model.GroupModeFailover,
+		Items: []model.GroupItem{{
+			ChannelID: channel.ID,
+			ModelName: remoteModel,
+			Priority:  1,
+			Weight:    1,
+		}},
+	}, true
+}
+
+// ResolveEnabledGroupOrDirect looks up a real group first, then falls back to
+// the channel/model direct route used by playground and ad-hoc clients.
+func ResolveEnabledGroupOrDirect(requestModel, supportedModels string, ctx context.Context) (model.Group, error) {
+	group, err := GroupGetEnabledMap(requestModel, ctx)
+	if err == nil {
+		return group, nil
+	}
+	if group, ok := ResolveDirectChannelGroup(requestModel, supportedModels, ctx); ok {
+		return group, nil
+	}
+	return model.Group{}, err
+}
+
 func channelRefreshCache(ctx context.Context) error {
 	channels := []model.Channel{}
 	if err := db.GetDB().WithContext(ctx).

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Loader2, MessageSquareText, MoreHorizontal, Plus, RotateCcw, X } from 'lucide-react';
+import { Activity, Gauge, Loader2, MessageSquareText, MoreHorizontal, Plus, RotateCcw, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { Channel, ExecutionHealthResult } from '@/api/endpoints/channel';
 import { useChannelModelHealth, useCreateGroupFromChannelModel } from '@/api/endpoints/channel';
@@ -54,6 +54,9 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
     const [results, setResults] = useState<Record<string, ExecutionHealthResult>>({});
     const [testingModels, setTestingModels] = useState<Set<string>>(() => new Set());
     const [openMenu, setOpenMenu] = useState<string | null>(null);
+    const [testKeyId, setTestKeyId] = useState<number>(0);
+    const [testTimeoutSec, setTestTimeoutSec] = useState<number>(30);
+    const [testingAll, setTestingAll] = useState(false);
 
     useEffect(() => {
         if (!creating) return;
@@ -112,31 +115,39 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
         );
     };
 
-    const test = async (model: string) => {
+    const test = async (model: string, options?: { silent?: boolean }) => {
         if (testingModels.has(model)) return;
         setTestingModels((current) => new Set(current).add(model));
         try {
-            // mutateAsync 返回每次调用各自的 Promise，多个模型测活不会互相覆盖回调。
-            const result = await health.mutateAsync({ channelId: channel.id, model });
+            const result = await health.mutateAsync({
+                channelId: channel.id,
+                model,
+                keyId: testKeyId || undefined,
+                timeoutMs: Math.max(1, Math.min(300, testTimeoutSec)) * 1000,
+            });
             setResults((current) => ({ ...current, [model]: result }));
-            if (result.success) {
-                toast.success(t('health_available'), { description: `${result.latency_ms} ms` });
-            } else {
-                toast.error(t('health_unavailable'), { description: result.error });
+            if (!options?.silent) {
+                if (result.success) {
+                    toast.success(t('health_available'), { description: `${result.latency_ms} ms` });
+                } else {
+                    toast.error(t('health_unavailable'), { description: result.error });
+                }
             }
+            return result;
         } catch (error) {
             const message = getErrorMessage(error);
-            setResults((current) => ({
-                ...current,
-                [model]: {
-                    success: false,
-                    latency_ms: 0,
-                    request_id: '',
-                    status_code: 0,
-                    error: message,
-                },
-            }));
-            toast.error(t('health_failed'), { description: message });
+            const failed: ExecutionHealthResult = {
+                success: false,
+                latency_ms: 0,
+                request_id: '',
+                status_code: 0,
+                error: message,
+            };
+            setResults((current) => ({ ...current, [model]: failed }));
+            if (!options?.silent) {
+                toast.error(t('health_failed'), { description: message });
+            }
+            return failed;
         } finally {
             setTestingModels((current) => {
                 const next = new Set(current);
@@ -146,12 +157,88 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
         }
     };
 
+    const testAll = async () => {
+        if (testingAll || models.length === 0) return;
+        const queued = models.filter((model) => !testingModels.has(model));
+        if (queued.length === 0) return;
+        setTestingAll(true);
+        const concurrency = Math.min(4, queued.length);
+        let nextIndex = 0;
+        const takeNext = () => {
+            const index = nextIndex;
+            nextIndex += 1;
+            return index;
+        };
+        const outcomes: ExecutionHealthResult[] = [];
+        const workers = Array.from({ length: concurrency }, async () => {
+            while (true) {
+                const index = takeNext();
+                if (index >= queued.length) return;
+                const result = await test(queued[index], { silent: true });
+                if (result) outcomes.push(result);
+            }
+        });
+        try {
+            await Promise.all(workers);
+            const available = outcomes.filter((item) => item.success).length;
+            const unavailable = outcomes.length - available;
+            if (unavailable === 0) {
+                toast.success(t('test_all_summary', { available, unavailable }));
+            } else if (available === 0) {
+                toast.error(t('test_all_summary', { available, unavailable }));
+            } else {
+                toast.warning(t('test_all_summary', { available, unavailable }));
+            }
+        } finally {
+            setTestingAll(false);
+        }
+    };
+
     if (models.length === 0) {
         return <div className="rounded-2xl border p-4 text-sm text-muted-foreground">{t('empty')}</div>;
     }
 
     return (
         <div className="overflow-hidden rounded-2xl border bg-card">
+            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
+                    <Gauge className="size-3.5 shrink-0" />
+                    <select
+                        value={testKeyId}
+                        onChange={(event) => setTestKeyId(Number(event.target.value))}
+                        className="min-w-0 max-w-44 rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+                        aria-label={t('test_key')}
+                    >
+                        <option value={0}>{t('test_key_auto')}</option>
+                        {channel.keys.filter((key) => key.enabled && key.channel_key).map((key, index) => (
+                            <option key={key.id} value={key.id}>{key.remark?.trim() || `Key ${index + 1}`}</option>
+                        ))}
+                    </select>
+                    <label className="flex shrink-0 items-center gap-1">
+                        <Input
+                            type="number"
+                            min={1}
+                            max={300}
+                            value={testTimeoutSec}
+                            onChange={(event) => setTestTimeoutSec(Math.max(1, Math.min(300, Number(event.target.value) || 30)))}
+                            className="h-8 w-16 rounded-lg px-2 text-xs"
+                            aria-label={t('test_timeout')}
+                        />
+                        <span>s</span>
+                    </label>
+                </div>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="rounded-xl"
+                    disabled={testingAll || testingModels.size > 0}
+                    onClick={() => void testAll()}
+                >
+                    {testingAll ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <Activity className="mr-1 size-3.5" />}
+                    {testingAll ? t('testing_all') : t('test_all')}
+                </Button>
+            </div>
             {models.map((model, modelIndex) => {
                 const result = results[model];
                 const isTesting = testingModels.has(model);

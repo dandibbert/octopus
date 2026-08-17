@@ -106,7 +106,7 @@ func ImagesHandler(endpoint string, c *gin.Context) {
 	}
 
 	// 获取通道分组
-	group, err := op.GroupGetEnabledMap(requestModel, ctx)
+	group, err := op.ResolveEnabledGroupOrDirect(requestModel, supportedModels, ctx)
 	if err != nil {
 		resp.ErrorWithCode(c, http.StatusNotFound, CodeRelayModelNotFound, "model not found")
 		return

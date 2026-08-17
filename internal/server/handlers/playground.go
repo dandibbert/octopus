@@ -84,7 +84,9 @@ type playgroundChatRequest struct {
 }
 
 type modelHealthRequest struct {
-	Model string `json:"model" binding:"required"`
+	Model     string `json:"model" binding:"required"`
+	KeyID     int    `json:"key_id,omitempty"`
+	TimeoutMS int    `json:"timeout_ms,omitempty"`
 }
 
 type executionHealthResult struct {
@@ -366,8 +368,28 @@ func channelModelHealth(c *gin.Context) {
 		respondPlaygroundError(c, http.StatusBadRequest, codePlaygroundModelNotConfigured, fmt.Sprintf("model %q is not configured on channel", modelName), map[string]any{"model": modelName, "channelId": channelID})
 		return
 	}
+	if req.KeyID > 0 {
+		found := false
+		for _, key := range channel.Keys {
+			if key.ID == req.KeyID && key.Enabled && strings.TrimSpace(key.ChannelKey) != "" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			respondPlaygroundError(c, http.StatusBadRequest, codePlaygroundTargetUnavailable, "selected channel key is unavailable", map[string]any{"keyId": req.KeyID})
+			return
+		}
+	}
 	group := directExecutionGroup(channelID, modelName)
-	result := runHealthProbe(c, modelName, &group)
+	timeout := healthProbeTimeout
+	if req.TimeoutMS > 0 {
+		if req.TimeoutMS > 300000 {
+			req.TimeoutMS = 300000
+		}
+		timeout = time.Duration(req.TimeoutMS) * time.Millisecond
+	}
+	result := runHealthProbe(c, modelName, &group, req.KeyID, timeout)
 	result.ChannelID = channelID
 	result.ChannelName = channel.Name
 	result.RequestedModel = modelName
@@ -393,13 +415,13 @@ func groupRouteHealth(c *gin.Context) {
 		respondPlaygroundError(c, http.StatusNotFound, codePlaygroundTargetUnavailable, "playground group target is unavailable", map[string]any{"targetType": "group", "targetId": groupID})
 		return
 	}
-	result := runHealthProbe(c, group.Name, nil)
+	result := runHealthProbe(c, group.Name, nil, 0, healthProbeTimeout)
 	result.Group = group.Name
 	result.SelectedChannel = result.ChannelName
 	resp.Success(c, result)
 }
 
-func runHealthProbe(parent *gin.Context, requestModel string, groupOverride *model.Group) executionHealthResult {
+func runHealthProbe(parent *gin.Context, requestModel string, groupOverride *model.Group, preferredKeyID int, timeout time.Duration) executionHealthResult {
 	started := time.Now()
 	requestID := fmt.Sprintf("health-%d", started.UnixNano())
 	body, _ := json.Marshal(map[string]any{
@@ -411,7 +433,10 @@ func runHealthProbe(parent *gin.Context, requestModel string, groupOverride *mod
 	})
 	recorder := httptest.NewRecorder()
 	inner, _ := gin.CreateTestContext(recorder)
-	probeCtx, cancel := context.WithTimeout(parent.Request.Context(), healthProbeTimeout)
+	if timeout <= 0 {
+		timeout = healthProbeTimeout
+	}
+	probeCtx, cancel := context.WithTimeout(parent.Request.Context(), timeout)
 	defer cancel()
 	inner.Request = parent.Request.Clone(probeCtx)
 	inner.Request.Method = http.MethodPost
@@ -427,6 +452,7 @@ func runHealthProbe(parent *gin.Context, requestModel string, groupOverride *mod
 	inner.Header("X-Octopus-Request-ID", requestID)
 
 	if groupOverride != nil {
+		relay.SetExecutionPreferredKey(inner, preferredKeyID)
 		relay.ExecuteDirectWithGroup(inbound.InboundTypeOpenAIChat, inner, *groupOverride)
 	} else {
 		relay.Handler(inbound.InboundTypeOpenAIChat, inner)

@@ -16,7 +16,13 @@
     "button": {
       "loading": "Logging in...",
       "submit": "Login"
-    }
+    },
+    "totpPlaceholder": "6-digit code (if enabled)",
+    "totpHint": "Leave blank when two-factor authentication is not enabled.",
+    "totp": "Authenticator Code",
+    "totpRequired": "Enter the 6-digit authenticator code to continue.",
+    "totpPlaceholderRequired": "6-digit authenticator code",
+    "totpHintRequired": "Two-factor authentication is enabled. Enter the current 6-digit code."
   },
   "apiKeyDashboard": {
     "error": "Failed to load data",
@@ -262,7 +268,24 @@
         "label": "Max Cooldown (seconds)",
         "placeholder": "Enter max cooldown in seconds"
       },
-      "hint": "When a channel fails consecutively up to the threshold, circuit breaker trips. Cooldown grows exponentially up to the max cooldown"
+      "hint": "When a channel fails consecutively up to the threshold, circuit breaker trips. Cooldown grows exponentially up to the max cooldown",
+      "enabled": {
+        "label": "Enable Circuit Breaker",
+        "description": "When disabled, breaker state is neither checked nor updated. Existing state is retained and becomes active again when re-enabled."
+      },
+      "status": {
+        "title": "Active Breakers",
+        "empty": "No model routes are currently open or half-open",
+        "count": "{count} routes are currently open or half-open",
+        "reset": "Reset All",
+        "resetSuccess": "Circuit breaker state reset",
+        "resetFailed": "Failed to reset circuit breakers",
+        "open": "Open",
+        "half_open": "Half-open probe",
+        "tripCount": "tripped {count} times",
+        "remaining": "probe in {seconds}s",
+        "probing": "probe available"
+      }
     },
     "outlierRetirement": {
       "title": "Passive Outlier Retirement",
@@ -420,6 +443,22 @@
         "change": "Change Password",
         "success": "Password changed successfully",
         "failed": "Failed to change password"
+      },
+      "twoFactor": {
+        "label": "Two-Factor Authentication",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "setup": "Set up authenticator",
+        "setupFailed": "Failed to start two-factor setup",
+        "scanHint": "Scan the QR code with your authenticator app, or enter the secret manually. Then enter the current 6-digit code to enable it.",
+        "qrAlt": "TOTP setup QR code",
+        "codePlaceholder": "6-digit code",
+        "enable": "Enable",
+        "enableSuccess": "Two-factor authentication enabled",
+        "enableFailed": "Failed to enable two-factor authentication",
+        "disable": "Disable",
+        "disableSuccess": "Two-factor authentication disabled",
+        "disableFailed": "Failed to disable two-factor authentication"
       }
     },
     "info": {
@@ -745,7 +784,21 @@
       "unknownUseRouted": "Use routed-model price",
       "unknownUseActual": "Use actual-model price",
       "billingAdvancedHint": "Leave this set to Follow channel for normal use. A SKU is only needed when this model represents a separate product or plan.",
-      "billingValidationError": "{count} model(s) use a charging mode that requires a SKU, but no SKU has been entered."
+      "billingValidationError": "{count} model(s) use a charging mode that requires a SKU, but no SKU has been entered.",
+      "paramOverridePlaceholder": "Example: {\"temperature\":0.2,\"top_p\":null}",
+      "requestOptions": "Request Overrides",
+      "paramOverrideInvalid": "Request parameter override must be a valid JSON object.",
+      "customHeaderEmpty": "No group-level header rules yet.",
+      "customHeader": "Custom Headers",
+      "paramOverrideHint": "Enter a JSON object. Group values apply first, then channel values override them. null removes the field from the final request.",
+      "customHeaderAdd": "Add Header",
+      "paramOverride": "Request Parameter Override",
+      "customHeaderHint": "Group headers are applied first; channel headers override matching names. Deleting a header is distinct from setting an empty value.",
+      "customHeaderKey": "Header name",
+      "customHeaderValue": "Header value",
+      "customHeaderDelete": "Delete",
+      "customHeaderDeleteValue": "This header will be removed",
+      "customHeaderRemove": "Remove this rule"
     },
     "mode": {
       "roundRobin": "Round Robin",
@@ -1121,7 +1174,13 @@
       "restore_auto_name": "Restore automatic name",
       "cancel": "Cancel",
       "create": "Create",
-      "creating": "Creating…"
+      "creating": "Creating…",
+      "test_all": "Test all",
+      "test_key": "Test key",
+      "testing_all": "Testing all…",
+      "test_key_auto": "Auto-select key",
+      "test_timeout": "Test timeout",
+      "test_all_summary": "{available} available, {unavailable} unavailable"
     },
     "tabs": {
       "site": "Site Channels",
@@ -1259,7 +1318,8 @@
       "wsModeOff": "Off",
       "matchRegex": "Match Regex",
       "matchRegexPlaceholder": "Optional: regex pattern to match request model names",
-      "remark": "Remark"
+      "remark": "Remark",
+      "customHeaderDelete": "Delete"
     }
   },
   "siteChannel": {

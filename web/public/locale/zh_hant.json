@@ -16,7 +16,13 @@
     "button": {
       "loading": "登入中...",
       "submit": "登入"
-    }
+    },
+    "totpPlaceholder": "6 位驗證碼（如已啟用）",
+    "totpHint": "未啟用兩步驗證時留空即可。",
+    "totp": "身分驗證器驗證碼",
+    "totpRequired": "請輸入 6 位身分驗證器驗證碼後再繼續。",
+    "totpPlaceholderRequired": "6 位身分驗證器驗證碼",
+    "totpHintRequired": "已啟用兩步驗證，請輸入目前的 6 位驗證碼。"
   },
   "apiKeyDashboard": {
     "error": "載入資料失敗",
@@ -262,7 +268,24 @@
         "label": "最大冷卻時間（秒）",
         "placeholder": "請輸入最大冷卻時間"
       },
-      "hint": "當渠道連續失敗達到閾值後觸發熔斷，冷卻時間按指數退避增長，上限為最大冷卻時間"
+      "hint": "當渠道連續失敗達到閾值後觸發熔斷，冷卻時間按指數退避增長，上限為最大冷卻時間",
+      "enabled": {
+        "label": "啟用熔斷器",
+        "description": "關閉後不會新建、命中或更新熔斷狀態；現有狀態會保留，重新開啟後繼續生效。"
+      },
+      "status": {
+        "title": "目前熔斷狀態",
+        "empty": "目前沒有處於熔斷或半開狀態的模型線路",
+        "count": "目前有 {count} 條線路處於熔斷或半開狀態",
+        "reset": "全部重設",
+        "resetSuccess": "熔斷狀態已重設",
+        "resetFailed": "重設熔斷狀態失敗",
+        "open": "熔斷中",
+        "half_open": "半開探測",
+        "tripCount": "已觸發 {count} 次",
+        "remaining": "{seconds}s 後探測",
+        "probing": "可探測"
+      }
     },
     "outlierRetirement": {
       "title": "被動離群退役",
@@ -420,6 +443,22 @@
         "change": "修改密碼",
         "success": "密碼修改成功",
         "failed": "密碼修改失敗"
+      },
+      "twoFactor": {
+        "label": "兩步驗證",
+        "enabled": "已啟用",
+        "disabled": "未啟用",
+        "setup": "綁定身分驗證器",
+        "setupFailed": "啟動兩步驗證綁定失敗",
+        "scanHint": "使用身分驗證器 App 掃描 QR Code，或手動輸入下方密鑰，再輸入目前的 6 位驗證碼確認啟用。",
+        "qrAlt": "TOTP 綁定 QR Code",
+        "codePlaceholder": "6 位驗證碼",
+        "enable": "啟用",
+        "enableSuccess": "兩步驗證已啟用",
+        "enableFailed": "啟用兩步驗證失敗",
+        "disable": "關閉",
+        "disableSuccess": "兩步驗證已關閉",
+        "disableFailed": "關閉兩步驗證失敗"
       }
     },
     "info": {
@@ -745,7 +784,21 @@
       "unknownUseRouted": "改用路由模型價格",
       "unknownUseActual": "改用實際模型價格",
       "billingAdvancedHint": "一般情況保持「跟隨渠道」即可。只有要把此模型作為獨立產品或方案計費時，才需要填寫 SKU。",
-      "billingValidationError": "有 {count} 個模型選擇了需要 SKU 的計費方式，但尚未填寫 SKU。"
+      "billingValidationError": "有 {count} 個模型選擇了需要 SKU 的計費方式，但尚未填寫 SKU。",
+      "paramOverridePlaceholder": "例如：{\"temperature\":0.2,\"top_p\":null}",
+      "requestOptions": "請求覆蓋",
+      "paramOverrideInvalid": "請求參數覆蓋必須是合法的 JSON 物件。",
+      "customHeaderEmpty": "目前沒有分組級 Header 規則。",
+      "customHeader": "自訂 Header",
+      "paramOverrideHint": "填寫 JSON 物件。分組先套用、渠道後覆蓋；值為 null 表示從最終請求中刪除該欄位。",
+      "customHeaderAdd": "新增 Header",
+      "paramOverride": "請求參數覆蓋",
+      "customHeaderHint": "分組 Header 先套用，渠道 Header 後套用並覆蓋同名項；刪除與設為空值是兩種不同操作。",
+      "customHeaderKey": "Header 名稱",
+      "customHeaderValue": "Header 值",
+      "customHeaderDelete": "刪除",
+      "customHeaderDeleteValue": "將刪除此 Header",
+      "customHeaderRemove": "移除此規則"
     },
     "mode": {
       "roundRobin": "輪詢",
@@ -1121,7 +1174,13 @@
       "restore_auto_name": "恢復自動名稱",
       "cancel": "取消",
       "create": "建立",
-      "creating": "建立中…"
+      "creating": "建立中…",
+      "test_all": "全部測活",
+      "test_key": "測試 Key",
+      "testing_all": "全部測試中…",
+      "test_key_auto": "自動選擇 Key",
+      "test_timeout": "測試逾時",
+      "test_all_summary": "{available} 個可用，{unavailable} 個不可用"
     },
     "tabs": {
       "site": "站點供應源",
@@ -1259,7 +1318,8 @@
       "wsModeOff": "關閉",
       "matchRegex": "匹配正規",
       "matchRegexPlaceholder": "可選：用於匹配請求模型名稱的正規表示式",
-      "remark": "備註"
+      "remark": "備註",
+      "customHeaderDelete": "刪除"
     }
   },
   "siteChannel": {

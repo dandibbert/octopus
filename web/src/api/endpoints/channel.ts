@@ -38,6 +38,7 @@ export type BaseUrl = {
 export type CustomHeader = {
     header_key: string;
     header_value: string;
+    delete?: boolean;
 };
 
 export type ChannelKey = {
@@ -385,8 +386,12 @@ export function useCreateGroupFromChannelModel() {
 
 export function useChannelModelHealth() {
     return useMutation({
-        mutationFn: ({ channelId, model }: { channelId: number; model: string }) =>
-            apiClient.post<ExecutionHealthResult>(`/api/v1/channel/${channelId}/models/health`, { model }),
+        mutationFn: ({ channelId, model, keyId, timeoutMs }: { channelId: number; model: string; keyId?: number; timeoutMs?: number }) =>
+            apiClient.post<ExecutionHealthResult>(`/api/v1/channel/${channelId}/models/health`, {
+                model,
+                key_id: keyId,
+                timeout_ms: timeoutMs,
+            }),
     });
 }
 
