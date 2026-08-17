@@ -1,4 +1,7 @@
+'use client';
+
 import { create } from 'zustand';
+import { useSiteEnabled } from '@/api/endpoints/setting';
 import {
     isChannelJumpTarget,
     isSiteChannelJumpTarget,
@@ -48,6 +51,14 @@ export const useChannelTabStore = create<ChannelTabState>((set) => ({
         }
     },
 }));
+
+// 站点功能关闭时只有手动渠道一个 tab。store 里持久化的选择保持不动，
+// 重新开启后仍能回到用户上次停留的 tab。
+export function useEffectiveChannelTab(): ChannelTab {
+    const { enabled: siteEnabled } = useSiteEnabled();
+    const activeTab = useChannelTabStore((state) => state.activeTab);
+    return siteEnabled ? activeTab : 'manual';
+}
 
 if (typeof window !== 'undefined') {
     useJumpStore.subscribe((state, prevState) => {

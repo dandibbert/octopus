@@ -110,21 +110,27 @@ import {
   X,
 } from "lucide-react";
 
-const PLATFORM_LABELS: Record<SitePlatform, string> = {
-  [SitePlatform.API]: "API 直连",
-  [SitePlatform.NewAPI]: "New API",
-  [SitePlatform.AnyRouter]: "AnyRouter",
-  [SitePlatform.OneAPI]: "One API",
-  [SitePlatform.OneHub]: "One Hub",
-  [SitePlatform.DoneHub]: "Done Hub",
-  [SitePlatform.Sub2API]: "Sub2API",
-};
+type SiteTranslate = ReturnType<typeof useTranslations>;
 
-const CREDENTIAL_LABELS: Record<SiteCredentialType, string> = {
-  [SiteCredentialType.UsernamePassword]: "用户名 / 密码",
-  [SiteCredentialType.AccessToken]: "Access Token",
-  [SiteCredentialType.APIKey]: "API Key",
-};
+function platformLabels(t: SiteTranslate): Record<SitePlatform, string> {
+  return {
+    [SitePlatform.API]: t("platform.api"),
+    [SitePlatform.NewAPI]: "New API",
+    [SitePlatform.AnyRouter]: "AnyRouter",
+    [SitePlatform.OneAPI]: "One API",
+    [SitePlatform.OneHub]: "One Hub",
+    [SitePlatform.DoneHub]: "Done Hub",
+    [SitePlatform.Sub2API]: "Sub2API",
+  };
+}
+
+function credentialLabels(t: SiteTranslate): Record<SiteCredentialType, string> {
+  return {
+    [SiteCredentialType.UsernamePassword]: t("credential.usernamePassword"),
+    [SiteCredentialType.AccessToken]: t("credential.accessToken"),
+    [SiteCredentialType.APIKey]: t("credential.apiKey"),
+  };
+}
 
 type HealthTone = "default" | "danger" | "muted" | "warning";
 
@@ -170,28 +176,28 @@ type SiteImportResult = {
   disabled_models?: number;
 };
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "从未执行";
+function formatDateTime(t: SiteTranslate, value?: string | null) {
+  if (!value) return t("common.never");
   const date = new Date(value);
   if (Number.isNaN(date.getTime()) || date.getFullYear() <= 1) {
-    return "从未执行";
+    return t("common.never");
   }
   return date.toLocaleString();
 }
 
-function statusLabel(status: string) {
+function statusLabel(t: SiteTranslate, status: string) {
   switch (status) {
     case "partial":
-      return "部分成功";
+      return t("status.partial");
     case "success":
-      return "成功";
+      return t("status.success");
     case "failed":
-      return "失败";
+      return t("status.failed");
     case "skipped":
-      return "跳过";
+      return t("status.skipped");
     case "idle":
     default:
-      return "未执行";
+      return t("status.idle");
   }
 }
 
@@ -210,21 +216,25 @@ function SiteMetric({
   );
 }
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error) return error.message;
   if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message?: unknown }).message;
     if (typeof message === "string") return message;
   }
-  return "操作失败";
+  return fallback;
 }
 
 function getSiteErrorMessage(
   locale: ReturnType<typeof useSettingStore.getState>["locale"],
   error: unknown,
-  t?: ReturnType<typeof useTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ) {
-  return translateSiteMessage(locale, getErrorMessage(error), t);
+  return translateSiteMessage(
+    locale,
+    getErrorMessage(error, t("site.common.operationFailed")),
+    t,
+  );
 }
 
 function formatBalance(value: number) {
@@ -267,13 +277,13 @@ function accountHasHealthFailure(
 function statusDotClass(status: string) {
   switch (status) {
     case "success":
-      return "bg-emerald-500";
+      return "bg-success";
     case "partial":
-      return "bg-amber-500";
+      return "bg-warning";
     case "failed":
       return "bg-destructive";
     case "skipped":
-      return "bg-amber-500";
+      return "bg-warning";
     default:
       return "bg-muted-foreground/40";
   }
@@ -286,28 +296,28 @@ function badgeToneClass(tone: HealthTone) {
     case "muted":
       return "border-border bg-muted/40 text-muted-foreground";
     case "warning":
-      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+      return "border-warning/20 bg-warning/10 text-warning";
     case "default":
     default:
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+      return "border-success/20 bg-success/10 text-success";
   }
 }
 
 function cardToneClass(tone: HealthTone) {
   switch (tone) {
     case "danger":
-      return "border-destructive/25 bg-gradient-to-br from-destructive/[0.07] via-card to-card";
+      return "border-destructive/25 bg-gradient-to-br from-destructive/10 via-card to-card";
     case "muted":
-      return "border-slate-400/25 bg-gradient-to-br from-slate-500/[0.06] via-card to-card dark:border-slate-600/35";
+      return "border-border bg-gradient-to-br from-muted/40 via-card to-card";
     case "warning":
-      return "border-amber-500/25 bg-gradient-to-br from-amber-500/[0.07] via-card to-card";
+      return "border-warning/25 bg-gradient-to-br from-warning/10 via-card to-card";
     case "default":
     default:
       return "border-border/70 bg-card";
   }
 }
 
-function buildSiteSummary(site: SiteRecord): SiteSummary {
+function buildSiteSummary(t: SiteTranslate, site: SiteRecord): SiteSummary {
   let keyCount = 0;
   let modelCount = 0;
   let groupCount = 0;
@@ -348,7 +358,7 @@ function buildSiteSummary(site: SiteRecord): SiteSummary {
       partialAccountCount,
       disabledAccountCount,
       enabledAccountCount,
-      healthLabel: "站点停用",
+      healthLabel: t("health.siteDisabled"),
       healthTone: "muted",
     };
   }
@@ -365,7 +375,7 @@ function buildSiteSummary(site: SiteRecord): SiteSummary {
       partialAccountCount,
       disabledAccountCount,
       enabledAccountCount,
-      healthLabel: `${failedAccountCount} 异常`,
+      healthLabel: t("health.failed", { count: failedAccountCount }),
       healthTone: "danger",
     };
   }
@@ -382,7 +392,7 @@ function buildSiteSummary(site: SiteRecord): SiteSummary {
       partialAccountCount,
       disabledAccountCount,
       enabledAccountCount,
-      healthLabel: `${disabledAccountCount} 已停用`,
+      healthLabel: t("health.disabled", { count: disabledAccountCount }),
       healthTone: "muted",
     };
   }
@@ -399,7 +409,7 @@ function buildSiteSummary(site: SiteRecord): SiteSummary {
       partialAccountCount,
       disabledAccountCount,
       enabledAccountCount,
-      healthLabel: `${partialAccountCount} 部分同步`,
+      healthLabel: t("health.partial", { count: partialAccountCount }),
       healthTone: "warning",
     };
   }
@@ -416,7 +426,7 @@ function buildSiteSummary(site: SiteRecord): SiteSummary {
       partialAccountCount,
       disabledAccountCount,
       enabledAccountCount,
-      healthLabel: "待配置",
+      healthLabel: t("health.unconfigured"),
       healthTone: "warning",
     };
   }
@@ -440,7 +450,7 @@ function buildSiteSummary(site: SiteRecord): SiteSummary {
     partialAccountCount,
     disabledAccountCount,
     enabledAccountCount,
-    healthLabel: allIdle ? "未执行" : "正常",
+    healthLabel: allIdle ? t("health.idle") : t("health.normal"),
     healthTone: allIdle ? "warning" : "default",
   };
 }
@@ -476,7 +486,11 @@ function ExecutionSummary({
   at?: string | null;
   message?: string | null;
 }) {
-  const text = [`上次${label} ${formatDateTime(at)}`, statusLabel(status)];
+  const t = useTranslations("site");
+  const text = [
+    t("execution.summary", { action: label, time: formatDateTime(t, at) }),
+    statusLabel(t, status),
+  ];
   if (message) {
     text.push(message);
   }
@@ -491,11 +505,11 @@ function ExecutionSummary({
           <span
             className={cn(
               "mt-1 size-2 shrink-0 rounded-full",
-              cloudflareProtected ? "bg-amber-500" : statusDotClass(status),
+              cloudflareProtected ? "bg-warning" : statusDotClass(status),
             )}
           />
           <span className="min-w-0 truncate">
-            {cloudflareProtected ? "Cloudflare 保护 · " : ""}
+            {cloudflareProtected ? t("execution.cloudflarePrefix") : ""}
             {summary}
           </span>
         </div>
@@ -516,13 +530,13 @@ function StaticSummary({
     <div
       className={cn(
         "flex items-start gap-2 text-xs",
-        tone === "warning" ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground",
+        tone === "warning" ? "text-warning" : "text-muted-foreground",
       )}
     >
       <span
         className={cn(
           "mt-1 size-2 shrink-0 rounded-full",
-          tone === "warning" ? "bg-amber-500" : "bg-muted-foreground/40",
+          tone === "warning" ? "bg-warning" : "bg-muted-foreground/40",
         )}
       />
       <span className="min-w-0 truncate">{text}</span>
@@ -566,7 +580,10 @@ function estimateVisibleSiteCardHeight(item: VisibleSite, expanded: boolean) {
 
 export function Site() {
   const t = useTranslations();
+  const tSite = useTranslations('site');
   const tProxy = useTranslations('proxyPool');
+  const PLATFORM_LABELS = useMemo(() => platformLabels(tSite), [tSite]);
+  const CREDENTIAL_LABELS = useMemo(() => credentialLabels(tSite), [tSite]);
   const locale = useSettingStore((state) => state.locale);
   const { data: sites, isLoading, error } = useSiteList();
   const updateSite = useUpdateSite();
@@ -827,7 +844,7 @@ export function Site() {
     const hasSearch = normalizedQuery.length > 0;
 
     const list = (sites ?? []).flatMap((site) => {
-      const summary = buildSiteSummary(site);
+      const summary = buildSiteSummary(tSite, site);
       const isForcedTarget = forcedSiteId === site.id;
 
       if (
@@ -923,6 +940,8 @@ export function Site() {
     forcedSiteId,
     siteSortField,
     siteSortOrder,
+    tSite,
+    PLATFORM_LABELS,
   ]);
 
   const hasActiveFilters =
@@ -974,7 +993,9 @@ export function Site() {
   async function handleToggleSite(site: SiteRecord) {
     try {
       await enableSite.mutateAsync({ id: site.id, enabled: !site.enabled });
-      toast.success(site.enabled ? "站点已停用" : "站点已启用");
+      toast.success(
+        site.enabled ? tSite("toast.siteDisabled") : tSite("toast.siteEnabled"),
+      );
     } catch (toggleError) {
       toast.error(getSiteErrorMessage(locale, toggleError, t));
     }
@@ -991,7 +1012,7 @@ export function Site() {
   async function handleRestoreSite(siteId: number, siteName: string) {
     try {
       await restoreSite.mutateAsync(siteId);
-      toast.success(`站点「${siteName}」已恢复，请在列表中启用`);
+      toast.success(tSite("toast.siteRestored", { name: siteName }));
     } catch (err) {
       toast.error(getSiteErrorMessage(locale, err, t));
     }
@@ -1003,7 +1024,11 @@ export function Site() {
         id: account.id,
         enabled: !account.enabled,
       });
-      toast.success(account.enabled ? "站点账号已停用" : "站点账号已启用");
+      toast.success(
+        account.enabled
+          ? tSite("toast.accountDisabled")
+          : tSite("toast.accountEnabled"),
+      );
     } catch (toggleError) {
       toast.error(getSiteErrorMessage(locale, toggleError, t));
     }
@@ -1017,7 +1042,12 @@ export function Site() {
     setSyncingAccountIds((current) => new Set(current).add(account.id));
     try {
       const result = await syncSiteAccount.mutateAsync(account.id);
-      const summary = `${result.message}（${result.group_count} 个分组，${result.token_count} 个 Key，${result.model_count} 个模型）`;
+      const summary = tSite("toast.syncSummary", {
+        message: result.message,
+        groups: result.group_count,
+        keys: result.token_count,
+        models: result.model_count,
+      });
       if (result.status === "failed") {
         toast.error(summary);
       } else if (result.status === "partial") {
@@ -1029,7 +1059,7 @@ export function Site() {
         toast.error(summary);
       }
     } catch (syncError) {
-      toast.error(translateSiteMessage(locale, getErrorMessage(syncError), t));
+      toast.error(getSiteErrorMessage(locale, syncError, t));
     } finally {
       setSyncingAccountIds((current) => {
         const next = new Set(current);
@@ -1043,8 +1073,16 @@ export function Site() {
     setCheckinAccountIds((current) => new Set(current).add(account.id));
     try {
       const result = await checkinSiteAccount.mutateAsync(account.id);
-      const suffix = result.reward ? `，奖励：${result.reward}` : "";
-      const message = `${statusLabel(result.status)}：${result.message}${suffix}`;
+      const message = result.reward
+        ? tSite("toast.checkinResultReward", {
+            status: statusLabel(tSite, result.status),
+            message: result.message,
+            reward: result.reward,
+          })
+        : tSite("toast.checkinResult", {
+            status: statusLabel(tSite, result.status),
+            message: result.message,
+          });
       if (result.status === "failed") {
         toast.error(message);
       } else {
@@ -1065,7 +1103,7 @@ export function Site() {
     const hasFile = !!importFile;
     const hasText = !!importPayloadText.trim();
     if (!hasFile && !hasText) {
-      toast.error("请选择 JSON 文件或粘贴导出内容");
+      toast.error(tSite("import.missingPayload"));
       return;
     }
 
@@ -1082,7 +1120,11 @@ export function Site() {
       setImportFile(null);
       setImportPayloadText("");
       toast.success(
-        `导入完成：新增 ${result.created_sites} 个站点，新增 ${result.created_accounts} 个账号，更新 ${result.updated_accounts} 个账号`,
+        tSite("import.success", {
+          createdSites: result.created_sites,
+          createdAccounts: result.created_accounts,
+          updatedAccounts: result.updated_accounts,
+        }),
       );
     } catch (importError) {
       toast.error(getSiteErrorMessage(locale, importError, t));
@@ -1140,7 +1182,7 @@ export function Site() {
     try {
       if (deleteConfirm.type === "site") {
         await deleteSite.mutateAsync(deleteConfirm.id);
-        toast.success("站点已删除");
+        toast.success(tSite("toast.siteDeleted"));
         setSelectedSiteIds((prev) =>
           prev.filter((id) => id !== deleteConfirm.id),
         );
@@ -1151,7 +1193,7 @@ export function Site() {
         });
       } else if (deleteConfirm.type === "archive-site") {
         await archiveSite.mutateAsync(deleteConfirm.id);
-        toast.success("站点已归档，可在『归档站点』中恢复");
+        toast.success(tSite("toast.siteArchived"));
         setSelectedSiteIds((prev) =>
           prev.filter((id) => id !== deleteConfirm.id),
         );
@@ -1162,7 +1204,7 @@ export function Site() {
         });
       } else {
         await deleteSiteAccount.mutateAsync(deleteConfirm.id);
-        toast.success("站点账号已删除");
+        toast.success(tSite("toast.accountDeleted"));
       }
     } catch (deleteError) {
       toast.error(getSiteErrorMessage(locale, deleteError, t));
@@ -1180,7 +1222,7 @@ export function Site() {
 
   async function handleBatchAction(action: string) {
     if (selectedSiteIds.length === 0) {
-      toast.error("请先选择站点");
+      toast.error(tSite("toast.selectSiteFirst"));
       return;
     }
     try {
@@ -1190,7 +1232,12 @@ export function Site() {
       });
       const successCount = result.success_ids.length;
       const failedCount = result.failed_items.length;
-      toast.success(`操作完成：成功 ${successCount}，失败 ${failedCount}`);
+      toast.success(
+        tSite("toast.batchResult", {
+          success: successCount,
+          failed: failedCount,
+        }),
+      );
       if (action === "delete") {
         setSelectedSiteIds([]);
       }
@@ -1202,7 +1249,9 @@ export function Site() {
   async function handleTogglePin(site: SiteRecord) {
     try {
       await updateSite.mutateAsync({ id: site.id, is_pinned: !site.is_pinned });
-      toast.success(site.is_pinned ? "已取消置顶" : "已置顶");
+      toast.success(
+        site.is_pinned ? tSite("toast.unpinned") : tSite("toast.pinned"),
+      );
     } catch (pinError) {
       toast.error(getSiteErrorMessage(locale, pinError, t));
     }
@@ -1263,13 +1312,13 @@ export function Site() {
       openArchivedDialog: () => setArchivedDialogOpen(true),
       syncAll: () => {
         syncAllSites.mutate(undefined, {
-          onSuccess: () => toast.success("已触发后台全量同步，页面会自动刷新"),
+          onSuccess: () => toast.success(tSite("toast.syncAllTriggered")),
           onError: (error) => toast.error(getSiteErrorMessage(locale, error, t)),
         });
       },
       checkinAll: () => {
         checkinAllSites.mutate(undefined, {
-          onSuccess: () => toast.success("已触发后台全量签到，页面会自动刷新"),
+          onSuccess: () => toast.success(tSite("toast.checkinAllTriggered")),
           onError: (error) => toast.error(getSiteErrorMessage(locale, error, t)),
         });
       },
@@ -1278,7 +1327,7 @@ export function Site() {
     return () => {
       resetSiteHandlers();
     };
-  }, [setSiteHandlers, resetSiteHandlers, syncAllSites, checkinAllSites, locale, t]);
+  }, [setSiteHandlers, resetSiteHandlers, syncAllSites, checkinAllSites, locale, t, tSite]);
 
   useEffect(() => {
     const updateDayKey = () => {
@@ -1378,7 +1427,7 @@ export function Site() {
       <section
         key={site.id}
         className={cn(
-          "rounded-[28px] border bg-card p-5 shadow-[0_20px_60px_-42px_rgba(15,23,42,0.45)] transition-colors",
+          "custom-shadow rounded-3xl border bg-card p-5 transition-colors",
           cardToneClass(summary.healthTone),
           highlightedSiteId === site.id &&
             "ring-2 ring-primary/35 ring-offset-2 ring-offset-background",
@@ -1389,7 +1438,9 @@ export function Site() {
             type="button"
             className="relative mt-1 shrink-0 text-muted-foreground transition-colors before:absolute before:-inset-2.5 before:content-[''] hover:text-foreground"
             title={
-              selectedSiteIds.includes(site.id) ? "取消选择站点" : "选择站点"
+              selectedSiteIds.includes(site.id)
+                ? tSite("card.deselectSite")
+                : tSite("card.selectSite")
             }
             onClick={() => toggleSiteSelection(site.id)}
           >
@@ -1417,9 +1468,9 @@ export function Site() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="line-clamp-2 break-words text-lg font-semibold leading-6 md:truncate md:whitespace-nowrap">{site.name}</h2>
                   {site.is_pinned ? (
-                    <Badge variant="outline" className="text-amber-600">
+                    <Badge variant="outline" className="text-warning">
                       <Pin className="mr-1 size-3" />
-                      置顶
+                      {tSite("card.pinned")}
                     </Badge>
                   ) : null}
                   <Badge variant="outline">
@@ -1447,12 +1498,12 @@ export function Site() {
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-                  <CompactMetric label="账号" value={summary.accountCount} />
-                  <CompactMetric label="Key" value={summary.keyCount} />
-                  <CompactMetric label="模型" value={summary.modelCount} />
-                  <CompactMetric label="余额" value={formatBalance(summary.balance)} />
+                  <CompactMetric label={tSite("card.accounts")} value={summary.accountCount} />
+                  <CompactMetric label={tSite("card.keys")} value={summary.keyCount} />
+                  <CompactMetric label={tSite("card.models")} value={summary.modelCount} />
+                  <CompactMetric label={tSite("card.balance")} value={formatBalance(summary.balance)} />
                   <CompactMetric
-                    label="今日收入"
+                    label={tSite("card.todayIncome")}
                     value={formatBalance(summary.todayIncome)}
                   />
                 </div>
@@ -1474,8 +1525,8 @@ export function Site() {
                           type="button"
                           title={
                             tagFilters.includes(tag)
-                              ? `取消按「${tag}」筛选`
-                              : `按「${tag}」筛选`
+                              ? tSite("card.clearTagFilter", { tag })
+                              : tSite("card.filterByTag", { tag })
                           }
                           aria-pressed={tagFilters.includes(tag)}
                           onClick={(event) => {
@@ -1500,16 +1551,22 @@ export function Site() {
                         : tProxy('mode.direct')}
                   </span>
                   {site.custom_header.length > 0 ? (
-                    <span>{site.custom_header.length} 个 Header</span>
+                    <span>
+                      {tSite("card.headerCount", {
+                        count: site.custom_header.length,
+                      })}
+                    </span>
                   ) : null}
-                  {site.external_checkin_url ? <span>手动签到</span> : null}
+                  {site.external_checkin_url ? (
+                    <span>{tSite("card.manualCheckin")}</span>
+                  ) : null}
                 </div>
               </div>
 
               <div className="flex items-center gap-1">
                 {site.accounts.length === 0 ? (
                   <IconActionButton
-                    label="新增账号"
+                    label={tSite("card.addAccount")}
                     onClick={() => openCreateAccountDialog(site)}
                   >
                     <Plus className="size-4" />
@@ -1523,8 +1580,8 @@ export function Site() {
                       size="icon-sm"
                       variant="outline"
                       className="rounded-xl"
-                      aria-label="更多站点操作"
-                      title="更多站点操作"
+                      aria-label={tSite("card.moreSiteActions")}
+                      title={tSite("card.moreSiteActions")}
                     >
                       <MoreHorizontal className="size-4" />
                     </Button>
@@ -1540,7 +1597,7 @@ export function Site() {
                         onClick={() => jumpToSiteChannel(site.id)}
                       >
                         <Waypoints className="size-4" />
-                        <span>查看站点渠道</span>
+                        <span>{tSite("card.viewSiteChannel")}</span>
                       </button>
                       {site.accounts.length > 0 ? (
                         <button
@@ -1549,7 +1606,7 @@ export function Site() {
                           onClick={() => openCreateAccountDialog(site)}
                         >
                           <Plus className="size-4" />
-                          <span>新增账号</span>
+                          <span>{tSite("card.addAccount")}</span>
                         </button>
                       ) : null}
                       <div className="my-1 border-t border-border/60" />
@@ -1559,7 +1616,7 @@ export function Site() {
                         onClick={() => openEditSiteDialog(site)}
                       >
                         <Pencil className="size-4" />
-                        <span>编辑站点</span>
+                        <span>{tSite("card.editSite")}</span>
                       </button>
                       <button
                         type="button"
@@ -1571,7 +1628,11 @@ export function Site() {
                         ) : (
                           <Pin className="size-4" />
                         )}
-                        <span>{site.is_pinned ? "取消置顶" : "置顶"}</span>
+                        <span>
+                          {site.is_pinned
+                            ? tSite("card.unpin")
+                            : tSite("card.pin")}
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -1579,7 +1640,11 @@ export function Site() {
                         onClick={() => handleToggleSite(site)}
                       >
                         <Power className="size-4" />
-                        <span>{site.enabled ? "停用站点" : "启用站点"}</span>
+                        <span>
+                          {site.enabled
+                            ? tSite("card.disableSite")
+                            : tSite("card.enableSite")}
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -1587,7 +1652,7 @@ export function Site() {
                         onClick={() => handleArchiveSite(site)}
                       >
                         <Archive className="size-4" />
-                        <span>归档站点</span>
+                        <span>{tSite("card.archiveSite")}</span>
                       </button>
                       <button
                         type="button"
@@ -1595,7 +1660,7 @@ export function Site() {
                         onClick={() => handleDeleteSite(site)}
                       >
                         <Trash2 className="size-4" />
-                        <span>删除站点</span>
+                        <span>{tSite("card.deleteSite")}</span>
                       </button>
                     </div>
                   </PopoverContent>
@@ -1604,10 +1669,10 @@ export function Site() {
                 <IconActionButton
                   label={
                     forceExpanded
-                      ? "筛选结果已自动展开"
+                      ? tSite("card.autoExpanded")
                       : isExpanded
-                        ? "收起账号"
-                        : "展开账号"
+                        ? tSite("card.collapseAccounts")
+                        : tSite("card.expandAccounts")
                   }
                   disabled={forceExpanded || site.accounts.length === 0}
                   onClick={() => toggleSiteExpanded(site.id, forceExpanded)}
@@ -1635,13 +1700,16 @@ export function Site() {
                   <div className="mt-4 border-t border-border/60 pt-4">
                     {hasFilteredAccounts ? (
                       <div className="mb-3 text-xs text-muted-foreground">
-                        显示 {visibleAccounts.length} / {site.accounts.length} 个账号
+                        {tSite("card.visibleAccounts", {
+                          visible: visibleAccounts.length,
+                          total: site.accounts.length,
+                        })}
                       </div>
                     ) : null}
 
                     {visibleAccounts.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-                        暂无账号。添加账号后即可自动同步分组、模型和渠道绑定。
+                        {tSite("card.noAccounts")}
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -1664,7 +1732,7 @@ export function Site() {
                               key={account.id}
                               ref={(node) => setAccountElementRef(account.id, node)}
                               className={cn(
-                                "rounded-2xl border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors",
+                                "rounded-2xl border px-4 py-3 transition-colors",
                                 cardToneClass(accountTone),
                                 highlightedAccountId === account.id &&
                                   "ring-2 ring-primary/35 ring-offset-2 ring-offset-background",
@@ -1688,43 +1756,47 @@ export function Site() {
                                         variant="outline"
                                         className={
                                           account.enabled
-                                            ? "text-emerald-600"
+                                            ? "text-success"
                                             : "text-muted-foreground"
                                         }
                                       >
-                                        {account.enabled ? "启用中" : "已停用"}
+                                        {account.enabled
+                                          ? tSite("account.enabled")
+                                          : tSite("account.disabled")}
                                       </Badge>
                                     </div>
 
                                     <div className="flex flex-wrap gap-x-4 gap-y-1">
                                       <CompactMetric
-                                        label="分组"
+                                        label={tSite("card.groups")}
                                         value={account.user_groups.length}
                                       />
                                       <CompactMetric
-                                        label="模型"
+                                        label={tSite("card.models")}
                                         value={account.models.length}
                                       />
                                       <CompactMetric
-                                        label="余额"
+                                        label={tSite("card.balance")}
                                         value={formatBalance(account.balance)}
                                       />
                                       <CompactMetric
-                                        label="今日收入"
+                                        label={tSite("card.todayIncome")}
                                         value={formatBalance(account.today_income)}
                                       />
                                     </div>
 
                                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                       <span>
-                                        {account.auto_sync ? "自动同步" : "手动同步"}
+                                        {account.auto_sync
+                                          ? tSite("account.autoSync")
+                                          : tSite("account.manualSync")}
                                       </span>
                                       <span>
                                         {account.auto_checkin
                                           ? account.random_checkin
-                                            ? "随机签到"
-                                            : "自动签到"
-                                          : "手动签到"}
+                                            ? tSite("account.randomCheckin")
+                                            : tSite("account.autoCheckin")
+                                          : tSite("account.manualCheckin")}
                                       </span>
                                       <span>
                                         {account.proxy_mode === "inherit"
@@ -1752,12 +1824,14 @@ export function Site() {
                                         </span>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        {account.enabled ? "停用账号" : "启用账号"}
+                                        {account.enabled
+                                          ? tSite("account.disableAccount")
+                                          : tSite("account.enableAccount")}
                                       </TooltipContent>
                                     </Tooltip>
 
                                     <IconActionButton
-                                      label="同步账号"
+                                      label={tSite("account.syncAccount")}
                                       disabled={syncingAccountIds.has(account.id)}
                                       onClick={() => handleSyncAccount(account)}
                                     >
@@ -1777,8 +1851,8 @@ export function Site() {
                                           size="icon-sm"
                                           variant="outline"
                                           className="rounded-xl"
-                                          aria-label="更多账号操作"
-                                          title="更多账号操作"
+                                          aria-label={tSite("card.moreAccountActions")}
+                                          title={tSite("card.moreAccountActions")}
                                         >
                                           <MoreHorizontal className="size-4" />
                                         </Button>
@@ -1796,7 +1870,7 @@ export function Site() {
                                             }
                                           >
                                             <Waypoints className="size-4" />
-                                            <span>查看站点渠道</span>
+                                            <span>{tSite("card.viewSiteChannel")}</span>
                                           </button>
                                           <button
                                             type="button"
@@ -1811,7 +1885,7 @@ export function Site() {
                                             hidden={!canShowManualCheckin}
                                           >
                                             <CalendarCheck2 className="size-4" />
-                                            <span>立即签到</span>
+                                            <span>{tSite("account.checkinNow")}</span>
                                           </button>
                                           <button
                                             type="button"
@@ -1821,7 +1895,7 @@ export function Site() {
                                             }
                                           >
                                             <Pencil className="size-4" />
-                                            <span>编辑账号</span>
+                                            <span>{tSite("account.editAccount")}</span>
                                           </button>
                                           <button
                                             type="button"
@@ -1834,7 +1908,7 @@ export function Site() {
                                             }
                                           >
                                             <Trash2 className="size-4" />
-                                            <span>删除账号</span>
+                                            <span>{tSite("account.deleteAccount")}</span>
                                           </button>
                                         </div>
                                       </PopoverContent>
@@ -1844,13 +1918,14 @@ export function Site() {
 
                                 <div className="space-y-1">
                                     <ExecutionSummary
-                                      label="同步"
+                                      label={tSite("execution.sync")}
                                       status={normalizedStatus(
                                         account.last_sync_status,
                                       )}
                                       at={account.last_sync_at}
                                       message={
-                                        translateSiteMessage(locale, account.last_sync_message, t) || "等待首次同步"
+                                        translateSiteMessage(locale, account.last_sync_message, t) ||
+                                        tSite("execution.waitingFirstSync")
                                       }
                                     />
                                     {supportsCheckin ? (
@@ -1859,37 +1934,41 @@ export function Site() {
                                         site.platform,
                                       ) ? (
                                         <ExecutionSummary
-                                          label="签到"
+                                          label={tSite("execution.checkin")}
                                           status={normalizedStatus(
                                             account.last_checkin_status,
                                           )}
                                           at={account.last_checkin_at}
                                           message={
                                             account.last_checkin_message ||
-                                            "等待首次签到"
+                                            tSite("execution.waitingFirstCheckin")
                                           }
                                         />
                                       ) : (
-                                        <StaticSummary text="签到未启用" />
+                                        <StaticSummary
+                                          text={tSite("execution.checkinDisabled")}
+                                        />
                                       )
                                     ) : (
                                       <StaticSummary
                                         tone="warning"
-                                        text="当前平台不支持签到"
+                                        text={tSite("execution.checkinUnsupported")}
                                       />
                                     )}
                                     {account.auto_checkin &&
                                     account.random_checkin ? (
                                       <div className="pl-4 text-xs text-muted-foreground">
-                                        下次自动签到{" "}
-                                        {account.next_auto_checkin_at
-                                          ? formatDateTime(
-                                              account.next_auto_checkin_at,
-                                            )
-                                          : "待调度"}{" "}
-                                        · 最小间隔 {account.checkin_interval_hours} 小时 ·
-                                        随机延迟 0-
-                                        {account.checkin_random_window_minutes} 分钟
+                                        {tSite("execution.nextAutoCheckin", {
+                                          time: account.next_auto_checkin_at
+                                            ? formatDateTime(
+                                                tSite,
+                                                account.next_auto_checkin_at,
+                                              )
+                                            : tSite("common.pendingSchedule"),
+                                          hours: account.checkin_interval_hours,
+                                          minutes:
+                                            account.checkin_random_window_minutes,
+                                        })}
                                       </div>
                                     ) : null}
                                 </div>
@@ -1933,7 +2012,7 @@ export function Site() {
         />
 
         {selectedSiteIds.length > 0 ? (
-          <section className="sticky top-0 z-30 rounded-3xl border border-border/70 bg-card/95 p-4 shadow-[0_20px_60px_-42px_rgba(15,23,42,0.45)] backdrop-blur supports-[backdrop-filter]:bg-card/90">
+          <section className="custom-shadow sticky top-0 z-30 rounded-3xl border border-border/70 bg-card/95 p-4 backdrop-blur supports-[backdrop-filter]:bg-card/90">
             <div className="flex flex-wrap items-center gap-3">
               {(() => {
                 const visibleIds = visibleSites.map((item) => item.site.id);
@@ -1955,7 +2034,11 @@ export function Site() {
                       }
                     }}
                     disabled={visibleIds.length === 0}
-                    title={allVisibleSelected ? "取消全选" : "全选当前可见站点"}
+                    title={
+                      allVisibleSelected
+                        ? tSite("bulk.clearSelection")
+                        : tSite("bulk.selectAllVisible")
+                    }
                     className="inline-flex items-center gap-2 text-sm font-medium text-foreground transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {allVisibleSelected ? (
@@ -1963,12 +2046,12 @@ export function Site() {
                     ) : (
                       <Square className="size-5" />
                     )}
-                    全选
+                    {tSite("bulk.selectAll")}
                   </button>
                 );
               })()}
               <span className="text-sm font-medium">
-                已选 {selectedSiteIds.length} 个站点
+                {tSite("bulk.selectedCount", { count: selectedSiteIds.length })}
               </span>
               <Button
                 variant="outline"
@@ -1977,7 +2060,7 @@ export function Site() {
                 onClick={() => handleBatchAction("enable")}
                 disabled={batchAction.isPending}
               >
-                批量启用
+                {tSite("bulk.enable")}
               </Button>
               <Button
                 variant="outline"
@@ -1986,7 +2069,7 @@ export function Site() {
                 onClick={() => handleBatchAction("disable")}
                 disabled={batchAction.isPending}
               >
-                批量禁用
+                {tSite("bulk.disable")}
               </Button>
               <Button
                 variant="outline"
@@ -1995,7 +2078,7 @@ export function Site() {
                 onClick={() => setBatchEditOpen(true)}
                 disabled={batchAction.isPending}
               >
-                批量编辑
+                {tSite("bulk.edit")}
               </Button>
               <Button
                 variant="destructive"
@@ -2010,7 +2093,7 @@ export function Site() {
                 }
                 disabled={batchAction.isPending}
               >
-                批量删除
+                {tSite("bulk.delete")}
               </Button>
               <Button
                 variant="ghost"
@@ -2018,7 +2101,7 @@ export function Site() {
                 className="rounded-xl"
                 onClick={() => setSelectedSiteIds([])}
               >
-                取消选择
+                {tSite("bulk.cancel")}
               </Button>
             </div>
           </section>
@@ -2026,26 +2109,28 @@ export function Site() {
 
         {error ? (
           <section className="rounded-3xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-            站点列表加载失败：{getSiteErrorMessage(locale, error, t)}
+            {tSite("list.loadFailed", {
+              message: getSiteErrorMessage(locale, error, t),
+            })}
           </section>
         ) : null}
 
         {isLoading ? (
           <section className="rounded-3xl border border-border bg-card p-6 text-sm text-muted-foreground">
-            正在加载站点信息...
+            {tSite("list.loading")}
           </section>
         ) : null}
 
         {!isLoading && !error && (!sites || sites.length === 0) ? (
           <section className="rounded-3xl border border-dashed border-border bg-card p-10 text-center">
             <CircleAlert className="mx-auto size-8 text-muted-foreground" />
-            <div className="mt-4 text-lg font-semibold">还没有站点</div>
+            <div className="mt-4 text-lg font-semibold">{tSite("empty.title")}</div>
             <p className="mt-2 text-sm text-muted-foreground">
-              先新增一个站点，再为它配置账号，后续即可自动同步分组、模型和托管渠道。
+              {tSite("empty.description")}
             </p>
             <Button onClick={openCreateSiteDialog} className="mt-5 rounded-xl">
               <Plus className="size-4" />
-              新增第一个站点
+              {tSite("empty.action")}
             </Button>
           </section>
         ) : null}
@@ -2057,9 +2142,11 @@ export function Site() {
         visibleSites.length === 0 ? (
           <section className="rounded-3xl border border-dashed border-border bg-card p-10 text-center">
             <CircleAlert className="mx-auto size-8 text-muted-foreground" />
-            <div className="mt-4 text-lg font-semibold">没有匹配的站点</div>
+            <div className="mt-4 text-lg font-semibold">
+              {tSite("empty.noMatchTitle")}
+            </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              当前搜索和筛选条件没有命中任何站点或账号。
+              {tSite("empty.noMatchDescription")}
             </p>
             <Button
               type="button"
@@ -2068,7 +2155,7 @@ export function Site() {
               onClick={clearFilters}
             >
               <FilterX className="size-4" />
-              清空筛选
+              {tSite("empty.clearFilters")}
             </Button>
           </section>
         ) : null}
@@ -2153,10 +2240,10 @@ export function Site() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileJson className="size-5" />
-              导入站点数据
+              {tSite("import.title")}
             </DialogTitle>
             <DialogDescription>
-              支持上传或粘贴 All API Hub / Metapi 导出的 JSON。导入会按平台和站点地址自动创建或复用站点。
+              {tSite("import.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -2168,7 +2255,7 @@ export function Site() {
             onDrop={handleImportDrop}
           >
             <div className="grid gap-2 text-sm">
-              <span className="font-medium">导入来源</span>
+              <span className="font-medium">{tSite("import.source")}</span>
               <Select
                 value={importSource}
                 onValueChange={(value) => {
@@ -2187,7 +2274,7 @@ export function Site() {
             </div>
 
             <div className="grid gap-2 text-sm">
-              <div className="text-sm font-medium">上传 JSON 文件</div>
+              <div className="text-sm font-medium">{tSite("import.uploadFile")}</div>
               <div className="flex items-center gap-2">
                 <Input
                   ref={importFileInputRef}
@@ -2215,12 +2302,12 @@ export function Site() {
                     )}
                   >
                     {isImportDragging
-                      ? "松开即可上传 JSON 文件"
-                      : importFile?.name ?? "点击选择或拖拽 JSON 文件到这里"}
+                      ? tSite("import.dropHint")
+                      : importFile?.name ?? tSite("import.pickHint")}
                   </span>
                 </button>
                 <IconActionButton
-                  label="清除文件"
+                  label={tSite("import.clearFile")}
                   onClick={() => {
                     setSelectedImportFile(null);
                   }}
@@ -2232,13 +2319,16 @@ export function Site() {
               </div>
               <div className="text-xs text-muted-foreground">
                 {importFile
-                  ? `已选择：${importFile.name}`
-                  : `支持 ${importSource === "metapi" ? "Metapi" : "All API Hub"} 导出的 .json 文件`}
+                  ? tSite("import.selectedFile", { name: importFile.name })
+                  : tSite("import.supportedFile", {
+                      source:
+                        importSource === "metapi" ? "Metapi" : "All API Hub",
+                    })}
               </div>
             </div>
 
             <label className="grid gap-2 text-sm">
-              <span className="font-medium">或粘贴导出 JSON</span>
+              <span className="font-medium">{tSite("import.pasteLabel")}</span>
               <textarea
                 value={importPayloadText}
                 onChange={(event) => {
@@ -2247,15 +2337,15 @@ export function Site() {
                 }}
                 placeholder={
                   importSource === "metapi"
-                    ? '粘贴类似 {"version":"2.1","accounts":{"sites":[...],"accounts":[...]}} 的完整导出内容'
-                    : '粘贴类似 {"accounts":{"accounts":[...]}} 的完整导出内容'
+                    ? tSite("import.pastePlaceholderMetapi")
+                    : tSite("import.pastePlaceholderAllAPIHub")
                 }
                 className="min-h-40 rounded-2xl border border-input bg-background px-4 py-3 font-mono text-xs outline-none transition focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20"
               />
               <span className="text-xs text-muted-foreground">
                 {importSource === "metapi"
-                  ? "Metapi 导入只迁移站点、账号、Key、分组和模型；路由策略与下游 Key 会跳过。"
-                  : "导入会保留已存在站点的本地配置；同一分组下的多个 key 后续仍会聚合到同一个托管 channel。"}
+                  ? tSite("import.hintMetapi")
+                  : tSite("import.hintAllAPIHub")}
               </span>
             </label>
 
@@ -2263,48 +2353,48 @@ export function Site() {
               <div className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <SiteMetric
-                    label="新增站点"
+                    label={tSite("import.createdSites")}
                     value={lastImportResult.created_sites}
                   />
                   <SiteMetric
-                    label="复用站点"
+                    label={tSite("import.reusedSites")}
                     value={lastImportResult.reused_sites}
                   />
                   <SiteMetric
-                    label="新增账号"
+                    label={tSite("import.createdAccounts")}
                     value={lastImportResult.created_accounts}
                   />
                   <SiteMetric
-                    label="更新账号"
+                    label={tSite("import.updatedAccounts")}
                     value={lastImportResult.updated_accounts}
                   />
                   <SiteMetric
-                    label="跳过账号"
+                    label={tSite("import.skippedAccounts")}
                     value={lastImportResult.skipped_accounts}
                   />
                   {typeof lastImportResult.scheduled_sync_accounts ===
                   "number" ? (
                     <SiteMetric
-                      label="后台同步"
+                      label={tSite("import.scheduledSync")}
                       value={lastImportResult.scheduled_sync_accounts}
                     />
                   ) : null}
                   {typeof lastImportResult.imported_tokens === "number" ? (
                     <>
                       <SiteMetric
-                        label="导入 Key"
+                        label={tSite("import.importedTokens")}
                         value={lastImportResult.imported_tokens}
                       />
                       <SiteMetric
-                        label="导入分组"
+                        label={tSite("import.importedGroups")}
                         value={lastImportResult.imported_groups ?? 0}
                       />
                       <SiteMetric
-                        label="导入模型"
+                        label={tSite("import.importedModels")}
                         value={lastImportResult.imported_models ?? 0}
                       />
                       <SiteMetric
-                        label="禁用模型"
+                        label={tSite("import.disabledModels")}
                         value={lastImportResult.disabled_models ?? 0}
                       />
                     </>
@@ -2315,7 +2405,7 @@ export function Site() {
                   <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <TriangleAlert className="size-4 text-muted-foreground" />
-                      <span>导入告警</span>
+                      <span>{tSite("import.warnings")}</span>
                     </div>
                     <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                       {lastImportResult.warnings.map((warning) => (
@@ -2339,7 +2429,7 @@ export function Site() {
               className="rounded-xl"
               onClick={() => setImportDialogOpen(false)}
             >
-              关闭
+              {tSite("common.close")}
             </Button>
             <Button
               onClick={handleImportSites}
@@ -2355,8 +2445,8 @@ export function Site() {
                 )}
               />
               {importAllAPIHub.isPending || importMetAPI.isPending
-                ? "导入中..."
-                : "开始导入"}
+                ? tSite("import.submitting")
+                : tSite("import.submit")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2365,23 +2455,25 @@ export function Site() {
       <Dialog open={archivedDialogOpen} onOpenChange={setArchivedDialogOpen}>
         <DialogContent className="flex h-[min(85vh,42rem)] max-w-3xl flex-col overflow-hidden rounded-3xl border-border/70 p-0 sm:max-w-3xl">
           <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-4">
-            <DialogTitle>归档站点</DialogTitle>
+            <DialogTitle>{tSite("archived.title")}</DialogTitle>
             <DialogDescription>
-              归档的站点仍保留账号、Key 和模型配置，托管渠道会被下线。点击恢复会还原到主列表（默认保持禁用状态，启用后会自动重建托管渠道）。
+              {tSite("archived.description")}
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
             {archivedLoading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                正在加载归档站点...
+                {tSite("archived.loading")}
               </div>
             ) : archivedError ? (
               <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-                加载失败：{getSiteErrorMessage(locale, archivedError, t)}
+                {tSite("archived.loadFailed", {
+                  message: getSiteErrorMessage(locale, archivedError, t),
+                })}
               </div>
             ) : !archivedSites || archivedSites.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                当前没有归档的站点。
+                {tSite("archived.empty")}
               </div>
             ) : (
               <div className="space-y-2">
@@ -2403,12 +2495,15 @@ export function Site() {
                         </span>
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        归档于{" "}
-                        {site.archived_at
-                          ? new Date(site.archived_at).toLocaleString()
-                          : "-"}
+                        {tSite("archived.archivedAt", {
+                          time: site.archived_at
+                            ? new Date(site.archived_at).toLocaleString()
+                            : "-",
+                        })}
                         {" · "}
-                        {site.accounts.length} 个账号已保留
+                        {tSite("archived.accountsKept", {
+                          count: site.accounts.length,
+                        })}
                       </div>
                     </div>
                     <Button
@@ -2419,7 +2514,7 @@ export function Site() {
                       disabled={restoreSite.isPending}
                     >
                       <ArchiveRestore className="size-4" />
-                      恢复
+                      {tSite("archived.restore")}
                     </Button>
                   </div>
                 ))}
@@ -2432,7 +2527,7 @@ export function Site() {
               className="rounded-xl"
               onClick={() => setArchivedDialogOpen(false)}
             >
-              关闭
+              {tSite("common.close")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2447,16 +2542,22 @@ export function Site() {
         <DialogContent className="max-w-md rounded-3xl">
           <DialogHeader>
             <DialogTitle>
-              {deleteConfirm?.type === "archive-site" ? "确认归档" : "确认删除"}
+              {deleteConfirm?.type === "archive-site"
+                ? tSite("confirm.archiveTitle")
+                : tSite("confirm.deleteTitle")}
             </DialogTitle>
             <DialogDescription>
               {deleteConfirm?.type === "site"
-                ? `确认删除站点「${deleteConfirm?.name}」及其所有账号和托管渠道？此操作不可撤销。`
+                ? tSite("confirm.deleteSite", { name: deleteConfirm?.name })
                 : deleteConfirm?.type === "archive-site"
-                  ? `确认归档站点「${deleteConfirm?.name}」？归档后将从主列表移除，托管渠道会被下线，账号和密钥会保留；可在『归档站点』中随时恢复。`
+                  ? tSite("confirm.archiveSite", { name: deleteConfirm?.name })
                   : deleteConfirm?.type === "batch-site"
-                    ? `确认删除已选的 ${deleteConfirm?.name} 个站点及其所有账号和托管渠道？此操作不可撤销。`
-                    : `确认删除账号「${deleteConfirm?.name}」及其托管渠道？此操作不可撤销。`}
+                    ? tSite("confirm.deleteBatch", {
+                        count: deleteConfirm?.name,
+                      })
+                    : tSite("confirm.deleteAccount", {
+                        name: deleteConfirm?.name ?? "",
+                      })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -2465,7 +2566,7 @@ export function Site() {
               className="rounded-xl"
               onClick={() => setDeleteConfirm(null)}
             >
-              取消
+              {tSite("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -2480,13 +2581,13 @@ export function Site() {
             >
               {deleteConfirm?.type === "archive-site"
                 ? archiveSite.isPending
-                  ? "归档中..."
-                  : "确认归档"
+                  ? tSite("confirm.archiving")
+                  : tSite("confirm.archiveConfirm")
                 : deleteSite.isPending ||
                     deleteSiteAccount.isPending ||
                     batchAction.isPending
-                  ? "删除中..."
-                  : "确认删除"}
+                  ? tSite("confirm.deleting")
+                  : tSite("confirm.deleteConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

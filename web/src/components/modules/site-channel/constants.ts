@@ -29,17 +29,17 @@ export const ROUTE_COLUMN_KEY_PREFIX = 'site-route-column';
 export function getRouteTypeTone(routeType: SiteModelRouteType) {
     switch (routeType) {
         case 'unknown':
-            return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+            return 'border-warning/30 bg-warning/10 text-warning';
         case 'anthropic':
-            return 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300';
+            return 'border-warning/30 bg-warning/10 text-warning';
         case 'gemini':
-            return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+            return 'border-success/30 bg-success/10 text-success';
         case 'volcengine':
-            return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300';
+            return 'border-info/30 bg-info/10 text-info';
         case 'openai_embedding':
-            return 'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300';
+            return 'border-border bg-muted/40 text-muted-foreground';
         case 'openai_response':
-            return 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300';
+            return 'border-info/30 bg-info/10 text-info';
         default:
             return 'border-primary/20 bg-primary/10 text-primary';
     }
@@ -54,9 +54,9 @@ export function getRouteSourceTone(routeSource: SiteModelRouteSource) {
         case 'manual_override':
             return 'border-primary/30 bg-primary/10 text-primary';
         case 'runtime_learned':
-            return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300';
+            return 'border-info/30 bg-info/10 text-info';
         case 'default_assigned':
-            return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+            return 'border-warning/30 bg-warning/10 text-warning';
         default:
             return 'border-border bg-muted/40 text-muted-foreground';
     }

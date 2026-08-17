@@ -165,9 +165,9 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
                                     aria-hidden="true"
                                     className={`mt-1.5 size-2 shrink-0 rounded-full ${
                                         isTesting
-                                            ? 'animate-pulse bg-amber-500'
+                                            ? 'animate-pulse bg-warning'
                                             : result?.success
-                                                ? 'bg-emerald-500'
+                                                ? 'bg-success'
                                                 : result
                                                     ? 'bg-destructive'
                                                     : 'bg-muted-foreground/30'
@@ -180,9 +180,9 @@ export function ChannelModelActions({ channel, onNavigate }: { channel: Channel;
                                             aria-live="polite"
                                             className={`mt-0.5 flex items-center gap-1 text-xs font-medium ${
                                                 isTesting
-                                                    ? 'text-amber-600'
+                                                    ? 'text-warning'
                                                     : result?.success
-                                                        ? 'text-emerald-600'
+                                                        ? 'text-success'
                                                         : 'text-destructive'
                                             }`}
                                         >

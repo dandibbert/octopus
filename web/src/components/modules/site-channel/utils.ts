@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type {
     SiteChannelAccount,
     SiteChannelCard,
@@ -8,6 +9,8 @@ import type {
     SiteModelRouteSource,
     SiteModelRouteType,
 } from '@/api/endpoints/site-channel';
+
+export type SiteChannelTranslate = ReturnType<typeof useTranslations<'siteChannel'>>;
 
 export type PendingCompletionKeyItem = {
     site_id: number;
@@ -81,10 +84,10 @@ export function isSameGroupFilter(
     return true;
 }
 
-export function routeTypeLabel(routeType: SiteModelRouteType) {
+export function routeTypeLabel(routeType: SiteModelRouteType, t: SiteChannelTranslate) {
     switch (routeType) {
         case 'unknown':
-            return '未识别端点';
+            return t('routeType.unknown');
         case 'openai_response':
             return 'OpenAI Response';
         case 'anthropic':
@@ -100,20 +103,20 @@ export function routeTypeLabel(routeType: SiteModelRouteType) {
     }
 }
 
-export function routeSourceLabel(routeSource: SiteModelRouteSource) {
+export function routeSourceLabel(routeSource: SiteModelRouteSource, t: SiteChannelTranslate) {
     switch (routeSource) {
         case 'manual_override':
-            return '\u624b\u52a8';
+            return t('routeSource.manual');
         case 'runtime_learned':
-            return '\u8fd0\u884c\u65f6';
+            return t('routeSource.runtime');
         case 'default_assigned':
-            return '\u9ed8\u8ba4';
+            return t('routeSource.default');
         default:
-            return '\u540c\u6b65\u63a8\u65ad';
+            return t('routeSource.synced');
     }
 }
 
-export function platformLabel(platform: SiteChannelCard['platform']) {
+export function platformLabel(platform: SiteChannelCard['platform'], t: SiteChannelTranslate) {
     switch (platform) {
         case 'new-api':
             return 'New API';
@@ -128,7 +131,7 @@ export function platformLabel(platform: SiteChannelCard['platform']) {
         case 'sub2api':
             return 'Sub2API';
         case 'api':
-            return 'API 直连';
+            return t('platform.api');
         default:
             return platform;
     }
@@ -363,10 +366,10 @@ export function hasSourceKeyChanges(
     return Boolean(payload.keys_to_add?.length || payload.keys_to_update?.length || payload.keys_to_delete?.length);
 }
 
-export function formatHistoryTime(value?: number | null) {
-    if (!value) return '\u4ece\u672a\u8bf7\u6c42';
+export function formatHistoryTime(value: number | null | undefined, t: SiteChannelTranslate) {
+    if (!value) return t('history.never');
     const date = new Date(value * 1000);
-    if (Number.isNaN(date.getTime())) return '\u4ece\u672a\u8bf7\u6c42';
+    if (Number.isNaN(date.getTime())) return t('history.never');
     return date.toLocaleString();
 }
 

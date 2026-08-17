@@ -2,6 +2,7 @@
 
 import { type ReactNode } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -14,10 +15,11 @@ export type ToolbarAction = {
     disabled?: boolean;
     badge?: number;
     priority: 'always' | 'desktop' | 'large' | 'menu-only';
-    // always:    始终可见（搜索）
-    // desktop:   较常用，空间足够即平铺，否则折叠进"更多"（新增/刷新）
-    // large:     次要，仅大屏平铺，否则折叠进"更多"（代理池/补全）
-    // menu-only: 只在菜单（设置/页面操作）
+    // always:    任何断点都平铺，从不折叠（搜索）
+    // desktop:   md 以上平铺；仅在 <md 且"更多"确实显示时才折叠（新增/刷新）
+    // large:     自适应——只有 1 个 large 项时 md 以上即平铺，多个才推迟到 xl 以上；
+    //            未平铺的断点折叠进"更多"（代理池/补全）
+    // menu-only: 任何断点都只出现在"更多"菜单里（设置/页面操作）
 };
 
 interface ToolbarMenuProps {
@@ -25,6 +27,7 @@ interface ToolbarMenuProps {
 }
 
 export function ToolbarMenu({ actions }: ToolbarMenuProps) {
+    const t = useTranslations('toolbar');
     const alwaysVisible = actions.filter((a) => a.priority === 'always');
     const desktopVisible = actions.filter((a) => a.priority === 'desktop');
     const largeVisible = actions.filter((a) => a.priority === 'large');
@@ -96,7 +99,7 @@ export function ToolbarMenu({ actions }: ToolbarMenuProps) {
                     <PopoverTrigger asChild>
                         <button
                             type="button"
-                            aria-label="更多操作"
+                            aria-label={t('actions.more')}
                             className={cn(
                                 buttonVariants({
                                     variant: 'ghost',
@@ -187,7 +190,7 @@ function ActionButton({ action }: { action: ToolbarAction }) {
         >
             {action.icon}
             {action.badge !== undefined && action.badge > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-3xs font-bold text-primary-foreground">
                     {action.badge > 99 ? '99+' : action.badge}
                 </span>
             )}

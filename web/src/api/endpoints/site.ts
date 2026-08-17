@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, API_BASE_URL } from "../client";
 import { logger } from "@/lib/logger";
 import { useAuthStore } from "./user";
+import { useSiteEnabled } from "./setting";
 import type { ProxyMode } from "./proxy-pool";
 
 export enum SitePlatform {
@@ -212,20 +213,23 @@ export type MetAPIImportResult = {
 };
 
 export function useSiteList() {
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useQuery({
     queryKey: ["sites", "list"],
     queryFn: async () => apiClient.get<SiteServer[]>("/api/v1/site/list"),
     select: normalizeSiteServerList,
+    enabled: siteEnabled,
     refetchInterval: 30000,
   });
 }
 
 export function useArchivedSiteList(enabled = false) {
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useQuery({
     queryKey: ["sites", "archived"],
     queryFn: async () => apiClient.get<SiteServer[]>("/api/v1/site/archived"),
     select: normalizeSiteServerList,
-    enabled,
+    enabled: siteEnabled && enabled,
   });
 }
 
@@ -321,10 +325,14 @@ function extractResponseData<T>(payload: unknown): T | undefined {
 
 export function useCreateSite() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
     mutationFn: async (
       data: Omit<Site, "id" | "accounts" | "archived" | "archived_at">,
-    ) => apiClient.post<Site>("/api/v1/site/create", data),
+    ) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<Site>("/api/v1/site/create", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点创建失败:", error),
   });
@@ -332,10 +340,14 @@ export function useCreateSite() {
 
 export function useUpdateSite() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
     mutationFn: async (
       data: Partial<Omit<Site, "accounts">> & { id: number },
-    ) => apiClient.post<Site>("/api/v1/site/update", data),
+    ) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<Site>("/api/v1/site/update", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点更新失败:", error),
   });
@@ -343,9 +355,12 @@ export function useUpdateSite() {
 
 export function useEnableSite() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (data: { id: number; enabled: boolean }) =>
-      apiClient.post<null>("/api/v1/site/enable", data),
+    mutationFn: async (data: { id: number; enabled: boolean }) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<null>("/api/v1/site/enable", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点状态更新失败:", error),
   });
@@ -353,9 +368,12 @@ export function useEnableSite() {
 
 export function useDeleteSite() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (id: number) =>
-      apiClient.delete<null>(`/api/v1/site/delete/${id}`),
+    mutationFn: async (id: number) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.delete<null>(`/api/v1/site/delete/${id}`);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点删除失败:", error),
   });
@@ -363,9 +381,12 @@ export function useDeleteSite() {
 
 export function useArchiveSite() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (id: number) =>
-      apiClient.post<null>(`/api/v1/site/archive/${id}`),
+    mutationFn: async (id: number) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<null>(`/api/v1/site/archive/${id}`);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点归档失败:", error),
   });
@@ -373,9 +394,12 @@ export function useArchiveSite() {
 
 export function useRestoreSite() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (id: number) =>
-      apiClient.post<null>(`/api/v1/site/restore/${id}`),
+    mutationFn: async (id: number) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<null>(`/api/v1/site/restore/${id}`);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点恢复失败:", error),
   });
@@ -383,6 +407,7 @@ export function useRestoreSite() {
 
 export function useCreateSiteAccount() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
     mutationFn: async (
       data: Omit<
@@ -402,7 +427,10 @@ export function useCreateSiteAccount() {
         | "balance_used"
         | "today_income"
       >,
-    ) => apiClient.post<SiteAccount>("/api/v1/site/account/create", data),
+    ) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<SiteAccount>("/api/v1/site/account/create", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点账号创建失败:", error),
   });
@@ -410,6 +438,7 @@ export function useCreateSiteAccount() {
 
 export function useUpdateSiteAccount() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
     mutationFn: async (
       data: Partial<
@@ -418,7 +447,10 @@ export function useUpdateSiteAccount() {
           "tokens" | "user_groups" | "models" | "channel_bindings"
         >
       > & { id: number },
-    ) => apiClient.post<SiteAccount>("/api/v1/site/account/update", data),
+    ) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<SiteAccount>("/api/v1/site/account/update", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点账号更新失败:", error),
   });
@@ -426,9 +458,12 @@ export function useUpdateSiteAccount() {
 
 export function useEnableSiteAccount() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (data: { id: number; enabled: boolean }) =>
-      apiClient.post<null>("/api/v1/site/account/enable", data),
+    mutationFn: async (data: { id: number; enabled: boolean }) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<null>("/api/v1/site/account/enable", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点账号状态更新失败:", error),
   });
@@ -436,9 +471,12 @@ export function useEnableSiteAccount() {
 
 export function useDeleteSiteAccount() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (id: number) =>
-      apiClient.delete<null>(`/api/v1/site/account/delete/${id}`),
+    mutationFn: async (id: number) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.delete<null>(`/api/v1/site/account/delete/${id}`);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点账号删除失败:", error),
   });
@@ -446,9 +484,15 @@ export function useDeleteSiteAccount() {
 
 export function useSyncSiteAccount() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (id: number) =>
-      apiClient.post<SiteSyncResult>(`/api/v1/site/account/sync/${id}`, {}),
+    mutationFn: async (id: number) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<SiteSyncResult>(
+        `/api/v1/site/account/sync/${id}`,
+        {},
+      );
+    },
     onSettled: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点账号同步失败:", error),
   });
@@ -456,12 +500,15 @@ export function useSyncSiteAccount() {
 
 export function useCheckinSiteAccount() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (id: number) =>
-      apiClient.post<SiteCheckinResult>(
+    mutationFn: async (id: number) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<SiteCheckinResult>(
         `/api/v1/site/account/checkin/${id}`,
         {},
-      ),
+      );
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点账号签到失败:", error),
   });
@@ -469,8 +516,12 @@ export function useCheckinSiteAccount() {
 
 export function useSyncAllSites() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async () => apiClient.post<null>("/api/v1/site/sync-all", {}),
+    mutationFn: async () => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<null>("/api/v1/site/sync-all", {});
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点批量同步失败:", error),
   });
@@ -478,35 +529,44 @@ export function useSyncAllSites() {
 
 export function useCheckinAllSites() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async () =>
-      apiClient.post<null>("/api/v1/site/checkin-all", {}),
+    mutationFn: async () => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<null>("/api/v1/site/checkin-all", {});
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("站点批量签到失败:", error),
   });
 }
 
 export function useSiteLastSyncTime() {
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useQuery({
     queryKey: ["sites", "last-sync-time"],
     queryFn: async () => apiClient.get<string>("/api/v1/site/last-sync-time"),
+    enabled: siteEnabled,
     refetchInterval: 30000,
   });
 }
 
 export function useSiteLastCheckinTime() {
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useQuery({
     queryKey: ["sites", "last-checkin-time"],
     queryFn: async () =>
       apiClient.get<string>("/api/v1/site/last-checkin-time"),
+    enabled: siteEnabled,
     refetchInterval: 30000,
   });
 }
 
 export function useImportAllAPIHub() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
     mutationFn: async (payload: { file?: File | null; text?: string }) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
       const hasFile = !!payload.file;
       const hasText = !!payload.text?.trim();
       if (!hasFile && !hasText) {
@@ -564,8 +624,10 @@ export function useImportAllAPIHub() {
 
 export function useImportMetAPI() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
     mutationFn: async (payload: { file?: File | null; text?: string }) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
       const hasFile = !!payload.file;
       const hasText = !!payload.text?.trim();
       if (!hasFile && !hasText) {
@@ -619,21 +681,30 @@ export function useImportMetAPI() {
 }
 
 export function useDetectSitePlatform() {
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (url: string) =>
-      apiClient.post<{ platform: string; default_route_type?: string }>("/api/v1/site/detect", { url }),
+    mutationFn: async (url: string) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<{ platform: string; default_route_type?: string }>(
+        "/api/v1/site/detect",
+        { url },
+      );
+    },
     onError: (error) => logger.error("平台检测失败:", error),
   });
 }
 
 export function useSiteBatchAction() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
-    mutationFn: async (data: { ids: number[]; action: string }) =>
-      apiClient.post<{
+    mutationFn: async (data: { ids: number[]; action: string }) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<{
         success_ids: number[];
         failed_items: Array<{ id: number; message: string }>;
-      }>("/api/v1/site/batch", data),
+      }>("/api/v1/site/batch", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("批量操作失败:", error),
   });
@@ -641,6 +712,7 @@ export function useSiteBatchAction() {
 
 export function useSiteBatchEdit() {
   const queryClient = useQueryClient();
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useMutation({
     mutationFn: async (data: {
       ids: number[];
@@ -648,23 +720,26 @@ export function useSiteBatchEdit() {
       remove_tags: string[];
       upserts: CustomHeader[];
       delete_keys: string[];
-    }) =>
-      apiClient.post<{
+    }) => {
+      if (!siteEnabled) throw new Error("Site features are disabled");
+      return apiClient.post<{
         success_ids: number[];
         failed_items: Array<{ id: number; message: string }>;
-      }>("/api/v1/site/batch/edit", data),
+      }>("/api/v1/site/batch/edit", data);
+    },
     onSuccess: () => invalidateSiteQueries(queryClient),
     onError: (error) => logger.error("批量编辑失败:", error),
   });
 }
 
 export function useSiteAvailableModels(siteId: number | null) {
+  const { enabled: siteEnabled } = useSiteEnabled();
   return useQuery({
     queryKey: ["sites", "available-models", siteId],
     queryFn: async () =>
       apiClient.get<{ site_id: number; models: string[] }>(
         `/api/v1/site/${siteId}/available-models`,
       ),
-    enabled: siteId != null && siteId > 0,
+    enabled: siteEnabled && siteId != null && siteId > 0,
   });
 }

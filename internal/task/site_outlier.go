@@ -28,6 +28,9 @@ type channelProber interface {
 
 // SiteOutlierRetireTask 被动离群退役（POR）控制面任务：
 // 阶段0 恢复探活 → 阶段1 门1窗口评估 → 阶段2 同站佐证 → 阶段3 探活确认 → 软退役。
+// POR 刻意不受站点功能总开关约束：它管的是已投影渠道的健康，
+// 而这些渠道在站点功能关闭后仍在中继。若一并停掉，被软退役的渠道
+// 将失去恢复探活，永久停在 enabled=false。
 func SiteOutlierRetireTask() {
 	enabled, err := op.SettingGetBool(model.SettingKeyOutlierRetireEnabled)
 	if err != nil || !enabled {

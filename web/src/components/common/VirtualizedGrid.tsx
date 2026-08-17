@@ -10,21 +10,26 @@ import {
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-const BREAKPOINTS = {
-    sm: 640,
-    md: 768,
-    lg: 960,
-    xl: 1280,
-    '2xl': 1536,
-} as const;
+export const GRID_GAP = 16;
 
-type Breakpoint = keyof typeof BREAKPOINTS;
-type ResponsiveColumns = Partial<Record<Breakpoint | 'default', number>>;
+/**
+ * 按「一张卡片至少需要多宽才可读」推导列数。
+ *
+ * 这里量的是容器宽度而非视口宽度（应用外壳 max-w-6xl 再减去侧栏，容器
+ * 始终窄于视口），所以不能复用 Tailwind 的视口断点——那样会让同一页面的
+ * 骨架屏（CSS 断点）和真实列表在某些宽度下列数不一致。
+ */
+export function columnsByMinWidth(minCardWidth: number, maxColumns = 6) {
+    return (containerWidth: number) => {
+        const cols = Math.floor((containerWidth + GRID_GAP) / (minCardWidth + GRID_GAP));
+        return Math.max(1, Math.min(maxColumns, cols));
+    };
+}
 
 interface VirtualizedGridProps<T> {
     items: T[];
     layout?: 'grid' | 'list';
-    columns: ResponsiveColumns | ((containerWidth: number) => number);
+    columns: number | ((containerWidth: number) => number);
     estimateItemHeight: number;
     gap?: number;
     overscan?: number;
@@ -39,24 +44,12 @@ interface VirtualizedGridProps<T> {
     onScroll?: (info: { scrollTop: number; scrollHeight: number; clientHeight: number }) => void;
 }
 
-function getColumnsForWidth(
-    width: number,
-    columns: ResponsiveColumns,
-): number {
-    if (width >= BREAKPOINTS['2xl'] && columns['2xl'] !== undefined) return columns['2xl'];
-    if (width >= BREAKPOINTS.xl && columns.xl !== undefined) return columns.xl;
-    if (width >= BREAKPOINTS.lg && columns.lg !== undefined) return columns.lg;
-    if (width >= BREAKPOINTS.md && columns.md !== undefined) return columns.md;
-    if (width >= BREAKPOINTS.sm && columns.sm !== undefined) return columns.sm;
-    return columns.default ?? 1;
-}
-
 export function VirtualizedGrid<T>({
     items,
     layout = 'grid',
     columns,
     estimateItemHeight,
-    gap = 16,
+    gap = GRID_GAP,
     overscan = 4,
     getItemKey,
     renderItem,
@@ -98,10 +91,7 @@ export function VirtualizedGrid<T>({
 
     const columnCount = useMemo(() => {
         if (layout === 'list') return 1;
-        if (typeof columns === 'function') {
-            return Math.max(1, columns(containerWidth));
-        }
-        return Math.max(1, getColumnsForWidth(containerWidth, columns));
+        return Math.max(1, typeof columns === 'function' ? columns(containerWidth) : columns);
     }, [layout, containerWidth, columns]);
 
     const itemRowCount = useMemo(

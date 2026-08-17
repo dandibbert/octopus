@@ -4,10 +4,11 @@ import { useMemo, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion } from 'motion/react';
 import { useChannelList } from '@/api/endpoints/channel';
+import { useSiteEnabled } from '@/api/endpoints/setting';
 import { useSiteChannelList } from '@/api/endpoints/site-channel';
 import { SiteChannelCompletionAction } from '@/components/modules/site-channel';
 import { cn } from '@/lib/utils';
-import { useChannelTabStore, type ChannelTab } from './tab-store';
+import { useChannelTabStore, useEffectiveChannelTab, type ChannelTab } from './tab-store';
 
 const TABS: { value: ChannelTab; key: 'site' | 'manual' }[] = [
     { value: 'site', key: 'site' },
@@ -24,10 +25,16 @@ export function ChannelTabSwitcher({
     underlineLayoutId = 'channel-tab-underline',
 }: Props) {
     const t = useTranslations('channel.tabs');
-    const activeTab = useChannelTabStore((s) => s.activeTab);
+    const { enabled: siteEnabled } = useSiteEnabled();
+    const activeTab = useEffectiveChannelTab();
     const setActiveTab = useChannelTabStore((s) => s.setActiveTab);
     const { data: channelsData } = useChannelList();
     const { data: siteChannelsData } = useSiteChannelList({ includeHistory: false });
+
+    const tabs = useMemo(
+        () => (siteEnabled ? TABS : TABS.filter((tab) => tab.value !== 'site')),
+        [siteEnabled],
+    );
 
     const counts = useMemo(
         () => ({
@@ -39,14 +46,14 @@ export function ChannelTabSwitcher({
 
     const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
         let nextIndex = currentIndex;
-        if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % TABS.length;
-        else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+        if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
         else if (event.key === 'Home') nextIndex = 0;
-        else if (event.key === 'End') nextIndex = TABS.length - 1;
+        else if (event.key === 'End') nextIndex = tabs.length - 1;
         else return;
 
         event.preventDefault();
-        const nextTab = TABS[nextIndex].value;
+        const nextTab = tabs[nextIndex].value;
         setActiveTab(nextTab);
         event.currentTarget.parentElement
             ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
@@ -54,13 +61,16 @@ export function ChannelTabSwitcher({
             .focus();
     };
 
+    // 只剩一个 tab 时切换器没有意义，让渠道页回到无标签的单一形态
+    if (tabs.length < 2) return null;
+
     return (
         <div
             role="tablist"
-            aria-label={`${t('site')} / ${t('manual')}`}
+            aria-label={tabs.map(({ key }) => t(key)).join(' / ')}
             className={cn('flex items-center gap-3 sm:gap-5', className)}
         >
-            {TABS.map(({ value, key }, index) => {
+            {tabs.map(({ value, key }, index) => {
                 const active = activeTab === value;
                 return (
                     <button
@@ -100,7 +110,7 @@ export function ChannelTabSwitcher({
 }
 
 export function ChannelHeaderActions() {
-    const activeTab = useChannelTabStore((s) => s.activeTab);
+    const activeTab = useEffectiveChannelTab();
     if (activeTab !== 'site') return null;
     return <SiteChannelCompletionAction />;
 }

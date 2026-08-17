@@ -4,9 +4,12 @@ import { useMemo } from 'react';
 import { GroupCard } from './Card';
 import { useGroupList } from '@/api/endpoints/group';
 import { useSearchStore, useToolbarViewOptionsStore } from '@/components/modules/toolbar';
-import { VirtualizedGrid } from '@/components/common/VirtualizedGrid';
+import { VirtualizedGrid, columnsByMinWidth } from '@/components/common/VirtualizedGrid';
+import { ListState } from '@/components/common/ListState';
 import { Layers3 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+
+const GROUP_COLUMNS = columnsByMinWidth(320, 3);
 
 export function Group() {
     const { data: groups } = useGroupList();
@@ -41,22 +44,16 @@ export function Group() {
     return (
         <VirtualizedGrid
             items={visibleGroups}
-            columns={{ default: 1, md: 2, lg: 3 }}
+            columns={GROUP_COLUMNS}
             estimateItemHeight={520}
             getItemKey={(group, index) => group.id ?? `group-${index}`}
             renderItem={(group) => <GroupCard group={group} />}
             emptyState={
-                <div className="flex max-w-sm flex-col items-center gap-3 rounded-3xl border border-dashed bg-card px-8 py-10 text-center">
-                    <Layers3 className="size-10 text-muted-foreground/60" />
-                    <div>
-                        <p className="font-medium text-card-foreground">
-                            {searchTerm.trim() ? t('empty.noMatchTitle') : t('empty.title')}
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {searchTerm.trim() ? t('empty.noMatchDescription') : t('empty.description')}
-                        </p>
-                    </div>
-                </div>
+                <ListState
+                    icon={Layers3}
+                    title={searchTerm.trim() ? t('empty.noMatchTitle') : t('empty.title')}
+                    description={searchTerm.trim() ? t('empty.noMatchDescription') : t('empty.description')}
+                />
             }
         />
     );

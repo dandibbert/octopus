@@ -12,7 +12,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useChannelList } from '@/api/endpoints/channel';
 import { useSiteChannelList } from '@/api/endpoints/site-channel';
-import { SettingKey, useSettingValue } from '@/api/endpoints/setting';
+import { SettingKey, useSettingValue, useSiteEnabled } from '@/api/endpoints/setting';
 import { useToolbarViewOptionsStore, type LogRequestSource } from '@/components/modules/toolbar/view-options-store';
 import { useSearchStore } from '@/components/modules/toolbar/search-store';
 
@@ -128,7 +128,7 @@ function DateTimePicker({ value, placeholder, defaultTime, disabledRange, onChan
                     numberOfMonths={1}
                 />
                 <div className="flex items-center gap-2 border-t border-border/60 px-3 py-2">
-                    <span className="text-[11px] font-medium text-muted-foreground">HH:mm</span>
+                    <span className="text-2xs font-medium text-muted-foreground">HH:mm</span>
                     <input
                         type="time"
                         value={timeString}
@@ -155,6 +155,7 @@ export function LogFilterPopover() {
     const setLogKeywordMode = useToolbarViewOptionsStore((s) => s.setLogKeywordMode);
     const setLogKeywordScope = useToolbarViewOptionsStore((s) => s.setLogKeywordScope);
     const { value: logKeepPeriodValue } = useSettingValue(SettingKey.RelayLogKeepPeriod, '0');
+    const { enabled: siteEnabled } = useSiteEnabled();
     const { data: channels } = useChannelList();
     const { data: sites } = useSiteChannelList({ includeHistory: false });
 
@@ -174,7 +175,7 @@ export function LogFilterPopover() {
         for (const item of channels) {
             const entry: ChannelEntry = { id: item.raw.id, name: item.raw.name };
             const src = item.raw.managed_source;
-            if (item.raw.managed && src?.site_id) {
+            if (siteEnabled && item.raw.managed && src?.site_id) {
                 const list = siteBuckets.get(src.site_id) ?? [];
                 list.push(entry);
                 siteBuckets.set(src.site_id, list);
@@ -202,7 +203,7 @@ export function LogFilterPopover() {
             });
         }
         return result;
-    }, [channels, sites, t]);
+    }, [channels, siteEnabled, sites, t]);
 
     const filteredGroups = useMemo(() => {
         const term = search.trim().toLowerCase();
@@ -316,7 +317,7 @@ export function LogFilterPopover() {
                 >
                     <Filter className="size-4 transition-colors duration-300" />
                     {activeCount > 0 ? (
-                        <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+                        <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-3xs font-semibold leading-none text-primary-foreground">
                             {activeCount}
                         </span>
                     ) : null}
@@ -360,7 +361,7 @@ export function LogFilterPopover() {
                             />
                         </div>
                         {logKeepPeriod > 0 ? (
-                            <p className="text-[11px] leading-4 text-muted-foreground">{t('popover.logFilter.date.hint')}</p>
+                            <p className="text-2xs leading-4 text-muted-foreground">{t('popover.logFilter.date.hint')}</p>
                         ) : null}
                     </div>
 
@@ -375,7 +376,7 @@ export function LogFilterPopover() {
                                         type="button"
                                         onClick={() => setLogKeywordMode(mode)}
                                         className={cn(
-                                            'rounded-md py-1 text-[11px] transition-colors',
+                                            'rounded-md py-1 text-2xs transition-colors',
                                             active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                                         )}
                                     >
@@ -384,7 +385,7 @@ export function LogFilterPopover() {
                                 );
                             })}
                         </div>
-                        <label className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                        <label className="flex items-center justify-between gap-2 text-2xs text-muted-foreground">
                             <span>{t('popover.logFilter.search.includeContent')}</span>
                             <input
                                 type="checkbox"
@@ -398,7 +399,7 @@ export function LogFilterPopover() {
                             />
                         </label>
                         {(logKeywordMode === 'contains' || logKeywordScope === 'content') ? (
-                            <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">
+                            <p className="text-2xs leading-4 text-warning">
                                 {t('popover.logFilter.search.slowHint')}
                             </p>
                         ) : null}
@@ -408,7 +409,7 @@ export function LogFilterPopover() {
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-medium text-muted-foreground">{t('popover.logFilter.source.title')}</p>
                             {logRequestSources.length > 0 ? (
-                                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-semibold tabular-nums">
+                                <Badge variant="secondary" className="h-5 px-1.5 text-3xs font-semibold tabular-nums">
                                     {logRequestSources.length}
                                 </Badge>
                             ) : null}
@@ -422,7 +423,7 @@ export function LogFilterPopover() {
                                         type="button"
                                         onClick={() => toggleRequestSource(source)}
                                         className={cn(
-                                            'flex min-h-8 items-center justify-center rounded-lg border px-1.5 text-[11px] transition-colors',
+                                            'flex min-h-8 items-center justify-center rounded-lg border px-1.5 text-2xs transition-colors',
                                             checked
                                                 ? 'border-primary bg-primary text-primary-foreground'
                                                 : 'border-border bg-muted/20 text-muted-foreground hover:text-foreground',
@@ -439,7 +440,7 @@ export function LogFilterPopover() {
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-medium text-muted-foreground">{t('popover.logFilter.channel.title')}</p>
                             {logChannelIds.length > 0 ? (
-                                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-semibold tabular-nums">
+                                <Badge variant="secondary" className="h-5 px-1.5 text-3xs font-semibold tabular-nums">
                                     {logChannelIds.length}
                                 </Badge>
                             ) : null}
@@ -498,7 +499,7 @@ export function LogFilterPopover() {
                                                     <span className="flex-1 truncate text-xs font-semibold text-foreground">
                                                         {group.label}
                                                     </span>
-                                                    <span className="text-[10px] tabular-nums text-muted-foreground">
+                                                    <span className="text-3xs tabular-nums text-muted-foreground">
                                                         {selectedInGroup}/{ids.length}
                                                     </span>
                                                 </button>

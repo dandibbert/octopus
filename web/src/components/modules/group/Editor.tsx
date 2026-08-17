@@ -163,7 +163,7 @@ function ModelPickerSection({
                                                         <Avatar size={16} />
                                                         <span className="min-w-0 flex flex-col">
                                                             <span className="text-sm font-medium truncate">{m.name}</span>
-                                                            {suffix && <span className="text-[10px] text-muted-foreground truncate">{suffix}</span>}
+                                                            {suffix && <span className="text-3xs text-muted-foreground truncate">{suffix}</span>}
                                                         </span>
                                                     </span>
 

@@ -4,6 +4,8 @@ static/out/
 .vscode
 .claude/
 .codex
+.cursor/
+.omc/
 .gocache/
 .tmp-go/
 .tmp-node/
@@ -11,6 +13,8 @@ static/out/
 .serena/
 .workflow/
 .tmp/
-docs/
+docs/*
+!docs/ui/
+!docs/ui/**
 CONTEXT.md
 .impeccable.md

@@ -4,9 +4,12 @@ import { useMemo } from 'react';
 import { useModelList } from '@/api/endpoints/model';
 import { ModelItem } from './Item';
 import { useSearchStore, useToolbarViewOptionsStore } from '@/components/modules/toolbar';
-import { VirtualizedGrid } from '@/components/common/VirtualizedGrid';
+import { VirtualizedGrid, columnsByMinWidth } from '@/components/common/VirtualizedGrid';
+import { ListState } from '@/components/common/ListState';
 import { SearchX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+
+const MODEL_COLUMNS = columnsByMinWidth(320, 3);
 
 export function Model() {
     const { data: models } = useModelList();
@@ -36,18 +39,16 @@ export function Model() {
         <VirtualizedGrid
             items={visibleModels}
             layout={layout}
-            columns={{ default: 1, md: 2, lg: 3 }}
+            columns={MODEL_COLUMNS}
             estimateItemHeight={layout === 'list' ? 156 : 232}
             getItemKey={(model) => `model-${model.canonical_model_id ?? model.name}-${model.provider ?? ''}-${model.name}`}
             renderItem={(model) => <ModelItem model={model} models={models ?? []} layout={layout} />}
             emptyState={
-                <div className="flex max-w-sm flex-col items-center gap-3 rounded-3xl border border-dashed bg-card px-8 py-10 text-center">
-                    <SearchX className="size-10 text-muted-foreground/60" />
-                    <div>
-                        <p className="font-medium text-card-foreground">{t('empty.title')}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">{t('empty.description')}</p>
-                    </div>
-                </div>
+                <ListState
+                    icon={SearchX}
+                    title={t('empty.title')}
+                    description={t('empty.description')}
+                />
             }
         />
     );

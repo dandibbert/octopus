@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { HelpCircle, type LucideIcon } from 'lucide-react';
 import { useSettingList, useSetSetting } from '@/api/endpoints/setting';
 import { toast } from '@/components/common/Toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 import type { ApiError } from '@/api/types';
 
@@ -152,6 +154,77 @@ export function SettingSection({ title, tooltip }: { title: string; tooltip?: Re
         <div className="flex items-center gap-2 border-t border-border pt-4 text-sm font-semibold text-card-foreground">
             {title}
             {tooltip && <SettingHelpTip>{tooltip}</SettingHelpTip>}
+        </div>
+    );
+}
+
+export function getTaskErrorMessage(error: unknown, fallback: string) {
+    if (error instanceof Error && error.message.trim()) {
+        return error.message;
+    }
+    if (error && typeof error === 'object' && 'message' in error) {
+        const message = (error as { message?: unknown }).message;
+        if (typeof message === 'string' && message.trim()) {
+            return message;
+        }
+    }
+    return fallback;
+}
+
+// 上次执行时间：缺失、非法、以及零值时间统一显示为"从未执行"
+export function useFormatTaskTime() {
+    const t = useTranslations('setting');
+
+    return useCallback((timeStr: string | undefined) => {
+        if (!timeStr) return t('syncTasks.never');
+        const date = new Date(timeStr);
+        if (Number.isNaN(date.getTime())) return t('syncTasks.never');
+        if (date.getFullYear() === 1) return t('syncTasks.never');
+        return date.toLocaleString();
+    }, [t]);
+}
+
+// 每行一个定时任务：自动执行间隔（小时）+ 手动触发，可选展示上次执行时间
+export function TaskRow({ icon: Icon, label, settingKey, last, running, runLabel, pendingLabel, onRun }: {
+    icon: LucideIcon;
+    label: string;
+    settingKey: string;
+    last?: string;
+    running: boolean;
+    runLabel: string;
+    pendingLabel: string;
+    onRun: () => void;
+}) {
+    const t = useTranslations('setting');
+    const field = useSettingField(settingKey);
+
+    return (
+        <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex items-center gap-3">
+                    <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <span className="text-sm font-medium">{label}</span>
+                </div>
+                {last !== undefined && (
+                    <span className="ml-8 text-xs text-muted-foreground">
+                        {t('syncTasks.last')}: {last}
+                    </span>
+                )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+                <Input
+                    type="number"
+                    min="0"
+                    value={field.value}
+                    onChange={(e) => field.setValue(e.target.value)}
+                    onBlur={field.save}
+                    placeholder={t('syncTasks.intervalPlaceholder')}
+                    className="w-28 rounded-xl"
+                />
+                <Button variant="outline" size="sm" onClick={onRun} disabled={running} className="rounded-xl">
+                    {running ? pendingLabel : runLabel}
+                </Button>
+            </div>
         </div>
     );
 }

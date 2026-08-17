@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react"
 import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
 import { useNavStore, type NavItem } from "@/components/modules/navbar"
-import { ROUTES } from "@/route/config"
+import { useVisibleRoutes } from "@/route/use-visible-routes"
 import { usePreload } from "@/route/use-preload"
 import { ENTRANCE_VARIANTS } from "@/lib/animations/fluid-transitions"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/animate-ui/components/animate/tooltip"
@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl"
 
 export function NavBar() {
     const { activeItem, setActiveItem } = useNavStore()
+    const visibleRoutes = useVisibleRoutes()
     const { preload } = usePreload()
     const t = useTranslations('navbar')
     const navRef = useRef<HTMLElement | null>(null)
@@ -42,7 +43,7 @@ export function NavBar() {
                 initial="initial"
                 animate="animate"
             >
-                {ROUTES.map((route, index) => {
+                {visibleRoutes.map((route, index) => {
                     const isActive = activeItem === route.id
                     const label = t(route.id)
                     return (

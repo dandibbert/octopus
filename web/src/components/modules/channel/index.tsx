@@ -6,7 +6,9 @@ import { Card } from './Card';
 import { useSearchStore, useToolbarViewOptionsStore } from '@/components/modules/toolbar';
 import { SiteChannelSection } from '@/components/modules/site-channel';
 import { cn } from '@/lib/utils';
-import { VirtualizedGrid } from '@/components/common/VirtualizedGrid';
+import { VirtualizedGrid, columnsByMinWidth } from '@/components/common/VirtualizedGrid';
+import { ListSkeleton, ListState } from '@/components/common/ListState';
+import { CircleAlert, Radio } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
     isChannelJumpTarget,
@@ -14,10 +16,12 @@ import {
     type PendingJump,
     useJumpStore,
 } from '@/stores/jump';
-import { useChannelTabStore } from './tab-store';
+import { useEffectiveChannelTab } from './tab-store';
 import { useTranslations } from 'next-intl';
 
 type ChannelPendingJump = PendingJump & { target: ChannelJumpTarget };
+
+const CHANNEL_COLUMNS = columnsByMinWidth(320);
 
 export function Channel() {
     const t = useTranslations('channel.list');
@@ -30,7 +34,7 @@ export function Channel() {
     const sortField = useToolbarViewOptionsStore((s) => s.getSortField(pageKey));
     const sortOrder = useToolbarViewOptionsStore((s) => s.getSortOrder(pageKey));
     const [highlightedChannelId, setHighlightedChannelId] = useState<number | null>(null);
-    const activeTab = useChannelTabStore((s) => s.activeTab);
+    const activeTab = useEffectiveChannelTab();
     const channelCardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
     const pendingChannelJump = pendingJump && isChannelJumpTarget(pendingJump.target)
@@ -119,14 +123,6 @@ export function Channel() {
         </div>
     ), [highlightedChannelId, layout, setChannelCardRef]);
 
-    const manualColumnCompute = useCallback((width: number) => {
-        if (layout === 'list') return 1;
-        const MIN_CARD_WIDTH = 320;
-        const GUTTER = 16;
-        const cols = Math.floor((width + GUTTER) / (MIN_CARD_WIDTH + GUTTER));
-        return Math.max(1, Math.min(6, cols));
-    }, [layout]);
-
     const manualHeader = targetedManagedChannel ? (
         <section className="space-y-3 px-1 pb-4">
             <div>
@@ -140,19 +136,11 @@ export function Channel() {
     ) : undefined;
 
     const manualFooter = isLoading ? (
-        <div className={cn('grid gap-4', layout === 'list' ? 'grid-cols-1' : 'md:grid-cols-2 lg:grid-cols-3')}>
-            {Array.from({ length: layout === 'list' ? 2 : 3 }).map((_, index) => (
-                <div key={index} className="h-56 animate-pulse rounded-3xl border border-border/70 bg-muted/40" />
-            ))}
-        </div>
+        <ListSkeleton layout={layout} count={layout === 'list' ? 2 : 3} minCardWidth={320} />
     ) : error ? (
-        <div className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-6 text-sm text-destructive">
-            {t('loadFailed', { message: error.message })}
-        </div>
+        <ListState tone="error" icon={CircleAlert} title={t('loadFailed', { message: error.message })} className="max-w-none" />
     ) : visibleManualChannels.length === 0 && !targetedManagedChannel ? (
-        <div className="rounded-3xl border border-border/70 bg-card/70 px-4 py-8 text-center text-sm text-muted-foreground">
-            {t('empty')}
-        </div>
+        <ListState icon={Radio} title={t('empty')} className="mx-auto" />
     ) : null;
 
     return (
@@ -178,7 +166,7 @@ export function Channel() {
                             <VirtualizedGrid
                                 items={visibleManualChannels}
                                 layout={layout}
-                                columns={manualColumnCompute}
+                                columns={CHANNEL_COLUMNS}
                                 estimateItemHeight={216}
                                 header={manualHeader}
                                 footer={manualFooter}

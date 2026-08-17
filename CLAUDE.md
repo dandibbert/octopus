@@ -78,6 +78,23 @@ Octopus 是一个 **LLM API 聚合与负载均衡服务**。Go 后端 (Gin + GOR
 - **i18n**: next-intl，翻译文件位于 `public/locale/{en,zh_hans,zh_hant}.json`
 - **构建**: SSG 静态导出 (`output: "export"`)，嵌入到 Go 二进制的 `static/` 目录
 
+### 设计系统（改动 UI 前必读）
+
+前端是一套成型的设计系统，不是一堆独立页面。新功能要先确定它在既有交互模型里的位置，
+而不是在最近的空位插一个按钮或卡片。正文在 `docs/ui/`（Cursor 打开 `web/src/**/*.tsx`
+时会自动带上同一份内容）：
+
+| 文档 | 内容 |
+|---|---|
+| `docs/ui/system-first.md` | 功能归属判断、缺词汇时补词汇而非绕过 |
+| `docs/ui/design-tokens.md` | 语义色 / 字号刻度 / 圆角 / 阴影，禁止硬编码调色板色与任意值 |
+| `docs/ui/interaction-patterns.md` | 表单容器、`ConfirmAction`、`ListState`、toast、i18n |
+| `docs/ui/responsive.md` | `md` 为移动/桌面分界、`columnsByMinWidth` 算列数、触摸目标 |
+
+要点速记：语义色用 `success/warning/info/destructive`（**无需写 `dark:` 变体**）；
+密集字号用 `text-2xs`/`text-3xs`；破坏性操作走 `common/ConfirmAction`；
+空/加载态走 `common/ListState`；栅格列数用 `columnsByMinWidth` 按容器宽度算。
+
 ## 配置
 
 运行时配置 `data/config.json`（首次运行自动生成），所有字段可通过 `OCTOPUS_` 前缀环境变量覆盖:

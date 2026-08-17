@@ -115,7 +115,7 @@ function ModelPreview({ source }: { source: GroupAutoGroupSource }) {
             <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className="min-h-9 rounded-md px-2 text-[10px] tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-5 md:min-h-0 md:px-1.5"
+                    className="min-h-9 rounded-md px-2 text-3xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-5 md:min-h-0 md:px-1.5"
                     aria-label={t('source.modelCount', { count: source.model_count })}
                 >
                     {source.model_count}
@@ -128,12 +128,12 @@ function ModelPreview({ source }: { source: GroupAutoGroupSource }) {
                 {models.length > 0 ? (
                     <div className="flex max-h-56 flex-wrap gap-1 overflow-y-auto">
                         {models.map((model) => (
-                            <Badge key={model} variant="secondary" className="max-w-64 truncate px-1.5 text-[10px] font-normal">
+                            <Badge key={model} variant="secondary" className="max-w-64 truncate px-1.5 text-3xs font-normal">
                                 {model}
                             </Badge>
                         ))}
                         {extraCount > 0 ? (
-                            <Badge variant="secondary" className="px-1.5 text-[10px] font-normal">
+                            <Badge variant="secondary" className="px-1.5 text-3xs font-normal">
                                 {t('source.moreModels', { count: extraCount })}
                             </Badge>
                         ) : null}
@@ -189,7 +189,7 @@ function ChannelRow({
                 {source.channel_name}
             </span>
             {!source.enabled ? (
-                <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">
+                <Badge variant="outline" className="h-5 px-1.5 text-3xs text-muted-foreground">
                     {t('source.disabled')}
                 </Badge>
             ) : null}
@@ -199,7 +199,7 @@ function ChannelRow({
                         <TooltipTrigger asChild>
                             <Badge
                                 variant="outline"
-                                className="h-5 cursor-help gap-1 border-primary/30 bg-primary/10 px-1.5 text-[10px] text-primary"
+                                className="h-5 cursor-help gap-1 border-primary/30 bg-primary/10 px-1.5 text-3xs text-primary"
                             >
                                 <Globe2 className="size-3" />
                                 {t(`mode.${modeKey(globalMode)}`)}
@@ -439,7 +439,7 @@ export function GroupAutoGroupDialogContent() {
                                     {t('sections.channels')}
                                 </span>
                                 {configuredCount > 0 ? (
-                                    <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 px-1.5 text-[10px] text-primary">
+                                    <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 px-1.5 text-3xs text-primary">
                                         {configuredCount}
                                     </Badge>
                                 ) : null}
@@ -537,11 +537,11 @@ export function GroupAutoGroupDialogContent() {
                                                             {group.label}
                                                         </span>
                                                         {groupConfigured > 0 ? (
-                                                            <span className="text-[10px] tabular-nums text-primary">
+                                                            <span className="text-3xs tabular-nums text-primary">
                                                                 {groupConfigured}/{group.sources.length}
                                                             </span>
                                                         ) : (
-                                                            <span className="text-[10px] tabular-nums text-muted-foreground">
+                                                            <span className="text-3xs tabular-nums text-muted-foreground">
                                                                 {group.sources.length}
                                                             </span>
                                                         )}

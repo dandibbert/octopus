@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/common/Toast';
+import { ConfirmAction } from '@/components/common/ConfirmAction';
 import {
     SettingKey,
     useTestWebDAV,
@@ -71,7 +72,6 @@ export function SettingWebDAVBackup() {
     };
 
     const handleRestore = async (filename: string) => {
-        if (!confirm(t('restoreConfirm'))) return;
         setRestoringFile(filename);
         try {
             await restoreBackup.mutateAsync(filename);
@@ -210,7 +210,7 @@ export function SettingWebDAVBackup() {
                         {backupList.isPending ? (
                             <p className="text-sm text-muted-foreground">{t('loading')}</p>
                         ) : backupList.isError ? (
-                            <p className="text-sm text-red-500">{t('loadError')}</p>
+                            <p className="text-sm text-destructive">{t('loadError')}</p>
                         ) : backups && backups.length === 0 ? (
                             <p className="text-sm text-muted-foreground">{t('noBackups')}</p>
                         ) : backups ? (
@@ -226,16 +226,23 @@ export function SettingWebDAVBackup() {
                                                 {formatBytes(backup.size)} &middot; {new Date(backup.modified_at).toLocaleString()}
                                             </div>
                                         </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="shrink-0 rounded-xl"
-                                            onClick={() => handleRestore(backup.name)}
+                                        <ConfirmAction
+                                            title={t('restoreConfirmTitle')}
+                                            description={t('restoreConfirm')}
+                                            confirmLabel={t('restore')}
                                             disabled={restoringFile !== null}
+                                            onConfirm={() => handleRestore(backup.name)}
                                         >
-                                            <Download className="size-3.5" />
-                                            {restoringFile === backup.name ? t('restoring') : t('restore')}
-                                        </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="shrink-0 rounded-xl"
+                                                disabled={restoringFile !== null}
+                                            >
+                                                <Download className="size-3.5" />
+                                                {restoringFile === backup.name ? t('restoring') : t('restore')}
+                                            </Button>
+                                        </ConfirmAction>
                                     </div>
                                 ))}
                             </div>

@@ -7,11 +7,16 @@ export type LazyComponent = ReturnType<typeof lazy> & {
     preload: () => Promise<{ default: ComponentType<Record<string, never>> }>
 };
 
+// 受功能开关控制的路由。开关关闭时该席位从导航中整体移除，
+// 而不是留一个进去发现空空如也的入口。
+export type RouteFeature = 'site';
+
 export interface RouteConfig {
     id: string;
     label: string;
     icon: LucideIcon;
     component: LazyComponent;
+    feature?: RouteFeature;
 }
 
 const Home_Module = lazyWithPreload(() => import('@/components/modules/home').then(m => ({ default: m.Home })));
@@ -25,7 +30,7 @@ const Setting_Module = lazyWithPreload(() => import('@/components/modules/settin
 
 export const ROUTES: RouteConfig[] = [
     { id: 'home', label: 'Home', icon: Home, component: Home_Module },
-    { id: 'site', label: 'Site', icon: Globe2, component: Site_Module },
+    { id: 'site', label: 'Site', icon: Globe2, component: Site_Module, feature: 'site' },
     { id: 'channel', label: 'Channel', icon: Radio, component: Channel_Module },
     { id: 'group', label: 'Group', icon: FolderTree, component: Group_Module },
     { id: 'playground', label: 'Playground', icon: MessageSquareText, component: Playground_Module },

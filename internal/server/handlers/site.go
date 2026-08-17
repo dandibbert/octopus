@@ -30,6 +30,7 @@ func refreshAccountRandomCheckinScheduleBestEffort(ctx context.Context, accountI
 func init() {
 	router.NewGroupRouter("/api/v1/site").
 		Use(middleware.Auth()).
+		Use(middleware.RequireSiteEnabled()).
 		AddRoute(router.NewRoute("/list", http.MethodGet).Handle(listSite)).
 		AddRoute(router.NewRoute("/archived", http.MethodGet).Handle(listArchivedSites)).
 		AddRoute(router.NewRoute("/import/all-api-hub", http.MethodPost).Handle(importAllAPIHub)).
@@ -44,6 +45,7 @@ func init() {
 
 	router.NewGroupRouter("/api/v1/site").
 		Use(middleware.Auth()).
+		Use(middleware.RequireSiteEnabled()).
 		Use(middleware.RequireJSON()).
 		AddRoute(router.NewRoute("/create", http.MethodPost).Handle(createSite)).
 		AddRoute(router.NewRoute("/update", http.MethodPost).Handle(updateSite)).
@@ -57,6 +59,7 @@ func init() {
 
 	router.NewGroupRouter("/api/v1/site").
 		Use(middleware.Auth()).
+		Use(middleware.RequireSiteEnabled()).
 		AddRoute(router.NewRoute("/delete/:id", http.MethodDelete).Handle(deleteSite)).
 		AddRoute(router.NewRoute("/archive/:id", http.MethodPost).Handle(archiveSite)).
 		AddRoute(router.NewRoute("/restore/:id", http.MethodPost).Handle(restoreSite)).

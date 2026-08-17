@@ -25,7 +25,7 @@ export function OverlayPortal({ onClose, children }: { onClose: () => void; chil
             <motion.div
                 data-slot="dialog-overlay"
                 aria-hidden="true"
-                className="fixed inset-0 z-50 bg-white/40 backdrop-blur-xs dark:bg-black/40"
+                className="overlay-scrim fixed inset-0 z-50"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}

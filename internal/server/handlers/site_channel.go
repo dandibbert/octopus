@@ -21,6 +21,7 @@ import (
 func init() {
 	router.NewGroupRouter("/api/v1/site-channel").
 		Use(middleware.Auth()).
+		Use(middleware.RequireSiteEnabled()).
 		AddRoute(router.NewRoute("/list", http.MethodGet).Handle(listSiteChannel)).
 		AddRoute(router.NewRoute("/:siteId", http.MethodGet).Handle(getSiteChannel)).
 		AddRoute(router.NewRoute("/:siteId/account/:accountId", http.MethodGet).Handle(getSiteChannelAccount)).
@@ -28,6 +29,7 @@ func init() {
 
 	router.NewGroupRouter("/api/v1/site-channel").
 		Use(middleware.Auth()).
+		Use(middleware.RequireSiteEnabled()).
 		Use(middleware.RequireJSON()).
 		AddRoute(router.NewRoute("/:siteId/account/:accountId/keys", http.MethodPost).Handle(createSiteChannelKey)).
 		AddRoute(router.NewRoute("/:siteId/account/:accountId/source-keys", http.MethodPut).Handle(updateSiteSourceKeys)).

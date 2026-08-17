@@ -61,7 +61,7 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
                             </Tooltip>
                             {channel.managed ? (
                                 <div className="mt-1">
-                                    <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                                    <span className="inline-flex rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-3xs font-medium text-warning">
                                         {t('managedBadge')}
                                     </span>
                                 </div>
@@ -104,7 +104,7 @@ export function Card({ channel, stats, layout = 'grid' }: { channel: Channel; st
                             </div>
                             <div className="rounded-2xl border border-border/70 bg-background/80 p-2">
                                 <dt className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
-                                    <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                    <CheckCircle2 className="size-3.5 text-success" />
                                     {tMetrics('successRequests')}
                                 </dt>
                                 <dd className="text-sm font-semibold">{stats.request_success.formatted.value}</dd>

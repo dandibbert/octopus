@@ -15,6 +15,11 @@ import (
 // 让首次启用此功能的实例也能立即看到历史折线图。已回填则跳过。
 // 回填窗口：默认 30 天。
 func StatsSiteModelBackfill(ctx context.Context) {
+	// 站点功能关闭时不回填；已回填标记保持 false，重新启用后仍会补上。
+	if enabled, err := SettingGetBool(model.SettingKeySiteEnabled); err != nil || !enabled {
+		return
+	}
+
 	done, err := SettingGetBool(model.SettingKeyStatsSiteModelBackfilled)
 	if err == nil && done {
 		return

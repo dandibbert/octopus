@@ -355,7 +355,7 @@ export function APIKeyExportOverlay({
                     </TabsContents>
                 </Tabs>
 
-                <div className="mt-2 text-[11px] text-muted-foreground/80">{t('apiKey.export.hint')}</div>
+                <div className="mt-2 text-2xs text-muted-foreground/80">{t('apiKey.export.hint')}</div>
 
                 <div className="flex gap-2 pt-2 mt-3">
                     <button

@@ -16,6 +16,7 @@ export const SettingKey = {
     StatsSaveInterval: 'stats_save_interval',
     ModelInfoUpdateInterval: 'model_info_update_interval',
     SyncLLMInterval: 'sync_llm_interval',
+    SiteEnabled: 'site_enabled',
     SiteSyncInterval: 'site_sync_interval',
     SiteCheckinInterval: 'site_checkin_interval',
     RelayLogKeepEnabled: 'relay_log_keep_enabled',
@@ -81,6 +82,16 @@ export function useSettingValue(key: string, defaultValue = '') {
 
 export function useGroupHealthEnabled() {
     const { value, ...query } = useSettingValue(SettingKey.GroupHealthEnabled, 'false');
+    return {
+        ...query,
+        enabled: value === 'true',
+    };
+}
+
+// 站点功能总开关。默认按 true 处理：设置尚未加载完时先当作启用，
+// 避免常见场景下站点导航席位闪一下才出现。
+export function useSiteEnabled() {
+    const { value, ...query } = useSettingValue(SettingKey.SiteEnabled, 'true');
     return {
         ...query,
         enabled: value === 'true',

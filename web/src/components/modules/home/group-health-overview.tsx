@@ -19,11 +19,11 @@ function formatDateTime(value?: string | null, fallback?: string) {
 function statusTone(status?: string | null) {
     switch (status) {
         case 'success':
-            return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+            return 'border-success/20 bg-success/10 text-success';
         case 'partial':
-            return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+            return 'border-warning/20 bg-warning/10 text-warning';
         case 'running':
-            return 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300';
+            return 'border-info/20 bg-info/10 text-info';
         case 'failed':
         default:
             return 'border-destructive/20 bg-destructive/10 text-destructive';
@@ -32,7 +32,7 @@ function statusTone(status?: string | null) {
 
 function probeModeTone(mode?: string | null) {
     return mode === 'full'
-        ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+        ? 'border-warning/20 bg-warning/10 text-warning'
         : 'border-border bg-muted/40 text-muted-foreground';
 }
 
@@ -71,10 +71,10 @@ function GroupHealthCard({
                     </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                    <Badge variant="outline" className={cn('h-6 px-2 text-[11px]', latest ? statusTone(latest.status) : 'border-border bg-muted/40 text-muted-foreground')}>
+                    <Badge variant="outline" className={cn('h-6 px-2 text-2xs', latest ? statusTone(latest.status) : 'border-border bg-muted/40 text-muted-foreground')}>
                         {t(`statusValue.${latest?.status ?? 'idle'}`)}
                     </Badge>
-                    <Badge variant="outline" className={cn('h-6 px-2 text-[11px] uppercase tracking-wide', probeModeTone(latest?.probe_mode ?? 'standard'))}>
+                    <Badge variant="outline" className={cn('h-6 px-2 text-2xs uppercase tracking-wide', probeModeTone(latest?.probe_mode ?? 'standard'))}>
                         {t(`probeMode.${latest?.probe_mode ?? 'standard'}`)}
                     </Badge>
                     <Button

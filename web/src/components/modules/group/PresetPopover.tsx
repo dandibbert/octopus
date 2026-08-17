@@ -295,7 +295,7 @@ export function PresetPopover({ group }: PresetPopoverProps) {
                                             )}
                                             <span className={cn('text-sm truncate', isActive && 'font-medium')}>{preset.name}</span>
                                             {isActive && (
-                                                <span className="text-[10px] uppercase tracking-wide text-primary shrink-0">
+                                                <span className="text-3xs uppercase tracking-wide text-primary shrink-0">
                                                     {t('preset.activeBadge')}
                                                 </span>
                                             )}

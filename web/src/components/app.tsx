@@ -15,7 +15,8 @@ import { ChannelTabSwitcher } from '@/components/modules/channel/TabSwitcher';
 import { ProxyPoolDialog } from '@/components/modules/proxy-pool/ProxyPoolDialog';
 import { ENTRANCE_VARIANTS } from '@/lib/animations/fluid-transitions';
 import { useQueryClient } from '@tanstack/react-query';
-import { CONTENT_MAP } from '@/route';
+import { CONTENT_MAP, useActiveRouteGuard } from '@/route';
+import { useSiteEnabled } from '@/api/endpoints/setting';
 import { apiClient } from '@/api/client';
 import { logger } from '@/lib/logger';
 
@@ -27,6 +28,10 @@ export function AppContainer() {
     const { activeItem, direction } = useNavStore();
     const t = useTranslations('navbar');
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
+
+    // 持久化的 activeItem 可能停在已被功能开关隐藏的席位上
+    useActiveRouteGuard();
 
     // Logo 动画完成状态 — 回访用户缩短动画时间
     const [logoAnimationComplete, setLogoAnimationComplete] = useState(false);
@@ -106,6 +111,7 @@ export function AppContainer() {
                     break;
                 }
                 case 'site': {
+                    if (!siteEnabled) break;
                     prefetches.push(
                         queryClient.prefetchQuery({
                             queryKey: ['sites', 'list'],

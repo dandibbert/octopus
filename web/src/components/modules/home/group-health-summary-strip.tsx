@@ -42,11 +42,11 @@ export function GroupHealthSummaryStrip() {
                                 <LoaderCircle className="size-3.5" />
                                 {t('running', { count: summary.running })}
                             </span>
-                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                            <span className="inline-flex items-center gap-1 text-success">
                                 <CheckCircle2 className="size-3.5" />
                                 {t('success', { count: summary.success })}
                             </span>
-                            <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                            <span className="inline-flex items-center gap-1 text-warning">
                                 <Activity className="size-3.5" />
                                 {t('partial', { count: summary.partial })}
                             </span>

@@ -3,6 +3,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { apiClient, API_BASE_URL } from '../client';
 import { logger } from '@/lib/logger';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSiteEnabled } from './setting';
 
 /**
  * 尝试状态
@@ -229,6 +230,7 @@ export async function getLogDetail(id: number): Promise<RelayLog> {
 }
 
 export function useLogSiteActionTargets(ids: number[], enabled = true) {
+    const { enabled: siteEnabled } = useSiteEnabled();
     const stableIds = useMemo(() => Array.from(new Set(ids.filter((id) => id > 0))).sort((a, b) => a - b), [ids]);
     return useQuery({
         queryKey: ['logs', 'site-action-targets', stableIds],
@@ -248,7 +250,7 @@ export function useLogSiteActionTargets(ids: number[], enabled = true) {
             );
             return Object.assign({}, ...results) as Record<number, LogSiteActionTargets>;
         },
-        enabled: enabled && stableIds.length > 0,
+        enabled: siteEnabled && enabled && stableIds.length > 0,
         staleTime: 30000,
         refetchOnWindowFocus: false,
     });

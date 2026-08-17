@@ -53,14 +53,14 @@ export function PresetEditorContent({ preset }: PresetEditorContentProps) {
                     name: item.model_name,
                     enabled: mc?.enabled ?? true,
                     channel_id: item.channel_id,
-                    channel_name: mc?.channel_name ?? `Channel ${item.channel_id}`,
+                    channel_name: mc?.channel_name ?? t('channelFallback', { id: String(item.channel_id) }),
                     weight: item.weight,
                     billing_basis: item.billing_basis,
                     billing_class_id: item.billing_class_id,
                     billing_unknown_policy: item.billing_unknown_policy,
                 };
             });
-    }, [preset.items, modelChannelByKey]);
+    }, [preset.items, modelChannelByKey, t]);
 
     const handleSubmit = useCallback((values: GroupEditorValues) => {
         const items: GroupPresetItem[] = values.members.map((m, idx) => ({

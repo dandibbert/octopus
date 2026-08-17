@@ -19,7 +19,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/common/Toast';
+import { ConfirmAction } from '@/components/common/ConfirmAction';
 import { cn } from '@/lib/utils';
+import { useSiteEnabled } from '@/api/endpoints/setting';
 import { useJumpStore } from '@/stores/jump';
 import { useProxyPoolDialogStore } from './dialog-store';
 
@@ -174,6 +176,7 @@ export function ProxyPoolDialog() {
     const setOpen = useProxyPoolDialogStore((state) => state.setOpen);
     const clearFocus = useProxyPoolDialogStore((state) => state.clearFocus);
     const requestJump = useJumpStore((state) => state.requestJump);
+    const { enabled: siteEnabled } = useSiteEnabled();
     const { data: proxies = [], isLoading, error } = useProxyConfigurationList();
     const createProxy = useCreateProxyConfiguration();
     const updateProxy = useUpdateProxyConfiguration();
@@ -236,27 +239,43 @@ export function ProxyPoolDialog() {
         setOpen(false);
         switch (reference.type) {
             case 'site':
-                if (reference.site_id) requestJump({ kind: 'site-card', siteId: reference.site_id });
+                if (siteEnabled && reference.site_id) requestJump({ kind: 'site-card', siteId: reference.site_id });
                 return;
             case 'site_account':
-                if (reference.site_id && reference.site_account_id) {
+                if (siteEnabled && reference.site_id && reference.site_account_id) {
                     requestJump({ kind: 'site-account', siteId: reference.site_id, accountId: reference.site_account_id });
                 }
                 return;
             case 'managed_channel':
-                if (reference.site_id) {
+                if (siteEnabled && reference.site_id) {
                     requestJump(
                         reference.site_account_id
                             ? { kind: 'site-channel-account', siteId: reference.site_id, accountId: reference.site_account_id }
                             : { kind: 'site-channel-card', siteId: reference.site_id },
                     );
+                    return;
                 }
+                if (reference.channel_id) requestJump({ kind: 'channel-card', channelId: reference.channel_id });
                 return;
             case 'channel':
                 if (reference.channel_id) requestJump({ kind: 'channel-card', channelId: reference.channel_id });
                 return;
             default:
                 return;
+        }
+    }
+
+    function canJumpToReference(reference: ProxyConfigurationReference) {
+        switch (reference.type) {
+            case 'site':
+            case 'site_account':
+                return siteEnabled;
+            case 'managed_channel':
+                return siteEnabled || !!reference.channel_id;
+            case 'channel':
+                return !!reference.channel_id;
+            default:
+                return false;
         }
     }
 
@@ -399,9 +418,17 @@ export function ProxyPoolDialog() {
                                             <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-xl md:size-8" onClick={() => setForm(createFormFromProxy(proxy))} title={t('edit')}>
                                                 <Pencil className="size-4" />
                                             </Button>
-                                            <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-xl text-destructive hover:text-destructive md:size-8" onClick={() => handleDelete(proxy)} disabled={deleteProxy.isPending || proxy.reference_count > 0} title={proxy.reference_count > 0 ? t('deleteBlocked') : t('delete')}>
-                                                <Trash2 className="size-4" />
-                                            </Button>
+                                            <ConfirmAction
+                                                title={t('deleteConfirmTitle')}
+                                                description={t('deleteConfirmDescription', { name: proxy.name })}
+                                                confirmLabel={t('delete')}
+                                                disabled={deleteProxy.isPending || proxy.reference_count > 0}
+                                                onConfirm={() => handleDelete(proxy)}
+                                            >
+                                                <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-xl text-destructive hover:text-destructive md:size-8" disabled={deleteProxy.isPending || proxy.reference_count > 0} title={proxy.reference_count > 0 ? t('deleteBlocked') : t('delete')}>
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </ConfirmAction>
                                         </div>
                                     </div>
                                 </article>
@@ -498,7 +525,7 @@ export function ProxyPoolDialog() {
                                                     <Badge variant="outline">{referenceTypeLabel(node.reference, t)}</Badge>
                                                     <span className="min-w-0 line-clamp-2 break-words text-sm font-medium leading-5 md:truncate md:whitespace-nowrap">{referenceTitle(node.reference, t)}</span>
                                                     {node.children.length > 0 ? (
-                                                        <Badge variant="secondary" className="text-[10px]">
+                                                        <Badge variant="secondary" className="text-3xs">
                                                             {t('derivedReferences', { count: node.children.length })}
                                                         </Badge>
                                                     ) : null}
@@ -506,9 +533,11 @@ export function ProxyPoolDialog() {
                                                 <div className="mt-1 line-clamp-2 break-all text-xs leading-4 text-muted-foreground md:truncate md:whitespace-nowrap">{referenceLocation(node.reference, t)}</div>
                                             </div>
                                         </div>
-                                        <Button type="button" variant="ghost" size="icon-sm" className="size-10 shrink-0 rounded-xl md:size-8" onClick={() => jumpToReference(node.reference)} title={t('jumpToReference')}>
-                                            <ExternalLink className="size-4" />
-                                        </Button>
+                                        {canJumpToReference(node.reference) ? (
+                                            <Button type="button" variant="ghost" size="icon-sm" className="size-10 shrink-0 rounded-xl md:size-8" onClick={() => jumpToReference(node.reference)} title={t('jumpToReference')}>
+                                                <ExternalLink className="size-4" />
+                                            </Button>
+                                        ) : null}
                                     </div>
                                     {expanded && node.children.length > 0 ? (
                                         <div className="mt-3 space-y-2 border-l border-dashed border-border/80 pl-3 md:pl-6">
@@ -516,14 +545,16 @@ export function ProxyPoolDialog() {
                                                 <div key={`${referenceNodeKey(child)}:${childIndex}`} className="flex items-center justify-between gap-3 rounded-xl bg-muted/20 px-3 py-2">
                                                     <div className="min-w-0">
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            <Badge variant="outline" className="text-[10px]">{referenceTypeLabel(child, t)}</Badge>
+                                                            <Badge variant="outline" className="text-3xs">{referenceTypeLabel(child, t)}</Badge>
                                                             <span className="min-w-0 line-clamp-2 break-words text-xs font-medium leading-4 md:truncate md:whitespace-nowrap">{referenceTitle(child, t)}</span>
                                                         </div>
-                                                        <div className="mt-1 line-clamp-2 break-all text-[11px] leading-4 text-muted-foreground md:truncate md:whitespace-nowrap">{referenceLocation(child, t)}</div>
+                                                        <div className="mt-1 line-clamp-2 break-all text-2xs leading-4 text-muted-foreground md:truncate md:whitespace-nowrap">{referenceLocation(child, t)}</div>
                                                     </div>
-                                                    <Button type="button" variant="ghost" size="icon-sm" className="size-10 shrink-0 rounded-xl md:size-8" onClick={() => jumpToReference(child)} title={t('jumpToReference')}>
-                                                        <ExternalLink className="size-4" />
-                                                    </Button>
+                                                    {canJumpToReference(child) ? (
+                                                        <Button type="button" variant="ghost" size="icon-sm" className="size-10 shrink-0 rounded-xl md:size-8" onClick={() => jumpToReference(child)} title={t('jumpToReference')}>
+                                                            <ExternalLink className="size-4" />
+                                                        </Button>
+                                                    ) : null}
                                                 </div>
                                             ))}
                                         </div>

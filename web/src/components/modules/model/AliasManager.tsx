@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/common/Toast';
+import { ConfirmAction } from '@/components/common/ConfirmAction';
 import {
     MorphingDialogClose,
     MorphingDialogDescription,
@@ -335,18 +336,25 @@ export function AliasManager({
                                         <button type="button" onClick={() => edit(alias)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" aria-label={t('edit')}>
                                             <Pencil className="size-3.5" />
                                         </button>
-                                        <button
-                                            type="button"
+                                        <ConfirmAction
+                                            title={t('deleteConfirmTitle')}
+                                            description={t('deleteConfirmDescription', { alias: alias.alias })}
+                                            confirmLabel={t('delete')}
                                             disabled={!alias.id || deleteAlias.isPending}
-                                            onClick={() => alias.id && deleteAlias.mutate(alias.id, {
+                                            onConfirm={() => alias.id && deleteAlias.mutate(alias.id, {
                                                 onSuccess: () => toast.success(t('deleted')),
                                                 onError: (error) => toast.error(t('deleteFailed'), { description: error.message }),
                                             })}
-                                            className="rounded-lg p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                                            aria-label={t('delete')}
                                         >
-                                            <Trash2 className="size-3.5" />
-                                        </button>
+                                            <button
+                                                type="button"
+                                                disabled={!alias.id || deleteAlias.isPending}
+                                                className="rounded-lg p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                                                aria-label={t('delete')}
+                                            >
+                                                <Trash2 className="size-3.5" />
+                                            </button>
+                                        </ConfirmAction>
                                     </div>
                                 </div>
                             </article>
@@ -384,7 +392,7 @@ export function AliasDialogContent() {
                             <Badge variant="outline">{t('advanced')}</Badge>
                         </div>
                         <p className="mt-1 text-sm font-normal text-muted-foreground">{t('description')}</p>
-                        <p className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-400">{t('doesNotCreatePrice')}</p>
+                        <p className="mt-1 text-sm font-medium text-warning">{t('doesNotCreatePrice')}</p>
                     </div>
                     <MorphingDialogClose
                         className="relative right-0 top-0 shrink-0"

@@ -148,7 +148,7 @@ export function Log() {
     return (
         <div className="flex h-full min-h-0 flex-col gap-3">
             {warning ? (
-                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
                     {warning}
                 </div>
             ) : null}
@@ -156,7 +156,7 @@ export function Log() {
                 <VirtualizedGrid
                     items={logs}
                     layout="list"
-                    columns={{ default: 1 }}
+                    columns={1}
                     estimateItemHeight={80}
                     overscan={8}
                     getItemKey={(log) => `log-${log.id}`}

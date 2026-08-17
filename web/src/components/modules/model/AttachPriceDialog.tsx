@@ -216,7 +216,7 @@ export function AttachPriceDialog({
                         )}
 
                         {selected && displayedAlias && (
-                            <div className="grid gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                            <div className="grid gap-2 rounded-2xl border border-warning/30 bg-warning/5 p-3 text-xs sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                                 <div className="min-w-0">
                                     <span className="text-muted-foreground">{t('currentTarget')}</span>
                                     <p className="mt-1 break-all font-medium text-card-foreground">

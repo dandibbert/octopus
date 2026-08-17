@@ -61,11 +61,15 @@ type SiteAccountFormState = {
     checkin_random_window_minutes: number;
 };
 
-const CREDENTIAL_LABELS: Record<SiteCredentialType, string> = {
-    [SiteCredentialType.UsernamePassword]: '用户名 / 密码',
-    [SiteCredentialType.AccessToken]: 'Access Token',
-    [SiteCredentialType.APIKey]: 'API Key',
-};
+type SiteTranslate = ReturnType<typeof useTranslations>;
+
+function credentialLabels(t: SiteTranslate): Record<SiteCredentialType, string> {
+    return {
+        [SiteCredentialType.UsernamePassword]: t('credential.usernamePassword'),
+        [SiteCredentialType.AccessToken]: t('credential.accessToken'),
+        [SiteCredentialType.APIKey]: t('credential.apiKey'),
+    };
+}
 
 const FORM_SECTION_TRANSITION: Transition = {
     duration: 0.2,
@@ -177,7 +181,7 @@ function createAccountForm(account: SiteAccount): SiteAccountFormState {
     };
 }
 
-function parseTokenExpiresAtInput(value: string) {
+function parseTokenExpiresAtInput(t: SiteTranslate, value: string) {
     const trimmed = value.trim();
     if (!trimmed) {
         return 0;
@@ -185,24 +189,24 @@ function parseTokenExpiresAtInput(value: string) {
     if (/^\d+$/.test(trimmed)) {
         const parsed = Number(trimmed);
         if (!Number.isFinite(parsed) || parsed <= 0) {
-            throw new Error('token_expires_at 必须是正整数时间戳');
+            throw new Error(t('dialog.account.errors.tokenExpiresAtInteger'));
         }
         return parsed < 1_000_000_000_000 ? Math.trunc(parsed * 1000) : Math.trunc(parsed);
     }
     const parsed = Date.parse(trimmed);
     if (!Number.isFinite(parsed) || parsed <= 0) {
-        throw new Error('token_expires_at 必须是时间戳或可解析时间');
+        throw new Error(t('dialog.account.errors.tokenExpiresAtInvalid'));
     }
     return Math.trunc(parsed);
 }
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, fallback: string) {
     if (error instanceof Error) return error.message;
     if (typeof error === 'object' && error !== null && 'message' in error) {
         const message = (error as { message?: unknown }).message;
         if (typeof message === 'string') return message;
     }
-    return '操作失败';
+    return fallback;
 }
 
 interface AccountEditDialogProps {
@@ -219,7 +223,9 @@ interface AccountEditDialogProps {
  */
 export function AccountEditDialog({ open, onOpenChange, site, account }: AccountEditDialogProps) {
     const t = useTranslations();
+    const tSite = useTranslations('site');
     const tProxy = useTranslations('proxyPool');
+    const CREDENTIAL_LABELS = useMemo(() => credentialLabels(tSite), [tSite]);
     const locale = useSettingStore((state) => state.locale);
     const createSiteAccount = useCreateSiteAccount();
     const updateSiteAccount = useUpdateSiteAccount();
@@ -239,17 +245,17 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
         async (event: FormEvent<HTMLFormElement>) => {
             event.preventDefault();
             if (!site || !accountForm) {
-                toast.error('站点上下文不存在');
+                toast.error(tSite('dialog.account.missingSite'));
                 return;
             }
             if (!accountForm.name.trim()) {
-                toast.error('请输入账号名称');
+                toast.error(tSite('dialog.account.errors.nameRequired'));
                 return;
             }
 
             if (accountForm.credential_type === SiteCredentialType.UsernamePassword) {
                 if (!accountForm.username.trim() || !accountForm.password.trim()) {
-                    toast.error('用户名和密码不能为空');
+                    toast.error(tSite('dialog.account.errors.credentialsRequired'));
                     return;
                 }
             }
@@ -257,14 +263,14 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                 accountForm.credential_type === SiteCredentialType.AccessToken &&
                 !accountForm.access_token.trim()
             ) {
-                toast.error('请输入 Access Token');
+                toast.error(tSite('dialog.account.errors.accessTokenRequired'));
                 return;
             }
             if (
                 accountForm.credential_type === SiteCredentialType.APIKey &&
                 !accountForm.api_key.trim()
             ) {
-                toast.error('请输入 API Key');
+                toast.error(tSite('dialog.account.errors.apiKeyRequired'));
                 return;
             }
             if (accountForm.auto_checkin && accountForm.random_checkin) {
@@ -273,7 +279,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                     accountForm.checkin_interval_hours < 1 ||
                     accountForm.checkin_interval_hours > 720
                 ) {
-                    toast.error('最小签到间隔必须在 1 到 720 小时之间');
+                    toast.error(tSite('dialog.account.errors.intervalRange'));
                     return;
                 }
                 if (
@@ -281,7 +287,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                     accountForm.checkin_random_window_minutes < 0 ||
                     accountForm.checkin_random_window_minutes > 1440
                 ) {
-                    toast.error('随机延迟窗口必须在 0 到 1440 分钟之间');
+                    toast.error(tSite('dialog.account.errors.windowRange'));
                     return;
                 }
             }
@@ -293,7 +299,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                 ? accountForm.platform_user_id.trim()
                 : '';
             if (shouldIncludePlatformUserID && !platformUserIDInput) {
-                toast.error('请输入 Platform User ID');
+                toast.error(tSite('dialog.account.errors.platformUserIdRequired'));
                 return;
             }
 
@@ -305,15 +311,24 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                 parsedPlatformUserID !== null &&
                 (!Number.isInteger(parsedPlatformUserID) || parsedPlatformUserID <= 0)
             ) {
-                toast.error('Platform User ID 必须是大于 0 的整数');
+                toast.error(tSite('dialog.account.errors.platformUserIdInvalid'));
                 return;
             }
 
             let parsedTokenExpiresAt = 0;
             try {
-                parsedTokenExpiresAt = parseTokenExpiresAtInput(accountForm.token_expires_at);
+                parsedTokenExpiresAt = parseTokenExpiresAtInput(
+                    tSite,
+                    accountForm.token_expires_at,
+                );
             } catch (error) {
-                toast.error(translateSiteMessage(locale, getErrorMessage(error), t));
+                toast.error(
+                    translateSiteMessage(
+                        locale,
+                        getErrorMessage(error, tSite('common.operationFailed')),
+                        t,
+                    ),
+                );
                 return;
             }
 
@@ -366,14 +381,23 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
             try {
                 if (account) {
                     await updateSiteAccount.mutateAsync({ id: account.id, ...payload });
-                    toast.success('站点账号已更新');
+                    toast.success(tSite('dialog.account.updated'));
                 } else {
                     await createSiteAccount.mutateAsync(payload);
-                    toast.success('站点账号已创建');
+                    toast.success(tSite('dialog.account.created'));
                 }
                 onOpenChange(false);
             } catch (submitError) {
-                toast.error(translateSiteMessage(locale, getErrorMessage(submitError), t));
+                toast.error(
+                    translateSiteMessage(
+                        locale,
+                        getErrorMessage(
+                            submitError,
+                            tSite('common.operationFailed'),
+                        ),
+                        t,
+                    ),
+                );
             }
         },
         [
@@ -387,6 +411,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
             onOpenChange,
             locale,
             t,
+            tSite,
         ],
     );
 
@@ -396,7 +421,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="max-w-md rounded-3xl">
-                    <p className="text-sm text-muted-foreground">站点上下文不存在。</p>
+                    <p className="text-sm text-muted-foreground">{tSite('dialog.account.missingSiteBody')}</p>
                 </DialogContent>
             </Dialog>
         );
@@ -411,13 +436,15 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                 <header className="mb-4 flex items-start justify-between gap-4 shrink-0">
                     <div className="min-w-0 flex-1">
                         <h2 className="text-2xl font-bold text-card-foreground truncate">
-                            {account ? '编辑站点账号' : '新增站点账号'}
+                            {account
+                                ? tSite('dialog.account.editTitle')
+                                : tSite('dialog.account.createTitle')}
                         </h2>
                     </div>
                     <button
                         type="button"
                         onClick={() => onOpenChange(false)}
-                        aria-label="关闭"
+                        aria-label={tSite('common.close')}
                         className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
                     >
                         <XIcon className="size-5" />
@@ -428,7 +455,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                     <div className="flex-1 min-h-0 space-y-5 overflow-y-auto px-1">
                         <div className="grid gap-4 md:grid-cols-2">
                             <label className="grid gap-2 text-sm">
-                                <span className="font-medium">账号名称</span>
+                                <span className="font-medium">{tSite('dialog.account.name')}</span>
                                 <Input
                                     value={accountForm.name}
                                     onChange={(event) =>
@@ -438,13 +465,13 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                 : current,
                                         )
                                     }
-                                    placeholder="例如：主账号"
+                                    placeholder={tSite('dialog.account.namePlaceholder')}
                                     className="rounded-xl"
                                 />
                             </label>
 
                             <label className="grid gap-2 text-sm">
-                                <span className="font-medium">凭据类型</span>
+                                <span className="font-medium">{tSite('dialog.account.credentialType')}</span>
                                 <Select
                                     value={accountForm.credential_type}
                                     onValueChange={(value) =>
@@ -497,7 +524,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                     >
                                         <div className="grid gap-4 md:grid-cols-2">
                                             <label className="grid gap-2 text-sm">
-                                                <span className="font-medium">用户名</span>
+                                                <span className="font-medium">{tSite('dialog.account.username')}</span>
                                                 <Input
                                                     value={accountForm.username}
                                                     onChange={(event) =>
@@ -507,13 +534,13 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                                 : current,
                                                         )
                                                     }
-                                                    placeholder="请输入用户名"
+                                                    placeholder={tSite('dialog.account.usernamePlaceholder')}
                                                     className="rounded-xl"
                                                 />
                                             </label>
 
                                             <label className="grid gap-2 text-sm">
-                                                <span className="font-medium">密码</span>
+                                                <span className="font-medium">{tSite('dialog.account.password')}</span>
                                                 <Input
                                                     type="password"
                                                     value={accountForm.password}
@@ -524,7 +551,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                                 : current,
                                                         )
                                                     }
-                                                    placeholder="请输入密码"
+                                                    placeholder={tSite('dialog.account.passwordPlaceholder')}
                                                     className="rounded-xl"
                                                 />
                                             </label>
@@ -550,7 +577,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                                 : current,
                                                         )
                                                     }
-                                                    placeholder="请输入 Access Token"
+                                                    placeholder={tSite('dialog.account.accessTokenPlaceholder')}
                                                     className="rounded-xl"
                                                 />
                                             </label>
@@ -572,7 +599,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                                             : current,
                                                                     )
                                                                 }
-                                                                placeholder="可选：请输入 refresh_token"
+                                                                placeholder={tSite('dialog.account.refreshTokenPlaceholder')}
                                                                 className="rounded-xl"
                                                             />
                                                         </label>
@@ -591,15 +618,15 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                                             : current,
                                                                     )
                                                                 }
-                                                                placeholder="可选：F12 中的时间戳或时间字符串"
+                                                                placeholder={tSite('dialog.account.tokenExpiresAtPlaceholder')}
                                                                 className="rounded-xl"
                                                             />
                                                         </label>
                                                     </div>
                                                     <span className="text-xs text-muted-foreground">
-                                                        Sub2API 推荐同时填写 F12 里的 <code>refresh_token</code>{' '}
-                                                        与 <code>token_expires_at</code>，会在快过期或 401
-                                                        时自动续期。
+                                                        {tSite.rich('dialog.account.sub2apiHint', {
+                                                            code: (chunks) => <code>{chunks}</code>,
+                                                        })}
                                                     </span>
                                                 </div>
                                             ) : null}
@@ -619,13 +646,12 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                                     : current,
                                                             )
                                                         }
-                                                        placeholder="例如 11494"
+                                                        placeholder={tSite('dialog.account.platformUserIdPlaceholder')}
                                                         className="rounded-xl"
                                                         required
                                                     />
                                                     <span className="text-xs text-muted-foreground">
-                                                        New API 站点同步 token、分组和签到时需要用户
-                                                        ID。导入数据会尽量自动填充该值。
+                                                        {tSite('dialog.account.platformUserIdHint')}
                                                     </span>
                                                 </label>
                                             ) : null}
@@ -650,7 +676,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                                             : current,
                                                     )
                                                 }
-                                                placeholder="请输入 API Key"
+                                                placeholder={tSite('dialog.account.apiKeyPlaceholder')}
                                                 className="rounded-xl"
                                             />
                                         </label>
@@ -664,7 +690,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                 <label className="flex cursor-pointer items-center justify-between gap-3">
                                     <span className="flex items-center gap-2 text-sm font-medium text-card-foreground">
                                         <UserRound className="size-4 text-muted-foreground" />
-                                        启用账号
+                                        {tSite('dialog.account.enableAccount')}
                                     </span>
                                     <Switch
                                         checked={accountForm.enabled}
@@ -678,7 +704,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                 <label className="flex cursor-pointer items-center justify-between gap-3">
                                     <span className="flex items-center gap-2 text-sm text-card-foreground">
                                         <RefreshCw className="size-4 text-muted-foreground" />
-                                        自动同步
+                                        {tSite('dialog.account.autoSync')}
                                     </span>
                                     <Switch
                                         checked={accountForm.auto_sync}
@@ -692,7 +718,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                 <label className="flex cursor-pointer items-center justify-between gap-3">
                                     <span className="flex items-center gap-2 text-sm text-card-foreground">
                                         <CalendarCheck2 className="size-4 text-muted-foreground" />
-                                        自动签到
+                                        {tSite('dialog.account.autoCheckin')}
                                     </span>
                                     <Switch
                                         checked={accountForm.auto_checkin}
@@ -708,7 +734,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                 <label className="flex cursor-pointer items-center justify-between gap-3">
                                     <span className="flex items-center gap-2 text-sm text-card-foreground">
                                         <CalendarCheck2 className="size-4 text-muted-foreground" />
-                                        随机签到
+                                        {tSite('dialog.account.randomCheckin')}
                                     </span>
                                     <Switch
                                         checked={accountForm.random_checkin}
@@ -741,7 +767,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                             className="mt-4 grid gap-4 border-t border-border/50 pt-4 md:grid-cols-2"
                                         >
                                             <label className="grid gap-2 text-sm">
-                                                <span className="font-medium">最小签到间隔（小时）</span>
+                                                <span className="font-medium">{tSite('dialog.account.checkinInterval')}</span>
                                                 <Input
                                                     type="number"
                                                     min={1}
@@ -763,7 +789,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                             </label>
 
                                             <label className="grid gap-2 text-sm">
-                                                <span className="font-medium">随机延迟窗口（分钟）</span>
+                                                <span className="font-medium">{tSite('dialog.account.checkinRandomWindow')}</span>
                                                 <Input
                                                     type="number"
                                                     min={0}
@@ -811,7 +837,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                 }
                             />
                             <span className="text-xs text-muted-foreground">
-                                用于该账号的同步、签到和模型拉取；自动投影的渠道会跟随这里解析后的代理。
+                                {tSite('dialog.account.proxyHint')}
                             </span>
                         </div>
                     </div>
@@ -823,14 +849,18 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                             className="h-12 w-full rounded-2xl sm:flex-1"
                             onClick={() => onOpenChange(false)}
                         >
-                            取消
+                            {tSite('common.cancel')}
                         </Button>
                         <Button
                             type="submit"
                             className="h-12 w-full rounded-2xl sm:flex-1"
                             disabled={isPending}
                         >
-                            {isPending ? '保存中...' : account ? '保存修改' : '创建账号'}
+                            {isPending
+                                ? tSite('common.saving')
+                                : account
+                                  ? tSite('dialog.account.save')
+                                  : tSite('dialog.account.create')}
                         </Button>
                     </footer>
                 </form>

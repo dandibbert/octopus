@@ -27,6 +27,7 @@ import { ChannelForm, type ChannelFormData } from './Form';
 import { formatMoney } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useSiteEnabled } from '@/api/endpoints/setting';
 import { useJumpStore } from '@/stores/jump';
 import { ChannelModelActions } from './ModelActions';
 
@@ -35,6 +36,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
     const updateChannel = useUpdateChannel();
     const deleteChannel = useDeleteChannel();
     const requestJump = useJumpStore((state) => state.requestJump);
+    const { enabled: siteEnabled } = useSiteEnabled();
     const [isEditing, setIsEditing] = useState(false);
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -220,7 +222,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                         {isEditing ? t('title.edit') : t('title.view')}
                     </h2>
                     {channel.managed ? (
-                        <Badge variant="outline" className="ml-3 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                        <Badge variant="outline" className="ml-3 border-warning/30 bg-warning/10 text-warning">
                             {t('managed.badge')}
                         </Badge>
                     ) : null}
@@ -242,17 +244,17 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                         <TabsContent value="viewing" >
                             <div className="space-y-4 pb-2 lg:space-y-5">
                                 {channel.managed ? (
-                                    <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+                                    <section className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
                                         <div>
                                             {t('managed.description')}
                                         </div>
-                                        {channel.managed_source ? (
+                                        {siteEnabled && channel.managed_source ? (
                                             <div className="mt-3 flex flex-wrap gap-2">
                                                 <Button
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    className="min-h-10 rounded-xl border-amber-500/30 bg-white/70 text-amber-900 hover:bg-white dark:bg-background/40 dark:text-amber-100"
+                                                    className="min-h-10 rounded-xl border-warning/30 bg-card/70 text-warning hover:bg-card"
                                                     onClick={() => handleManagedSourceJump('site')}
                                                 >
                                                     {t('managed.viewSite')}
@@ -261,7 +263,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    className="min-h-10 rounded-xl border-amber-500/30 bg-white/70 text-amber-900 hover:bg-white dark:bg-background/40 dark:text-amber-100"
+                                                    className="min-h-10 rounded-xl border-warning/30 bg-card/70 text-warning hover:bg-card"
                                                     onClick={() => handleManagedSourceJump('site-channel')}
                                                 >
                                                     {t('managed.viewSiteChannel')}
@@ -416,10 +418,10 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                                     className={cn(
                                                         "h-5 px-1.5 text-xs",
                                                         url.delay < 300
-                                                            ? "bg-green-500/15 text-green-700 dark:text-green-400"
+                                                            ? "bg-success/15 text-success"
                                                             : url.delay < 1000
-                                                                ? "bg-orange-500/15 text-orange-700 dark:text-orange-400"
-                                                                : "bg-red-500/15 text-red-700 dark:text-red-400"
+                                                                ? "bg-warning/15 text-warning"
+                                                                : "bg-destructive/15 text-destructive"
                                                     )}
                                                 >
                                                     {url.delay}ms
@@ -441,7 +443,7 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                     <div className="rounded-2xl border bg-card overflow-hidden">
                                         {channel.keys?.map((key) => (
                                             <div key={key.id} className="flex items-center gap-3 p-3 sm:p-4 border-b last:border-0 hover:bg-accent/5 transition-colors">
-                                                <div className={cn("size-2 shrink-0 rounded-full", key.enabled ? "bg-emerald-500" : "bg-destructive")} />
+                                                <div className={cn("size-2 shrink-0 rounded-full", key.enabled ? "bg-success" : "bg-destructive")} />
 
                                                 <span className="font-mono text-sm truncate min-w-0 flex-1">
                                                     {key.channel_key.length > 10
@@ -466,22 +468,22 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
                                                         <Badge
                                                             variant="secondary"
                                                             className={cn(
-                                                                "h-5 px-1.5 text-[10px]",
+                                                                "h-5 px-1.5 text-3xs",
                                                                 key.status_code === 200
-                                                                    ? "bg-green-500/15 text-green-700 dark:text-green-400"
+                                                                    ? "bg-success/15 text-success"
                                                                     : key.status_code === 401 ||
                                                                         key.status_code === 403 ||
                                                                         key.status_code === 429 ||
                                                                         key.status_code >= 500
-                                                                        ? "bg-red-500/15 text-red-700 dark:text-red-400"
-                                                                        : "bg-orange-500/15 text-orange-700 dark:text-orange-400"
+                                                                        ? "bg-destructive/15 text-destructive"
+                                                                        : "bg-warning/15 text-warning"
                                                             )}
                                                         >
                                                             {key.status_code}
                                                         </Badge>
                                                     )}
 
-                                                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                                    <Badge variant="secondary" className="h-5 px-1.5 text-3xs">
                                                         {formatMoney(key.total_cost).formatted.value}
                                                         {formatMoney(key.total_cost).formatted.unit}
                                                     </Badge>

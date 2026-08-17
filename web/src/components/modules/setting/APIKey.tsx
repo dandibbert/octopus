@@ -364,7 +364,7 @@ function APIKeyForm({ apiKey, isPending, submitLabel, onSubmit, onClose }: APIKe
                         </div>
                     )}
                 </div>
-                <div className="text-[11px] text-muted-foreground/80">{t('apiKey.form.modelsHint')}</div>
+                <div className="text-2xs text-muted-foreground/80">{t('apiKey.form.modelsHint')}</div>
             </div>
 
             <div className="flex items-center justify-between pt-1">

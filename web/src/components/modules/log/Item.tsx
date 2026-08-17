@@ -174,20 +174,20 @@ function getWSBadgeMeta(mode: RelayLogWSMode | null | undefined, usedWS: boolean
         case 'continuation':
             return {
                 label: t('wsContinuation'),
-                className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                className: 'bg-success/10 text-success',
                 description: t('wsContinuationHint'),
             };
         case 'replay':
             return {
                 label: t('wsReplay'),
-                className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+                className: 'bg-warning/10 text-warning',
                 description: t('wsReplayHint'),
             };
         case 'fresh':
         default:
             return {
                 label: t('ws'),
-                className: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+                className: 'bg-info/10 text-info',
                 description: t('wsFreshHint'),
             };
     }
@@ -198,13 +198,13 @@ function getWSExecBadgeMeta(mode: RelayLogWSExecMode | null | undefined, t: Retu
         case 'passthrough':
             return {
                 label: t('wsPassthrough'),
-                className: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+                className: 'bg-info/10 text-info',
                 description: t('wsPassthroughHint'),
             };
         case 'transform':
             return {
                 label: t('wsTransform'),
-                className: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+                className: 'bg-muted text-muted-foreground',
                 description: t('wsTransformHint'),
             };
         default:
@@ -217,19 +217,19 @@ function getWSRecoveryBadgeMeta(recovery: RelayLogWSRecovery | null | undefined,
         case 'reconnect':
             return {
                 label: t('wsReconnect'),
-                className: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
+                className: 'bg-info/10 text-info',
                 description: t('wsReconnectHint'),
             };
         case 'replay':
             return {
                 label: t('wsReplayRecovery'),
-                className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+                className: 'bg-warning/10 text-warning',
                 description: t('wsReplayRecoveryHint'),
             };
         case 'downgrade':
             return {
                 label: t('wsDowngrade'),
-                className: 'bg-slate-500/10 text-slate-700 dark:text-slate-300',
+                className: 'bg-muted text-muted-foreground',
                 description: t('wsDowngradeHint'),
             };
         default:
@@ -256,9 +256,9 @@ function getAttemptStatusMeta(status: AttemptStatus, t: ReturnType<typeof useTra
         case 'circuit_break':
             return {
                 label: t('circuitBreak'),
-                badgeClassName: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-                containerClassName: 'bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/10',
-                messageClassName: 'text-amber-700 dark:text-amber-300 border-amber-500/30',
+                badgeClassName: 'bg-warning/15 text-warning',
+                containerClassName: 'bg-warning/5 border-warning/20 hover:bg-warning/10',
+                messageClassName: 'text-warning border-warning/30',
             };
         case 'failed':
         default:
@@ -404,17 +404,17 @@ function getBillingStatusMeta(status: string | undefined, recorded: boolean, t: 
         case 'resolved':
             return {
                 label: t('billingStatusResolved'),
-                className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+                className: 'bg-success/15 text-success',
             };
         case 'free':
             return {
                 label: t('billingStatusFree'),
-                className: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
+                className: 'bg-info/15 text-info',
             };
         case 'unknown':
             return {
                 label: t('billingStatusUnknown'),
-                className: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+                className: 'bg-warning/15 text-warning',
             };
         case 'conflict':
             return {
@@ -473,21 +473,21 @@ function PriceLedgerCard({
                 <div className={cn(
                     'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg',
                     kind === 'billing'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+                        ? 'bg-success/10 text-success'
+                        : 'bg-info/10 text-info',
                 )}>
                     {kind === 'billing' ? <DollarSign className="size-4" /> : <ArrowUpFromLine className="size-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                         <span className="font-medium text-foreground">{title}</span>
-                        <Badge className={cn('h-5 border-0 px-1.5 text-[10px] shadow-none', statusMeta.className)}>
+                        <Badge className={cn('h-5 border-0 px-1.5 text-3xs shadow-none', statusMeta.className)}>
                             {statusMeta.label}
                         </Badge>
                     </div>
                     <div className={cn(
                         'mt-0.5 break-words text-base font-semibold tabular-nums md:truncate',
-                        status === 'unknown' && 'text-amber-700 dark:text-amber-300',
+                        status === 'unknown' && 'text-warning',
                         status === 'conflict' && 'text-destructive',
                         status !== 'unknown' && status !== 'conflict' && 'text-foreground',
                     )} title={amountLabel}>
@@ -496,7 +496,7 @@ function PriceLedgerCard({
                 </div>
             </div>
 
-            <dl className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-1.5 text-[11px] sm:grid-cols-2">
+            <dl className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-1.5 text-2xs sm:grid-cols-2">
                 {kind === 'billing' ? (
                     <div className="flex min-w-0 items-baseline gap-1.5">
                         <dt className="shrink-0 text-muted-foreground">{t('billingBasisLabel')}</dt>
@@ -559,7 +559,7 @@ function RetryBadgeWithTooltip({ channelName, brandColor, attempts }: RetryBadge
                             <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 transition-colors">
                                 <Badge
                                     className={cn(
-                                        'h-5 shrink-0 px-1.5 text-[10px] font-bold uppercase shadow-none border-0',
+                                        'h-5 shrink-0 px-1.5 text-3xs font-bold uppercase shadow-none border-0',
                                         statusMeta.badgeClassName,
                                     )}
                                 >
@@ -569,12 +569,12 @@ function RetryBadgeWithTooltip({ channelName, brandColor, attempts }: RetryBadge
                                     <span className="truncate text-xs font-semibold text-foreground">
                                         {attempt.channel_name}
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-3xs text-muted-foreground">
                                         {attempt.model_name} • {formatDuration(attempt.totalDuration)}
                                     </span>
                                 </div>
                                 {attempt.repeat > 1 ? (
-                                    <Badge variant="outline" className="shrink-0 h-5 px-1.5 text-[10px] font-semibold tabular-nums">
+                                    <Badge variant="outline" className="shrink-0 h-5 px-1.5 text-3xs font-semibold tabular-nums">
                                         ×{attempt.repeat}
                                     </Badge>
                                 ) : null}
@@ -780,6 +780,7 @@ function AttemptDisableButton({
 
 export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogSiteActionTargets | null }) {
     const t = useTranslations('log.card');
+    const tCommon = useTranslations('common');
     const sourceT = useTranslations('toolbar.popover.logFilter.source');
     const displayActualModelName = useMemo(
         () => log.actual_model_name?.trim() || log.request_model_name?.trim() || '',
@@ -868,7 +869,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                 onSuccess: () => {
                     setConfirmDisableOpen(false);
                     setActiveDisableTarget(null);
-                    toast.success(`已禁用 ${target.group_name} / ${target.model_name}`);
+                    toast.success(t('disableSuccess', { group: target.group_name, model: target.model_name }));
                 },
                 onError: (error) => {
                     toast.error(error.message);
@@ -910,7 +911,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                             {log.request_model_name}
                                         </span>
                                         {log.request_source && log.request_source !== 'api' ? (
-                                            <Badge variant="outline" className="mt-0.5 shrink-0 px-1.5 py-0 text-[10px]">
+                                            <Badge variant="outline" className="mt-0.5 shrink-0 px-1.5 py-0 text-3xs">
                                                 {log.request_source === 'playground'
                                                     ? sourceT('playground')
                                                     : log.request_source === 'health_check'
@@ -930,7 +931,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         ) : (
                                             <Badge
                                                 variant="secondary"
-                                                className="shrink-0 px-1.5 py-0 text-[10px]"
+                                                className="shrink-0 px-1.5 py-0 text-3xs"
                                                 style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
                                             >
                                                 {log.channel_name}
@@ -940,7 +941,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                             {displayActualModelName}
                                         </span>
                                         {log.attempts?.some((attempt) => attempt.sticky) ? (
-                                            <Pin className="size-3.5 shrink-0 text-amber-500" />
+                                            <Pin className="size-3.5 shrink-0 text-warning" />
                                         ) : null}
                                     </div>
                                     <div className="mt-2">
@@ -952,7 +953,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         {log.request_model_name}
                                     </span>
                                     {log.request_source && log.request_source !== 'api' ? (
-                                        <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                                        <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-3xs">
                                             {log.request_source === 'playground'
                                                 ? sourceT('playground')
                                                 : log.request_source === 'health_check'
@@ -980,7 +981,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         {displayActualModelName}
                                     </span>
                                     {log.attempts?.some((attempt) => attempt.sticky) ? (
-                                        <Pin className="size-3.5 shrink-0 text-amber-500" />
+                                        <Pin className="size-3.5 shrink-0 text-warning" />
                                     ) : null}
                                 </div>
                                 <div className="hidden md:block">
@@ -994,25 +995,25 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                 </div>
                                 {requestAPIKeyName ? (
                                     <div className="flex items-center gap-1.5">
-                                        <KeyRound className="size-3.5 shrink-0 text-orange-500" />
+                                        <KeyRound className="size-3.5 shrink-0 text-warning" />
                                         <span className="truncate" title={requestAPIKeyName}>
                                             {requestAPIKeyName}
                                         </span>
                                     </div>
                                 ) : null}
                                 <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                    <Zap className="size-3.5 shrink-0 text-amber-500" />
+                                    <Zap className="size-3.5 shrink-0 text-warning" />
                                     <span>{t('duration')} {formatDurationCompact(log.ftut)} / {formatDurationCompact(log.use_time)}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <ArrowDownToLine className={cn('size-3.5 shrink-0', hasCacheTokens(log) ? 'text-sky-500' : 'text-green-500')} />
+                                    <ArrowDownToLine className={cn('size-3.5 shrink-0', hasCacheTokens(log) ? 'text-info' : 'text-success')} />
                                     <span className="flex items-center gap-1">
                                         {t('input')}
                                         <span className="tabular-nums">{getHeadlineInputTokens(log).toLocaleString()}</span>
                                         {hasCacheTokens(log) && log.cache_read_tokens != null && log.cache_read_tokens > 0 ? (
                                             <Badge
                                                 variant="secondary"
-                                                className="shrink-0 px-1.5 py-0 text-[11px] bg-sky-500/15 text-sky-600 dark:text-sky-400"
+                                                className="shrink-0 px-1.5 py-0 text-2xs bg-info/15 text-info"
                                             >
                                                 {formatCompactTokenCount(log.cache_read_tokens)}
                                             </Badge>
@@ -1020,12 +1021,12 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <ArrowUpFromLine className="size-3.5 shrink-0 text-purple-500" />
+                                    <ArrowUpFromLine className="size-3.5 shrink-0 text-info" />
                                     <span>{t('output')} {log.output_tokens.toLocaleString()}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <DollarSign className="size-3.5 shrink-0 text-emerald-500" />
-                                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                    <DollarSign className="size-3.5 shrink-0 text-success" />
+                                    <span className="font-medium text-success">
                                         {t('cost')} {getLedgerAmountLabel(
                                             Number.isFinite(log.cost) ? log.cost : undefined,
                                             log.billing_cost_status,
@@ -1065,7 +1066,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     ) : (
                                         <Badge
                                             variant="secondary"
-                                            className="shrink-0 px-1.5 py-0 text-[10px]"
+                                            className="shrink-0 px-1.5 py-0 text-3xs"
                                             style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
                                         >
                                             {log.channel_name}
@@ -1073,7 +1074,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     )}
                                     <span className="min-w-0 flex-1 line-clamp-1 break-all">{displayActualModelName}</span>
                                     {log.attempts?.some((attempt) => attempt.sticky) ? (
-                                        <Pin className="size-3.5 shrink-0 text-amber-500" />
+                                        <Pin className="size-3.5 shrink-0 text-warning" />
                                     ) : null}
                                 </div>
                                 <div className="mt-2">
@@ -1101,7 +1102,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                 )}
                                 <span className="text-muted-foreground truncate">{displayActualModelName}</span>
                                 {log.attempts?.some((attempt) => attempt.sticky) ? (
-                                    <Pin className="size-3.5 shrink-0 text-amber-500" />
+                                    <Pin className="size-3.5 shrink-0 text-warning" />
                                 ) : null}
                             </div>
                             <div className="hidden md:block">
@@ -1235,7 +1236,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                                                 <div className="flex items-start gap-2">
                                                                                     <Badge
                                                                                         className={cn(
-                                                                                            'h-5 shrink-0 px-1.5 text-[10px] font-bold uppercase shadow-none border-0',
+                                                                                            'h-5 shrink-0 px-1.5 text-3xs font-bold uppercase shadow-none border-0',
                                                                                             statusMeta.badgeClassName,
                                                                                         )}
                                                                                     >
@@ -1250,10 +1251,10 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                                                                 ({attempt.model_name})
                                                                                             </span>
                                                                                             {attempt.sticky ? (
-                                                                                                <Pin className="size-3.5 shrink-0 text-amber-500" />
+                                                                                                <Pin className="size-3.5 shrink-0 text-warning" />
                                                                                             ) : null}
                                                                                             {attempt.repeat > 1 ? (
-                                                                                                <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-semibold tabular-nums">
+                                                                                                <Badge variant="outline" className="h-5 px-1.5 text-3xs font-semibold tabular-nums">
                                                                                                     ×{attempt.repeat}
                                                                                                 </Badge>
                                                                                             ) : null}
@@ -1273,7 +1274,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                                                     </div>
                                                                                 </div>
                                                                                 {sanitizedMsg ? (
-                                                                                    <div className={cn('pl-2 border-l-2 text-[11px] leading-relaxed whitespace-pre-wrap wrap-break-word', statusMeta.messageClassName)}>
+                                                                                    <div className={cn('pl-2 border-l-2 text-2xs leading-relaxed whitespace-pre-wrap wrap-break-word', statusMeta.messageClassName)}>
                                                                                         {sanitizedMsg}
                                                                                     </div>
                                                                                 ) : null}
@@ -1294,7 +1295,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                 <details className="group shrink-0 overflow-hidden rounded-2xl border border-border/60 bg-muted/20 text-xs">
                                     <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/35 [&::-webkit-details-marker]:hidden">
                                         <div className="min-w-0 flex-1">
-                                            <div className="text-[11px] text-muted-foreground">{t('modelPath')}</div>
+                                            <div className="text-2xs text-muted-foreground">{t('modelPath')}</div>
                                             <div
                                                 className="mt-0.5 whitespace-normal break-all font-mono text-foreground md:truncate md:whitespace-nowrap"
                                                 title={`${displayLog.request_model_name} → ${displayLog.routed_model_name || '—'} → ${displayLog.actual_model_name || '—'}`}
@@ -1302,8 +1303,8 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                                 {displayLog.request_model_name} → {displayLog.routed_model_name || '—'} → {displayLog.actual_model_name || '—'}
                                             </div>
                                         </div>
-                                        <div className="hidden shrink-0 items-center gap-3 text-[11px] md:flex">
-                                            <span className="text-emerald-600 dark:text-emerald-400">
+                                        <div className="hidden shrink-0 items-center gap-3 text-2xs md:flex">
+                                            <span className="text-success">
                                                 {t('billingReceivable')} {getLedgerAmountLabel(
                                                     Number.isFinite(displayLog.cost) ? displayLog.cost : undefined,
                                                     displayLog.billing_cost_status,
@@ -1329,17 +1330,17 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
                                             <span>{t('modelPath')}</span>
                                             {displayLog.price_estimated ? (
-                                                <Badge className="h-5 border-0 bg-amber-500/15 px-1.5 text-[10px] text-amber-700 shadow-none dark:text-amber-300">
+                                                <Badge className="h-5 border-0 bg-warning/15 px-1.5 text-3xs text-warning shadow-none">
                                                     {t('billingPriceEstimated')}
                                                 </Badge>
                                             ) : null}
                                             {displayLog.usage_estimated ? (
-                                                <Badge className="h-5 border-0 bg-orange-500/15 px-1.5 text-[10px] text-orange-700 shadow-none dark:text-orange-300">
+                                                <Badge className="h-5 border-0 bg-warning/15 px-1.5 text-3xs text-warning shadow-none">
                                                     {t('billingUsageEstimated')}
                                                 </Badge>
                                             ) : null}
                                             {displayLog.model_mismatch ? (
-                                                <Badge className="h-5 border-0 bg-destructive/15 px-1.5 text-[10px] text-destructive shadow-none">
+                                                <Badge className="h-5 border-0 bg-destructive/15 px-1.5 text-3xs text-destructive shadow-none">
                                                     {t('billingModelMismatch')}
                                                 </Badge>
                                             ) : null}
@@ -1352,7 +1353,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         </div>
                                         {displayLog.requested_canonical_id || displayLog.routed_canonical_id || displayLog.actual_canonical_id ? (
                                             <div
-                                                className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
+                                                className="mt-1 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground"
                                                 title={`${displayLog.requested_canonical_id || '—'} → ${displayLog.routed_canonical_id || '—'} → ${displayLog.actual_canonical_id || '—'}`}
                                             >
                                                 <Link className="size-3 shrink-0" />
@@ -1362,7 +1363,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                             </div>
                                         ) : null}
                                         {displayLog.request_id ? (
-                                            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                                            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
                                                 <span className="shrink-0">{t('requestId')}</span>
                                                 <code className="min-w-0 whitespace-normal break-all md:truncate md:whitespace-nowrap" title={displayLog.request_id}>{displayLog.request_id}</code>
                                             </div>
@@ -1404,7 +1405,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full min-h-0">
                                         <div className="flex flex-col rounded-2xl border border-border bg-muted/30 overflow-hidden min-h-0">
                                             <div className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 border-b border-border bg-muted/50 shrink-0">
-                                                <Send className="size-4 text-green-500" />
+                                                <Send className="size-4 text-success" />
                                                 <span className="text-sm font-medium text-card-foreground">{t('requestContent')}</span>
                                                 <Badge variant="secondary" className="ml-auto text-xs">
                                                     {getHeadlineInputTokens(displayLog).toLocaleString()} {t('tokens')}
@@ -1418,7 +1419,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         </div>
                                         <div className="flex flex-col rounded-2xl border border-border bg-muted/30 overflow-hidden min-h-0">
                                             <div className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 border-b border-border bg-muted/50 shrink-0">
-                                                <MessageSquare className="size-4 text-purple-500" />
+                                                <MessageSquare className="size-4 text-info" />
                                                 <span className="text-sm font-medium text-card-foreground">{t('responseContent')}</span>
                                                 <Badge variant="secondary" className="ml-auto text-xs">
                                                     {displayLog.output_tokens.toLocaleString()} {t('tokens')}
@@ -1442,19 +1443,19 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                             </div>
                             {requestAPIKeyName ? (
                                 <div className="flex min-w-0 items-center gap-1.5">
-                                    <KeyRound className="size-3.5 shrink-0 text-orange-500" />
+                                    <KeyRound className="size-3.5 shrink-0 text-warning" />
                                     <span className="truncate" title={requestAPIKeyName}>
                                         {requestAPIKeyName}
                                     </span>
                                 </div>
                             ) : null}
                             <div className="flex items-center gap-1.5">
-                                <Zap className="size-3.5 text-amber-500" />
+                                <Zap className="size-3.5 text-warning" />
                                 <span>{t('duration')}: {formatDurationCompact(log.ftut)} / {formatDurationCompact(log.use_time)}</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                                <DollarSign className="size-3.5 text-emerald-500" />
-                                <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                <DollarSign className="size-3.5 text-success" />
+                                <span className="font-medium text-success">
                                     {t('cost')}: {getLedgerAmountLabel(
                                         Number.isFinite(displayLog.cost) ? displayLog.cost : undefined,
                                         displayLog.billing_cost_status,
@@ -1472,20 +1473,24 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                 <AlertDialog open={confirmDisableOpen} onOpenChange={handleConfirmDisableOpenChange}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>确认禁用站点模型</AlertDialogTitle>
+                            <AlertDialogTitle>{t('disableConfirmTitle')}</AlertDialogTitle>
                             <AlertDialogDescription>
-                                将在 {activeDisableTarget.site_name} / {activeDisableTarget.account_name} / {activeDisableTarget.group_name} 中禁用模型 {activeDisableTarget.model_name}。
-                                禁用后对应投影渠道和分组会刷新为最新状态。
+                                {t('disableConfirmDescription', {
+                                    site: activeDisableTarget.site_name,
+                                    account: activeDisableTarget.account_name,
+                                    group: activeDisableTarget.group_name,
+                                    model: activeDisableTarget.model_name,
+                                })}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                            <AlertDialogCancel disabled={disableMutation.isPending}>取消</AlertDialogCancel>
+                            <AlertDialogCancel disabled={disableMutation.isPending}>{tCommon('confirm.cancel')}</AlertDialogCancel>
                             <AlertDialogAction
                                 onClick={confirmDisableModel}
                                 disabled={disableMutation.isPending}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
-                                {disableMutation.isPending ? '禁用中...' : '确认禁用'}
+                                {disableMutation.isPending ? t('disabling') : t('disableConfirmAction')}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

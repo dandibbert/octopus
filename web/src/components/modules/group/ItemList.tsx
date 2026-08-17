@@ -152,14 +152,14 @@ function MemberItem({
                         </TooltipTrigger>
                         <TooltipContent key={member.name}>{member.name}</TooltipContent>
                     </Tooltip>
-                    <span className="line-clamp-2 break-words text-[10px] leading-tight text-muted-foreground md:truncate md:whitespace-nowrap">{sourceLabel}</span>
+                    <span className="line-clamp-2 break-words text-3xs leading-tight text-muted-foreground md:truncate md:whitespace-nowrap">{sourceLabel}</span>
                     {showBilling && (
                         <div className="mt-1.5">
                             <button
                                 type="button"
                                 onClick={() => setBillingExpanded((value) => !value)}
                                 className={cn(
-                                    'flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-[10px] transition-colors',
+                                    'flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-3xs transition-colors',
                                     hasBillingOverride
                                         ? 'bg-primary/10 text-primary'
                                         : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -174,7 +174,7 @@ function MemberItem({
                             </button>
 
                             {billingExpanded && (
-                                <div className="mt-1.5 grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-2 text-[10px] md:grid-cols-2">
+                                <div className="mt-1.5 grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-2 text-3xs md:grid-cols-2">
                                     <label className="grid gap-1 text-muted-foreground">
                                         {t('form.billingBasisLabel')}
                                         <select
@@ -188,7 +188,7 @@ function MemberItem({
                                                         : {}),
                                                 });
                                             }}
-                                            className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-2 text-base text-foreground md:h-7 md:text-[11px]"
+                                            className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-2 text-base text-foreground md:h-7 md:text-2xs"
                                             aria-label={t('form.billingBasisLabel')}
                                         >
                                             <option value="">{t('form.billingInherit')}</option>
@@ -206,7 +206,7 @@ function MemberItem({
                                             onChange={(event) => onBillingChange?.(member.id, {
                                                 billing_unknown_policy: event.target.value as UnknownPricePolicy,
                                             })}
-                                            className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-2 text-base text-foreground md:h-7 md:text-[11px]"
+                                            className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-2 text-base text-foreground md:h-7 md:text-2xs"
                                             aria-label={t('form.billingUnknownLabel')}
                                         >
                                             <option value="">{t('form.billingPolicyInherit')}</option>
@@ -225,7 +225,7 @@ function MemberItem({
                                                 onChange={(event) => onBillingChange?.(member.id, { billing_class_id: event.target.value })}
                                                 placeholder={t('form.billingClassPlaceholder')}
                                                 className={cn(
-                                                    'h-10 w-full min-w-0 rounded-md border bg-background px-2 text-base text-foreground placeholder:text-muted-foreground md:h-7 md:text-[11px]',
+                                                    'h-10 w-full min-w-0 rounded-md border bg-background px-2 text-base text-foreground placeholder:text-muted-foreground md:h-7 md:text-2xs',
                                                     billingSKUInvalid ? 'border-destructive' : 'border-border',
                                                 )}
                                             />

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../client';
 import { logger } from '@/lib/logger';
+import { useSiteEnabled } from './setting';
 import type { SitePlatform } from './site';
 import type { AutoGroupType } from './channel';
 
@@ -443,20 +444,25 @@ function invalidateSiteChannelAndRelated(queryClient: ReturnType<typeof useQuery
 
 export function useSiteChannelList(options: { includeHistory?: boolean } = {}) {
     const includeHistory = options.includeHistory ?? true;
+    const { enabled: siteEnabled } = useSiteEnabled();
     return useQuery({
         queryKey: ['site-channel', 'list', { includeHistory }],
         queryFn: async () => apiClient.get<SiteChannelCardServer[]>(`/api/v1/site-channel/list?include_history=${includeHistory}`),
         select: (cards) => cards.map(normalizeSiteChannelCard),
+        enabled: siteEnabled,
         refetchInterval: 30000,
     });
 }
 
 export function useUpdateSiteChannelModelRoutes(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async (payload: SiteModelRouteUpdateRequest[]) =>
-            apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/model-routes'), payload),
+        mutationFn: async (payload: SiteModelRouteUpdateRequest[]) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/model-routes'), payload);
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -472,10 +478,13 @@ export function useUpdateSiteChannelModelRoutes(siteId: number, accountId: numbe
 
 export function useCreateSiteChannelKey(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async (payload: SiteChannelKeyCreateRequest) =>
-            apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/keys'), payload),
+        mutationFn: async (payload: SiteChannelKeyCreateRequest) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/keys'), payload);
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -491,10 +500,13 @@ export function useCreateSiteChannelKey(siteId: number, accountId: number) {
 
 export function useUpdateSiteChannelModelDisabled() {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async ({ siteId, accountId, payload }: SiteChannelModelDisabledMutationInput) =>
-            apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/model-disabled'), payload),
+        mutationFn: async ({ siteId, accountId, payload }: SiteChannelModelDisabledMutationInput) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/model-disabled'), payload);
+        },
         onSuccess: (account, variables) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -510,10 +522,13 @@ export function useUpdateSiteChannelModelDisabled() {
 
 export function useUpdateSiteSourceKeys(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async (payload: SiteSourceKeyUpdateRequest) =>
-            apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/source-keys'), payload),
+        mutationFn: async (payload: SiteSourceKeyUpdateRequest) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/source-keys'), payload);
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -529,6 +544,7 @@ export function useUpdateSiteSourceKeys(siteId: number, accountId: number) {
 
 export function useUpdateAnySiteSourceKeys() {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
         mutationFn: async ({
@@ -539,8 +555,10 @@ export function useUpdateAnySiteSourceKeys() {
             siteId: number;
             accountId: number;
             payload: SiteSourceKeyUpdateRequest;
-        }) =>
-            apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/source-keys'), payload),
+        }) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/source-keys'), payload);
+        },
         onSuccess: (account, variables) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -556,10 +574,13 @@ export function useUpdateAnySiteSourceKeys() {
 
 export function useUpdateSiteGroupProjection(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async (payload: SiteGroupProjectionUpdateRequest) =>
-            apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/group-projection'), payload),
+        mutationFn: async (payload: SiteGroupProjectionUpdateRequest) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/group-projection'), payload);
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -575,10 +596,13 @@ export function useUpdateSiteGroupProjection(siteId: number, accountId: number) 
 
 export function useUpdateSiteProjectedChannelSettings(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async (payload: SiteProjectedChannelSettingsUpdateRequest[]) =>
-            apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/projected-channel-settings'), payload),
+        mutationFn: async (payload: SiteProjectedChannelSettingsUpdateRequest[]) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.put<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/projected-channel-settings'), payload);
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -594,10 +618,13 @@ export function useUpdateSiteProjectedChannelSettings(siteId: number, accountId:
 
 export function useAddSiteManualModels(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async (payload: SiteManualModelAddRequest) =>
-            apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/manual-models'), payload),
+        mutationFn: async (payload: SiteManualModelAddRequest) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/manual-models'), payload);
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -613,10 +640,13 @@ export function useAddSiteManualModels(siteId: number, accountId: number) {
 
 export function useDeleteSiteManualModel(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async (payload: SiteManualModelDeleteRequest) =>
-            apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/manual-models/delete'), payload),
+        mutationFn: async (payload: SiteManualModelDeleteRequest) => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/manual-models/delete'), payload);
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>
@@ -632,10 +662,13 @@ export function useDeleteSiteManualModel(siteId: number, accountId: number) {
 
 export function useResetSiteChannelModelRoutes(siteId: number, accountId: number) {
     const queryClient = useQueryClient();
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return useMutation({
-        mutationFn: async () =>
-            apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/model-routes/reset'), {}),
+        mutationFn: async () => {
+            if (!siteEnabled) throw new Error('Site features are disabled');
+            return apiClient.post<SiteChannelAccountServer>(getAccountPath(siteId, accountId, '/model-routes/reset'), {});
+        },
         onSuccess: (account) => {
             const normalizedAccount = normalizeSiteChannelAccount(account);
             queryClient.setQueryData<SiteChannelCard[]>(['site-channel', 'list'], (cards) =>

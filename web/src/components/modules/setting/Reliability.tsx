@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Hash, HeartPulse, ShieldCheck, Timer, TimerOff, type LucideIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { SettingKey } from '@/api/endpoints/setting';
+import { SettingKey, useSiteEnabled } from '@/api/endpoints/setting';
 import { SettingCard, SettingRow, SettingSection, useSettingField, useSettingToggle } from './shared';
 
 // min/max 与后端 model.Setting.Validate() 的边界保持一致，前端先行约束整数范围。
@@ -51,6 +51,7 @@ export function SettingReliability() {
     const t = useTranslations('setting');
     const outlier = useSettingToggle(SettingKey.OutlierRetireEnabled);
     const groupHealth = useSettingToggle(SettingKey.GroupHealthEnabled);
+    const { enabled: siteEnabled } = useSiteEnabled();
 
     return (
         <SettingCard icon={ShieldCheck} title={t('reliability.title')}>
@@ -80,22 +81,26 @@ export function SettingReliability() {
                 icon={TimerOff}
             />
 
-            {/* 被动离群退役 */}
-            <SettingSection title={t('outlierRetirement.title')} tooltip={t('outlierRetirement.hint')} />
-            <SettingRow label={t('outlierRetirement.enabled.label')}>
-                <Switch checked={outlier.enabled} onCheckedChange={outlier.toggle} />
-            </SettingRow>
-            {outlier.enabled && OUTLIER_FIELDS.map((f) => (
-                <NumberFieldRow
-                    key={f.key}
-                    settingKey={f.key}
-                    label={t(`outlierRetirement.${f.labelKey}.label`)}
-                    placeholder={t(`outlierRetirement.${f.labelKey}.placeholder`)}
-                    tooltip={t(`outlierRetirement.${f.labelKey}.description`)}
-                    min={f.min}
-                    max={f.max}
-                />
-            ))}
+            {/* POR 只作用于站点投影渠道，站点功能关闭时一并收起设置面 */}
+            {siteEnabled && (
+                <>
+                    <SettingSection title={t('outlierRetirement.title')} tooltip={t('outlierRetirement.hint')} />
+                    <SettingRow label={t('outlierRetirement.enabled.label')}>
+                        <Switch checked={outlier.enabled} onCheckedChange={outlier.toggle} />
+                    </SettingRow>
+                    {outlier.enabled && OUTLIER_FIELDS.map((f) => (
+                        <NumberFieldRow
+                            key={f.key}
+                            settingKey={f.key}
+                            label={t(`outlierRetirement.${f.labelKey}.label`)}
+                            placeholder={t(`outlierRetirement.${f.labelKey}.placeholder`)}
+                            tooltip={t(`outlierRetirement.${f.labelKey}.description`)}
+                            min={f.min}
+                            max={f.max}
+                        />
+                    ))}
+                </>
+            )}
         </SettingCard>
     );
 }

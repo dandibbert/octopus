@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { Plus, X, XIcon } from 'lucide-react';
 import {
@@ -78,15 +78,19 @@ const DEFAULT_ROUTE_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }
     { value: 'gemini', label: 'Gemini' },
 ];
 
-const PLATFORM_LABELS: Record<SitePlatform, string> = {
-    [SitePlatform.API]: 'API 直连',
-    [SitePlatform.NewAPI]: 'New API',
-    [SitePlatform.AnyRouter]: 'AnyRouter',
-    [SitePlatform.OneAPI]: 'One API',
-    [SitePlatform.OneHub]: 'One Hub',
-    [SitePlatform.DoneHub]: 'Done Hub',
-    [SitePlatform.Sub2API]: 'Sub2API',
-};
+type SiteTranslate = ReturnType<typeof useTranslations>;
+
+function platformLabels(t: SiteTranslate): Record<SitePlatform, string> {
+    return {
+        [SitePlatform.API]: t('platform.api'),
+        [SitePlatform.NewAPI]: 'New API',
+        [SitePlatform.AnyRouter]: 'AnyRouter',
+        [SitePlatform.OneAPI]: 'One API',
+        [SitePlatform.OneHub]: 'One Hub',
+        [SitePlatform.DoneHub]: 'Done Hub',
+        [SitePlatform.Sub2API]: 'Sub2API',
+    };
+}
 
 function createEmptySiteForm(): SiteFormState {
     return {
@@ -169,13 +173,13 @@ function trimRouteBaseURLs(items: SiteRouteBaseURL[]) {
         .filter((item) => item.route_type || item.base_url);
 }
 
-function getErrorMessage(error: unknown) {
+function getErrorMessage(error: unknown, fallback: string) {
     if (error instanceof Error) return error.message;
     if (typeof error === 'object' && error !== null && 'message' in error) {
         const message = (error as { message?: unknown }).message;
         if (typeof message === 'string') return message;
     }
-    return '操作失败';
+    return fallback;
 }
 
 interface SiteEditDialogProps {
@@ -193,7 +197,9 @@ interface SiteEditDialogProps {
  */
 export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }: SiteEditDialogProps) {
     const t = useTranslations();
+    const tSite = useTranslations('site');
     const tProxy = useTranslations('proxyPool');
+    const PLATFORM_LABELS = useMemo(() => platformLabels(tSite), [tSite]);
     const locale = useSettingStore((state) => state.locale);
     const createSite = useCreateSite();
     const updateSite = useUpdateSite();
@@ -207,11 +213,11 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
             event.preventDefault();
 
             if (!siteForm.name.trim()) {
-                toast.error('请输入站点名称');
+                toast.error(tSite('dialog.site.errors.nameRequired'));
                 return;
             }
             if (!siteForm.base_url.trim()) {
-                toast.error('请输入站点地址');
+                toast.error(tSite('dialog.site.errors.baseUrlRequired'));
                 return;
             }
 
@@ -231,15 +237,17 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                         }));
                     }
                     toast.success(
-                        `自动检测到平台：${PLATFORM_LABELS[platform] ?? platform}`,
+                        tSite('dialog.site.detected', {
+                            platform: PLATFORM_LABELS[platform] ?? platform,
+                        }),
                     );
                 } catch {
-                    toast.error('无法自动检测平台类型，请手动选择');
+                    toast.error(tSite('dialog.site.errors.detectFailed'));
                     return;
                 }
             }
             if (!platform) {
-                toast.error('请选择平台类型');
+                toast.error(tSite('dialog.site.errors.platformRequired'));
                 return;
             }
 
@@ -248,7 +256,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                 (item) => !item.header_key || !item.header_value,
             );
             if (invalidHeader) {
-                toast.error('自定义 Header 的键和值都不能为空');
+                toast.error(tSite('dialog.site.errors.headerIncomplete'));
                 return;
             }
 
@@ -257,7 +265,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                 (item) => !item.route_type || !item.base_url,
             );
             if (invalidRouteBaseURL) {
-                toast.error('协议路径覆盖的类型和地址都不能为空');
+                toast.error(tSite('dialog.site.errors.routeIncomplete'));
                 return;
             }
             const routeTypeSet = new Set<string>();
@@ -267,7 +275,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                 return false;
             });
             if (duplicateRoute) {
-                toast.error('同一协议的路径覆盖只能配置一条');
+                toast.error(tSite('dialog.site.errors.routeDuplicate'));
                 return;
             }
 
@@ -298,19 +306,26 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
             try {
                 if (site) {
                     await updateSite.mutateAsync({ id: site.id, ...payload });
-                    toast.success('站点已更新');
+                    toast.success(tSite('dialog.site.updated'));
                     onOpenChange(false);
                 } else {
                     const createdSite = normalizeSiteRecord(
                         await createSite.mutateAsync(payload),
                     );
-                    toast.success('站点已创建');
+                    toast.success(tSite('dialog.site.created'));
                     onOpenChange(false);
                     onCreated?.(createdSite);
                 }
             } catch (submitError) {
                 toast.error(
-                    translateSiteMessage(locale, getErrorMessage(submitError), t),
+                    translateSiteMessage(
+                        locale,
+                        getErrorMessage(
+                            submitError,
+                            tSite('common.operationFailed'),
+                        ),
+                        t,
+                    ),
                 );
             }
         },
@@ -325,6 +340,8 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
             onCreated,
             locale,
             t,
+            tSite,
+            PLATFORM_LABELS,
         ],
     );
 
@@ -339,13 +356,15 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                 <header className="mb-4 flex items-start justify-between gap-4 shrink-0">
                     <div className="min-w-0 flex-1">
                         <h2 className="text-2xl font-bold text-card-foreground truncate">
-                            {site ? '编辑站点' : '新增站点'}
+                            {site
+                                ? tSite('dialog.site.editTitle')
+                                : tSite('dialog.site.createTitle')}
                         </h2>
                     </div>
                     <button
                         type="button"
                         onClick={() => onOpenChange(false)}
-                        aria-label="关闭"
+                        aria-label={tSite('common.close')}
                         className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
                     >
                         <XIcon className="size-5" />
@@ -356,7 +375,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                     <div className="flex-1 min-h-0 space-y-5 overflow-y-auto px-1">
                         <div className="grid gap-4 md:grid-cols-2">
                             <label className="grid gap-2 text-sm">
-                                <span className="font-medium">站点名称</span>
+                                <span className="font-medium">{tSite('dialog.site.name')}</span>
                                 <Input
                                     value={siteForm.name}
                                     onChange={(event) =>
@@ -365,13 +384,13 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                             name: event.target.value,
                                         }))
                                     }
-                                    placeholder="例如：主站 OneAPI"
+                                    placeholder={tSite('dialog.site.namePlaceholder')}
                                     className="rounded-xl"
                                 />
                             </label>
 
                             <label className="grid gap-2 text-sm">
-                                <span className="font-medium">平台类型</span>
+                                <span className="font-medium">{tSite('dialog.site.platform')}</span>
                                 <Select
                                     value={siteForm.platform || AUTO_DETECT_VALUE}
                                     onValueChange={(value) =>
@@ -385,11 +404,11 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                     }
                                 >
                                     <SelectTrigger className="w-full rounded-xl">
-                                        <SelectValue placeholder="自动检测" />
+                                        <SelectValue placeholder={tSite('dialog.site.autoDetect')} />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl">
                                         {!site && (
-                                            <SelectItem className="rounded-xl" value={AUTO_DETECT_VALUE}>自动检测</SelectItem>
+                                            <SelectItem className="rounded-xl" value={AUTO_DETECT_VALUE}>{tSite('dialog.site.autoDetect')}</SelectItem>
                                         )}
                                         {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
                                             <SelectItem className="rounded-xl" key={value} value={value}>
@@ -402,7 +421,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                         </div>
 
                         <label className="grid gap-2 text-sm">
-                            <span className="font-medium">站点地址</span>
+                            <span className="font-medium">{tSite('dialog.site.baseUrl')}</span>
                             <Input
                                 value={siteForm.base_url}
                                 onChange={(event) =>
@@ -419,7 +438,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                         {siteForm.platform === SitePlatform.API && (
                             <div className="grid gap-2 text-sm">
                                 <div className="flex items-center gap-1.5">
-                                    <span className="font-medium">默认协议</span>
+                                    <span className="font-medium">{tSite('dialog.site.defaultRoute')}</span>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <button
@@ -433,7 +452,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                             </button>
                                         </TooltipTrigger>
                                         <TooltipContent className="max-w-xs">
-                                            决定获取模型列表的请求格式，以及未手动指定路由类型的模型的默认端点格式
+                                            {tSite('dialog.site.defaultRouteHint')}
                                         </TooltipContent>
                                     </Tooltip>
                                 </div>
@@ -461,7 +480,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                         )}
 
                         <label className="grid gap-2 text-sm">
-                            <span className="font-medium">手动签到 URL</span>
+                            <span className="font-medium">{tSite('dialog.site.externalCheckinUrl')}</span>
                             <Input
                                 value={siteForm.external_checkin_url}
                                 onChange={(event) =>
@@ -470,16 +489,16 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                         external_checkin_url: event.target.value,
                                     }))
                                 }
-                                placeholder="可选：例如 https://example.com/signin"
+                                placeholder={tSite('dialog.site.externalCheckinUrlPlaceholder')}
                                 className="rounded-xl"
                             />
                             <span className="text-xs text-muted-foreground">
-                                配置后可在站点总览中一键打开此页面进行手动签到。
+                                {tSite('dialog.site.externalCheckinUrlHint')}
                             </span>
                         </label>
 
                         <label className="grid gap-2 text-sm">
-                            <span className="font-medium">标签</span>
+                            <span className="font-medium">{tSite('dialog.site.tags')}</span>
                             <TagInput
                                 value={siteForm.tags}
                                 onChange={(tags) =>
@@ -488,7 +507,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                 suggestions={allTags}
                             />
                             <span className="text-xs text-muted-foreground">
-                                可选：为站点打标签，便于在列表中分类筛选。
+                                {tSite('dialog.site.tagsHint')}
                             </span>
                         </label>
 
@@ -503,9 +522,9 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
 
                         <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
                             <div>
-                                <div className="text-sm font-medium">启用站点</div>
+                                <div className="text-sm font-medium">{tSite('dialog.site.enabled')}</div>
                                 <div className="text-xs text-muted-foreground">
-                                    停用后不再投影托管渠道
+                                    {tSite('dialog.site.enabledHint')}
                                 </div>
                             </div>
                             <Switch
@@ -519,13 +538,13 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                         <Accordion type="single" collapsible className="w-full rounded-xl border bg-card">
                             <AccordionItem value="advanced" className="border-none">
                                 <AccordionTrigger className="rounded-xl px-4 py-3 text-sm font-medium text-card-foreground transition-colors hover:bg-muted/30 hover:no-underline">
-                                    高级设置
+                                    {tSite('dialog.site.advanced')}
                                 </AccordionTrigger>
                                 <AccordionContent className="space-y-4 border-t px-4 pb-4 pt-4">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <label className="text-sm font-medium text-card-foreground">
-                                                自定义 Header {siteForm.custom_header.length > 0 ? `(${siteForm.custom_header.length})` : ''}
+                                                {tSite('dialog.site.customHeader')} {siteForm.custom_header.length > 0 ? `(${siteForm.custom_header.length})` : ''}
                                             </label>
                                             <Button
                                                 type="button"
@@ -543,7 +562,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                                 className="h-6 px-2 text-xs text-muted-foreground/70 hover:bg-transparent hover:text-muted-foreground"
                                             >
                                                 <Plus className="mr-1 h-3 w-3" />
-                                                添加
+                                                {tSite('common.add')}
                                             </Button>
                                         </div>
                                         <div className="space-y-2">
@@ -609,7 +628,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <label className="text-sm font-medium text-card-foreground">
-                                                协议路径覆盖 {siteForm.route_base_urls.length > 0 ? `(${siteForm.route_base_urls.length})` : ''}
+                                                {tSite('dialog.site.routeOverride')} {siteForm.route_base_urls.length > 0 ? `(${siteForm.route_base_urls.length})` : ''}
                                             </label>
                                             <Button
                                                 type="button"
@@ -627,11 +646,11 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                                 className="h-6 px-2 text-xs text-muted-foreground/70 hover:bg-transparent hover:text-muted-foreground"
                                             >
                                                 <Plus className="mr-1 h-3 w-3" />
-                                                添加
+                                                {tSite('common.add')}
                                             </Button>
                                         </div>
                                         <p className="text-xs text-muted-foreground/70">
-                                            按协议覆盖请求地址，例如 Anthropic 填 https://example.com/anthropic/v1，留空则用站点地址默认推断。
+                                            {tSite('dialog.site.routeOverrideHint')}
                                         </p>
                                         <div className="space-y-2">
                                             {siteForm.route_base_urls.map((item, index) => (
@@ -651,7 +670,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                                                         }
                                                     >
                                                         <SelectTrigger className="w-40 rounded-xl">
-                                                            <SelectValue placeholder="协议类型" />
+                                                            <SelectValue placeholder={tSite('dialog.site.routeTypePlaceholder')} />
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {ROUTE_BASE_URL_OPTIONS.map((option) => (
@@ -710,14 +729,18 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
                             className="h-12 w-full rounded-2xl sm:flex-1"
                             onClick={() => onOpenChange(false)}
                         >
-                            取消
+                            {tSite('common.cancel')}
                         </Button>
                         <Button
                             type="submit"
                             className="h-12 w-full rounded-2xl sm:flex-1"
                             disabled={isPending}
                         >
-                            {isPending ? '保存中...' : site ? '保存修改' : '创建站点'}
+                            {isPending
+                                ? tSite('common.saving')
+                                : site
+                                  ? tSite('dialog.site.save')
+                                  : tSite('dialog.site.create')}
                         </Button>
                     </footer>
                 </form>

@@ -61,11 +61,11 @@ function statusLabel(status?: GroupHealthStatus | null) {
 function statusDotTone(status?: GroupHealthStatus | null) {
     switch (status) {
         case 'success':
-            return 'bg-emerald-500';
+            return 'bg-success';
         case 'partial':
-            return 'bg-amber-500';
+            return 'bg-warning';
         case 'running':
-            return 'bg-sky-500 animate-pulse';
+            return 'bg-info animate-pulse';
         case 'failed':
             return 'bg-destructive';
         default:
@@ -76,11 +76,11 @@ function statusDotTone(status?: GroupHealthStatus | null) {
 function statusTextTone(status?: GroupHealthStatus | null) {
     switch (status) {
         case 'success':
-            return 'text-emerald-600 dark:text-emerald-400';
+            return 'text-success';
         case 'partial':
-            return 'text-amber-600 dark:text-amber-400';
+            return 'text-warning';
         case 'running':
-            return 'text-sky-600 dark:text-sky-400';
+            return 'text-info';
         case 'failed':
             return 'text-destructive';
         default:
@@ -90,14 +90,14 @@ function statusTextTone(status?: GroupHealthStatus | null) {
 
 function probeModeTone(mode?: GroupHealthProbeMode | null) {
     return mode === 'full'
-        ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+        ? 'border-warning/20 bg-warning/10 text-warning'
         : 'border-border bg-muted/40 text-muted-foreground';
 }
 
 function attemptBadgeTone(status: GroupHealthAttemptStatus) {
     switch (status) {
         case 'success':
-            return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+            return 'border-success/20 bg-success/10 text-success';
         case 'skipped':
             return 'border-border bg-muted/40 text-muted-foreground';
         case 'failed':
@@ -127,7 +127,7 @@ export function GroupHealthAttemptDetails({ attempt }: { attempt: GroupHealthAtt
                     {attempt.model_name ? <><span className="hidden shrink-0 md:inline">·</span><span className="min-w-0 basis-full break-all md:basis-auto md:truncate">{attempt.model_name}</span></> : null}
                 </div>
             </div>
-            <Badge variant="outline" className={cn('shrink-0 text-[11px]', attemptBadgeTone(attempt.status))}>
+            <Badge variant="outline" className={cn('shrink-0 text-2xs', attemptBadgeTone(attempt.status))}>
                 {t(`attemptStatus.${attempt.status}`)}
             </Badge>
         </div>
@@ -251,7 +251,7 @@ export function GroupHealthBadge({ groupId }: { groupId?: number }) {
                         <CardContent className="p-3">
                             <div className="text-xs text-muted-foreground">{t('status')}</div>
                             <div className={cn('mt-1 font-medium', statusTextTone(latest?.status))}>{t(`statusValue.${statusLabel(latest?.status)}`)}</div>
-                            <Badge variant="outline" className={cn('mt-2 h-5 px-1.5 text-[10px] uppercase tracking-wide', probeModeTone(latest?.probe_mode ?? 'standard'))}>
+                            <Badge variant="outline" className={cn('mt-2 h-5 px-1.5 text-3xs uppercase tracking-wide', probeModeTone(latest?.probe_mode ?? 'standard'))}>
                                 {t(`probeMode.${latest?.probe_mode ?? 'standard'}`)}
                             </Badge>
                         </CardContent>

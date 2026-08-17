@@ -40,7 +40,8 @@ import { useLogUIStore } from '@/components/modules/log/ui-store';
 import { LogFilterPopover } from '@/components/modules/log/FilterPopover';
 import { useProxyPoolDialogStore } from '@/components/modules/proxy-pool/dialog-store';
 import { useCompletionStore } from '@/components/modules/site-channel/completion-store';
-import { useChannelTabStore } from '@/components/modules/channel/tab-store';
+import { useEffectiveChannelTab } from '@/components/modules/channel/tab-store';
+import { useSiteEnabled } from '@/api/endpoints/setting';
 import { useTranslations } from 'next-intl';
 import { useSearchStore } from './search-store';
 import { ToolbarMenu, type ToolbarAction } from './ToolbarMenu';
@@ -125,7 +126,8 @@ export function Toolbar() {
     const openProxyPool = useProxyPoolDialogStore((s) => s.open);
 
     // Completion (for channel site tab)
-    const activeChannelTab = useChannelTabStore((s) => s.activeTab);
+    const { enabled: siteEnabled } = useSiteEnabled();
+    const activeChannelTab = useEffectiveChannelTab();
     const completionPendingCount = useCompletionStore((s) => s.pendingCount);
     const openCompletionDialog = useCompletionStore((s) => s.openDialog);
 
@@ -147,24 +149,27 @@ export function Toolbar() {
     const actions = useMemo((): ToolbarAction[] => {
         const result: ToolbarAction[] = [];
 
+        // 代理池入口平时挂在站点页。站点功能关闭后站点页不存在，而手动渠道
+        // 仍可能使用池模式，于是入口落到渠道页，避免池配置无处管理。
+        if (toolbarItem === (siteEnabled ? 'site' : 'channel')) {
+            result.push({
+                id: 'proxy-pool',
+                icon: <Network className="size-4" />,
+                label: tProxyPool('name'),
+                onClick: () => openProxyPool(),
+                priority: 'large', // 单个 large 项 md 以上即平铺，多个才推迟到 xl
+            });
+        }
+
         // 站点页面按钮
         if (toolbarItem === 'site') {
-            result.push(
-                {
-                    id: 'proxy-pool',
-                    icon: <Network className="size-4" />,
-                    label: tProxyPool('name'),
-                    onClick: () => openProxyPool(),
-                    priority: 'large', // xl以上可见
-                },
-                {
-                    id: 'create-site',
-                    icon: <Plus className="size-4" />,
-                    label: '新增站点',
-                    onClick: requestOpenCreateSite,
-                    priority: 'desktop', // md以上可见
-                }
-            );
+            result.push({
+                id: 'create-site',
+                icon: <Plus className="size-4" />,
+                label: t('actions.createSite'),
+                onClick: requestOpenCreateSite,
+                priority: 'desktop', // md 以上平铺，<md 仅在"更多"菜单确实显示时折叠
+            });
         }
 
         // 渠道页面按钮
@@ -174,17 +179,17 @@ export function Toolbar() {
                 result.push({
                     id: 'completion',
                     icon: <KeyRound className="size-4" />,
-                    label: '统一补全 Key',
+                    label: t('actions.completionKey'),
                     onClick: openCompletionDialog,
                     badge: completionPendingCount,
-                    priority: 'large', // xl以上可见
+                    priority: 'large', // 单个 large 项 md 以上即平铺，多个才推迟到 xl
                 });
             }
 
             result.push({
                 id: 'create-channel',
                 icon: <Plus className="size-4" />,
-                label: '新增渠道',
+                label: t('actions.createChannel'),
                 onClick: () => setCreateDialogOpen(true),
                 priority: 'desktop',
             });
@@ -196,14 +201,14 @@ export function Toolbar() {
                 {
                     id: 'auto-group',
                     icon: <WandSparkles className="size-4" />,
-                    label: '自动分组',
+                    label: t('actions.autoGroup'),
                     onClick: () => setAutoGroupDialogOpen(true),
                     priority: 'large',
                 },
                 {
                     id: 'create-group',
                     icon: <Plus className="size-4" />,
-                    label: '新增分组',
+                    label: t('actions.createGroup'),
                     onClick: () => setCreateDialogOpen(true),
                     priority: 'desktop',
                 }
@@ -235,7 +240,7 @@ export function Toolbar() {
             result.push({
                 id: 'refresh',
                 icon: <RefreshCw className={cn('size-4', isLogRefreshing && 'animate-spin')} />,
-                label: '刷新',
+                label: t('actions.refresh'),
                 onClick: requestLogRefresh,
                 disabled: isLogRefreshing,
                 priority: 'desktop',
@@ -245,6 +250,7 @@ export function Toolbar() {
         return result;
     }, [
         toolbarItem,
+        siteEnabled,
         activeChannelTab,
         completionPendingCount,
         isLogRefreshing,
@@ -252,6 +258,7 @@ export function Toolbar() {
         requestOpenCreateSite,
         openCompletionDialog,
         requestLogRefresh,
+        t,
         tModelAlias,
         tModelCreate,
         tProxyPool,
@@ -517,35 +524,35 @@ export function Toolbar() {
                                 {/* 站点页面的全局操作 */}
                                 {toolbarItem === 'site' && (
                                     <div className="grid gap-2">
-                                        <p className="text-xs font-medium text-muted-foreground">全局操作</p>
+                                        <p className="text-xs font-medium text-muted-foreground">{t('popover.globalActions.title')}</p>
                                         <div className="grid gap-2">
                                             <button
                                                 type="button"
                                                 onClick={requestOpenImportDialog}
                                                 className="h-8 rounded-lg border px-2 text-xs font-medium text-left transition-colors border-border bg-muted/20 text-foreground hover:bg-muted/30"
                                             >
-                                                导入站点数据
+                                                {t('popover.globalActions.importSites')}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={requestSyncAll}
                                                 className="h-8 rounded-lg border px-2 text-xs font-medium text-left transition-colors border-border bg-muted/20 text-foreground hover:bg-muted/30"
                                             >
-                                                全量同步
+                                                {t('popover.globalActions.syncAll')}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={requestCheckinAll}
                                                 className="h-8 rounded-lg border px-2 text-xs font-medium text-left transition-colors border-border bg-muted/20 text-foreground hover:bg-muted/30"
                                             >
-                                                全量签到
+                                                {t('popover.globalActions.checkinAll')}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={requestOpenArchivedDialog}
                                                 className="h-8 rounded-lg border px-2 text-xs font-medium text-left transition-colors border-border bg-muted/20 text-foreground hover:bg-muted/30"
                                             >
-                                                归档站点
+                                                {t('popover.globalActions.archivedSites')}
                                             </button>
                                         </div>
                                     </div>

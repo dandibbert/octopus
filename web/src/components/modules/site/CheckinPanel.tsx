@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
   CalendarCheck2,
@@ -21,25 +22,25 @@ import {
   type CheckinFilterStatus,
 } from "./checkin-status";
 
-const FILTERS: Array<{ key: CheckinFilterStatus; label: string }> = [
-  { key: "all", label: "全部" },
-  { key: "success", label: "成功" },
-  { key: "failed", label: "失败" },
-  { key: "idle", label: "未执行" },
-  { key: "disabled", label: "禁用" },
+const FILTERS: Array<{ key: CheckinFilterStatus }> = [
+  { key: "all" },
+  { key: "success" },
+  { key: "failed" },
+  { key: "idle" },
+  { key: "disabled" },
 ];
 
 function filterTone(status: CheckinFilterStatus, active: boolean) {
   if (active) {
     switch (status) {
       case "success":
-        return "border-emerald-500/30 bg-emerald-500 text-white";
+        return "border-success/30 bg-success text-success-foreground";
       case "failed":
-        return "border-destructive/30 bg-destructive text-white";
+        return "border-destructive/30 bg-destructive text-destructive-foreground";
       case "idle":
         return "border-border bg-foreground text-background";
       case "disabled":
-        return "border-slate-500/30 bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900";
+        return "border-border bg-muted-foreground text-background";
       case "all":
       default:
         return "border-primary/30 bg-primary text-primary-foreground";
@@ -48,13 +49,13 @@ function filterTone(status: CheckinFilterStatus, active: boolean) {
 
   switch (status) {
     case "success":
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+      return "border-success/20 bg-success/10 text-success";
     case "failed":
       return "border-destructive/20 bg-destructive/10 text-destructive";
     case "idle":
       return "border-border bg-muted/40 text-muted-foreground";
     case "disabled":
-      return "border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300";
+      return "border-border bg-muted text-muted-foreground";
     case "all":
     default:
       return "border-border bg-background text-foreground";
@@ -83,7 +84,7 @@ function OverviewMetric({
         className={cn(
           "flex size-9 items-center justify-center rounded-xl bg-background shadow-sm",
           tone === "warning"
-            ? "text-amber-600 dark:text-amber-400"
+            ? "text-warning"
             : "text-muted-foreground",
         )}
       >
@@ -131,6 +132,7 @@ export function CheckinPanel({
   activeTags: string[];
   onTagFilterChange: (tag: string) => void;
 }) {
+  const t = useTranslations("site");
   const summaryNow = useMemo(() => {
     const [year = "", month = "", day = ""] = statusDayKey.split("-");
     const parsed = new Date(Number(year), Number(month), Number(day));
@@ -158,18 +160,21 @@ export function CheckinPanel({
   }, [manualCheckinUrls]);
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-[0_18px_60px_-40px_rgba(15,23,42,0.45)]">
+    <section className="custom-shadow overflow-hidden rounded-3xl border border-border/70 bg-card">
       <div className="border-b border-border/60 bg-gradient-to-br from-background via-card to-muted/10 px-5 py-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-base font-semibold">
             <CalendarCheck2 className="size-5 text-primary" />
-            <span>总览</span>
+            <span>{t("checkin.overview")}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>当前结果</span>
+            <span>{t("checkin.currentResults")}</span>
             <span className="font-medium text-foreground">
-              {visibleSiteCount} 站点 / {visibleAccountCount} 账号
+              {t("checkin.resultCount", {
+                sites: visibleSiteCount,
+                accounts: visibleAccountCount,
+              })}
             </span>
           </div>
         </div>
@@ -177,22 +182,22 @@ export function CheckinPanel({
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <OverviewMetric
             icon={<Wallet className="size-4" />}
-            label="当前余额"
+            label={t("checkin.totalBalance")}
             value={formatCurrency(inventory.totalBalance)}
           />
           <OverviewMetric
             icon={<TrendingUp className="size-4" />}
-            label="累计消耗"
+            label={t("checkin.totalUsed")}
             value={formatCurrency(inventory.totalBalanceUsed)}
           />
           <OverviewMetric
             icon={<Layers3 className="size-4" />}
-            label="启用账号"
+            label={t("checkin.enabledAccounts")}
             value={`${inventory.enabledAccounts} / ${inventory.totalAccounts}`}
           />
           <OverviewMetric
             icon={<AlertTriangle className="size-4" />}
-            label="今日异常"
+            label={t("checkin.todayFailed")}
             value={`${summary.failed}`}
             tone={summary.failed > 0 ? "warning" : "default"}
           />
@@ -200,7 +205,11 @@ export function CheckinPanel({
 
         {hasActiveFilters && hasContextBadges ? (
           <div className="mt-4 flex flex-wrap gap-2">
-            {searchTerm ? <Badge variant="outline">搜索：{searchTerm}</Badge> : null}
+            {searchTerm ? (
+              <Badge variant="outline">
+                {t("checkin.searchBadge", { term: searchTerm })}
+              </Badge>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -226,7 +235,7 @@ export function CheckinPanel({
                   )}
                 >
                   <span>{count}</span>
-                  <span>{filter.label}</span>
+                  <span>{t(`checkin.filter.${filter.key}`)}</span>
                 </button>
               );
             })}
@@ -241,7 +250,7 @@ export function CheckinPanel({
                 onClick={onClearFilters}
               >
                 <FilterX className="size-4" />
-                清空筛选
+                {t("checkin.clearFilters")}
               </Button>
             ) : null}
             {manualCheckinUrls.length > 0 ? (
@@ -253,7 +262,9 @@ export function CheckinPanel({
                 onClick={openAllManualCheckin}
               >
                 <ExternalLink className="size-4" />
-                打开手动签到 ({manualCheckinUrls.length})
+                {t("checkin.openManualCheckin", {
+                  count: manualCheckinUrls.length,
+                })}
               </Button>
             ) : null}
           </div>
@@ -268,7 +279,11 @@ export function CheckinPanel({
                   key={tag}
                   type="button"
                   onClick={() => onTagFilterChange(tag)}
-                  title={active ? `取消按「${tag}」筛选` : `按「${tag}」筛选`}
+                  title={
+                    active
+                      ? t("card.clearTagFilter", { tag })
+                      : t("card.filterByTag", { tag })
+                  }
                   className={cn(
                     "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                     active
@@ -278,7 +293,7 @@ export function CheckinPanel({
                 >
                   <Tag className="size-3" />
                   <span>{tag}</span>
-                  <span className="text-[10px] opacity-70">{count}</span>
+                  <span className="text-3xs opacity-70">{count}</span>
                 </button>
               );
             })}

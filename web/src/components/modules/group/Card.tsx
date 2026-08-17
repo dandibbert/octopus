@@ -465,8 +465,8 @@ export function GroupCard({ group }: { group: Group }) {
                                                 <span className={cn(
                                                     'absolute right-1.5 top-1.5 size-1.5 rounded-full ring-2 ring-card',
                                                     routeHealth.isPending
-                                                        ? 'animate-pulse bg-sky-500'
-                                                        : routeHealthResult?.success ? 'bg-emerald-500' : 'bg-destructive',
+                                                        ? 'animate-pulse bg-info'
+                                                        : routeHealthResult?.success ? 'bg-success' : 'bg-destructive',
                                                 )} />
                                             )}
                                         </button>
@@ -485,11 +485,11 @@ export function GroupCard({ group }: { group: Group }) {
                                 id={`group-route-health-result-${group.id}`}
                                 className={cn(
                                     'w-[min(calc(100vw-1.5rem),20rem)] rounded-xl bg-card p-3 text-xs shadow-lg',
-                                    routeHealthResult.success ? 'border-emerald-500/30' : 'border-destructive/30',
+                                    routeHealthResult.success ? 'border-success/30' : 'border-destructive/30',
                                 )}
                             >
                                 <div className="flex items-start gap-2">
-                                    <span className={cn('mt-1 size-2 shrink-0 rounded-full', routeHealthResult.success ? 'bg-emerald-500' : 'bg-destructive')} />
+                                    <span className={cn('mt-1 size-2 shrink-0 rounded-full', routeHealthResult.success ? 'bg-success' : 'bg-destructive')} />
                                     <div className="min-w-0 flex-1">
                                         <div className="font-medium" aria-live="polite">
                                             {routeHealthResult.success

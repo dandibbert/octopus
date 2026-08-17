@@ -9,8 +9,8 @@ type ToastOptions = {
 const icons = {
     success: <CircleCheck className="size-5 text-primary" />,
     error: <CircleX className="size-5 text-destructive" />,
-    warning: <AlertTriangle className="size-5 text-destructive/70" />,
-    info: <Info className="size-5 text-accent" />,
+    warning: <AlertTriangle className="size-5 text-warning" />,
+    info: <Info className="size-5 text-info" />,
     loading: <Loader2 className="size-5 text-muted-foreground animate-spin" />,
 };
 
