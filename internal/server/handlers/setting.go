@@ -64,6 +64,14 @@ func setSetting(c *gin.Context) {
 		resp.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	switch setting.Key {
+	case model.SettingKeyTwoFactorEnabled:
+		resp.Error(c, http.StatusBadRequest, "two-factor authentication must be changed via /api/v1/user/2fa or the disable-2fa command")
+		return
+	case model.SettingKeyJWTSecret:
+		resp.Error(c, http.StatusBadRequest, "jwt_secret cannot be changed through the settings API")
+		return
+	}
 	if err := op.SettingSetString(setting.Key, setting.Value); err != nil {
 		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return

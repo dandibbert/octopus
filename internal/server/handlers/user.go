@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/bestruirui/octopus/internal/model"
@@ -18,6 +19,10 @@ func init() {
 		AddRoute(
 			router.NewRoute("/login", http.MethodPost).
 				Handle(login),
+		).
+		AddRoute(
+			router.NewRoute("/login/security", http.MethodGet).
+				Handle(publicSecurityStatus),
 		)
 	router.NewGroupRouter("/api/v1/user").
 		Use(middleware.Auth()).
@@ -33,6 +38,22 @@ func init() {
 		AddRoute(
 			router.NewRoute("/status", http.MethodGet).
 				Handle(status),
+		).
+		AddRoute(
+			router.NewRoute("/security", http.MethodGet).
+				Handle(securityStatus),
+		).
+		AddRoute(
+			router.NewRoute("/2fa/setup", http.MethodPost).
+				Handle(twoFactorSetup),
+		).
+		AddRoute(
+			router.NewRoute("/2fa/enable", http.MethodPost).
+				Handle(twoFactorEnable),
+		).
+		AddRoute(
+			router.NewRoute("/2fa/disable", http.MethodPost).
+				Handle(twoFactorDisable),
 		)
 }
 
@@ -43,6 +64,18 @@ func login(c *gin.Context) {
 		return
 	}
 	if err := op.UserVerify(user.Username, user.Password); err != nil {
+		resp.InvalidCredentials(c)
+		return
+	}
+	if locked, remaining := op.TwoFactorLocked(); locked {
+		resp.Error(c, http.StatusTooManyRequests, op.TwoFactorLockError(remaining).Error())
+		return
+	}
+	if err := op.TwoFactorVerifyLogin(user.Code); err != nil {
+		if errors.Is(err, op.ErrTwoFactorLocked) {
+			resp.Error(c, http.StatusTooManyRequests, err.Error())
+			return
+		}
 		resp.InvalidCredentials(c)
 		return
 	}
@@ -82,4 +115,47 @@ func changeUsername(c *gin.Context) {
 
 func status(c *gin.Context) {
 	resp.Success(c, "ok")
+}
+
+func publicSecurityStatus(c *gin.Context) {
+	resp.Success(c, model.UserSecurityStatus{TwoFactorEnabled: op.TwoFactorEnabled()})
+}
+
+func securityStatus(c *gin.Context) {
+	resp.Success(c, model.UserSecurityStatus{TwoFactorEnabled: op.TwoFactorEnabled()})
+}
+
+func twoFactorSetup(c *gin.Context) {
+	setup, err := op.TwoFactorSetup()
+	if err != nil {
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	resp.Success(c, setup)
+}
+
+func twoFactorEnable(c *gin.Context) {
+	var req model.TwoFactorCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.InvalidJSON(c)
+		return
+	}
+	if err := op.TwoFactorEnable(req.Code); err != nil {
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	resp.Success(c, "two factor authentication enabled")
+}
+
+func twoFactorDisable(c *gin.Context) {
+	var req model.TwoFactorCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		resp.InvalidJSON(c)
+		return
+	}
+	if err := op.TwoFactorDisable(req.Code); err != nil {
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	resp.Success(c, "two factor authentication disabled")
 }

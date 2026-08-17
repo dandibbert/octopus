@@ -1,11 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { User, KeyRound, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, KeyRound, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useChangeUsername, useChangePassword, useAuth } from '@/api/endpoints/user';
+import {
+    useChangeUsername,
+    useChangePassword,
+    useAuth,
+    useSecurityStatus,
+    useTwoFactorSetup,
+    useTwoFactorEnable,
+    useTwoFactorDisable,
+    type TwoFactorSetupResponse,
+} from '@/api/endpoints/user';
 import { toast } from '@/components/common/Toast';
 
 export function SettingAccount() {
@@ -13,6 +23,10 @@ export function SettingAccount() {
     const { logout } = useAuth();
     const changeUsername = useChangeUsername();
     const changePassword = useChangePassword();
+    const security = useSecurityStatus();
+    const twoFactorSetup = useTwoFactorSetup();
+    const twoFactorEnable = useTwoFactorEnable();
+    const twoFactorDisable = useTwoFactorDisable();
 
     const [newUsername, setNewUsername] = useState('');
     const [oldPassword, setOldPassword] = useState('');
@@ -22,6 +36,8 @@ export function SettingAccount() {
     const [showOldPassword, setShowOldPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [twoFactorSetupData, setTwoFactorSetupData] = useState<TwoFactorSetupResponse | null>(null);
+    const [twoFactorCode, setTwoFactorCode] = useState('');
 
     const handleChangeUsername = () => {
         if (!newUsername.trim()) {
@@ -103,6 +119,109 @@ export function SettingAccount() {
                         {changeUsername.isPending ? t('account.saving') : t('account.save')}
                     </Button>
                 </div>
+            </div>
+
+            <div className="border-t border-border" />
+
+            <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <ShieldCheck className="size-4" />
+                        <span>{t('account.twoFactor.label')}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                        {security.data?.two_factor_enabled ? t('account.twoFactor.enabled') : t('account.twoFactor.disabled')}
+                    </span>
+                </div>
+
+                {!security.data?.two_factor_enabled && !twoFactorSetupData && (
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full rounded-xl"
+                        disabled={twoFactorSetup.isPending}
+                        onClick={() => twoFactorSetup.mutate(undefined, {
+                            onSuccess: setTwoFactorSetupData,
+                            onError: (error) => toast.error(t('account.twoFactor.setupFailed'), { description: error.message }),
+                        })}
+                    >
+                        {t('account.twoFactor.setup')}
+                    </Button>
+                )}
+
+                {!security.data?.two_factor_enabled && twoFactorSetupData && (
+                    <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-4">
+                        <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
+                            <Image
+                                src={twoFactorSetupData.qr_code}
+                                alt={t('account.twoFactor.qrAlt')}
+                                width={160}
+                                height={160}
+                                unoptimized
+                                className="size-40 rounded-xl bg-white p-2"
+                            />
+                            <div className="min-w-0 flex-1 space-y-2 text-xs text-muted-foreground">
+                                <p>{t('account.twoFactor.scanHint')}</p>
+                                <div className="rounded-lg bg-background px-3 py-2 font-mono text-foreground break-all">{twoFactorSetupData.secret}</div>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                value={twoFactorCode}
+                                onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                maxLength={6}
+                                placeholder={t('account.twoFactor.codePlaceholder')}
+                                className="rounded-xl"
+                            />
+                            <Button
+                                type="button"
+                                className="shrink-0 rounded-xl"
+                                disabled={twoFactorEnable.isPending || twoFactorCode.length !== 6}
+                                onClick={() => twoFactorEnable.mutate(twoFactorCode, {
+                                    onSuccess: () => {
+                                        toast.success(t('account.twoFactor.enableSuccess'));
+                                        setTwoFactorSetupData(null);
+                                        setTwoFactorCode('');
+                                    },
+                                    onError: (error) => toast.error(t('account.twoFactor.enableFailed'), { description: error.message }),
+                                })}
+                            >
+                                {t('account.twoFactor.enable')}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {security.data?.two_factor_enabled && (
+                    <div className="flex gap-2">
+                        <Input
+                            value={twoFactorCode}
+                            onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            placeholder={t('account.twoFactor.codePlaceholder')}
+                            className="rounded-xl"
+                        />
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            className="shrink-0 rounded-xl"
+                            disabled={twoFactorDisable.isPending || twoFactorCode.length !== 6}
+                            onClick={() => twoFactorDisable.mutate(twoFactorCode, {
+                                onSuccess: () => {
+                                    toast.success(t('account.twoFactor.disableSuccess'));
+                                    setTwoFactorCode('');
+                                },
+                                onError: (error) => toast.error(t('account.twoFactor.disableFailed'), { description: error.message }),
+                            })}
+                        >
+                            {t('account.twoFactor.disable')}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div className="border-t border-border" />

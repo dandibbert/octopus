@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl'
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { useLogin } from "@/api/endpoints/user"
+import { useLogin, useLoginSecurityStatus } from "@/api/endpoints/user"
 import { useAPIKeyLogin } from "@/api/endpoints/apikey"
 import Logo from "@/components/modules/logo"
 import { KeyRound, User } from "lucide-react"
@@ -27,10 +27,13 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
   const [mode, setMode] = useState<LoginMode>('user')
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [error, setError] = useState<string | null>(null)
 
   const loginMutation = useLogin()
+  const loginSecurity = useLoginSecurityStatus()
+  const twoFactorRequired = loginSecurity.data?.two_factor_enabled === true
   const apiKeyLoginMutation = useAPIKeyLogin()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,10 +42,15 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
 
     try {
       if (mode === 'user') {
+        if (twoFactorRequired && code.trim().length !== 6) {
+          setError(t('totpRequired'))
+          return
+        }
         await loginMutation.mutateAsync({
           username,
           password,
           expire: 86400,
+          code: code.trim() || undefined,
         })
       } else {
         await apiKeyLoginMutation.mutateAsync(apiKey)
@@ -126,6 +134,24 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
                     required={mode === 'user'}
                     disabled={isPending}
                   />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="totp-code">{t('totp')}</FieldLabel>
+                  <Input
+                    id="totp-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder={twoFactorRequired ? t('totpPlaceholderRequired') : t('totpPlaceholder')}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required={mode === 'user' && twoFactorRequired}
+                    disabled={isPending}
+                  />
+                  <FieldDescription>
+                    {twoFactorRequired ? t('totpHintRequired') : t('totpHint')}
+                  </FieldDescription>
                 </Field>
               </TabsContent>
               <TabsContent value="apikey">

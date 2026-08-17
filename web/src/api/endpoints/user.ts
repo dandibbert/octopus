@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient, setAuthStoreGetter } from '../client';
@@ -12,6 +12,17 @@ export interface UserLoginRequest {
     username: string;
     password: string;
     expire: number; // token 过期时间（秒）
+    code?: string;
+}
+
+export interface TwoFactorSetupResponse {
+    secret: string;
+    uri: string;
+    qr_code: string;
+}
+
+export interface UserSecurityStatus {
+    two_factor_enabled: boolean;
 }
 
 /**
@@ -218,6 +229,42 @@ export function useChangeUsername() {
         onError: (error) => {
             logger.error('用户名修改失败:', error);
         },
+    });
+}
+
+export function useLoginSecurityStatus() {
+    return useQuery({
+        queryKey: ['user', 'login-security'],
+        queryFn: () => apiClient.get<UserSecurityStatus>('/api/v1/user/login/security'),
+        staleTime: 30_000,
+        retry: 1,
+    });
+}
+
+export function useSecurityStatus() {
+    return useQuery({
+        queryKey: ['user', 'security'],
+        queryFn: () => apiClient.get<UserSecurityStatus>('/api/v1/user/security'),
+    });
+}
+
+export function useTwoFactorSetup() {
+    return useMutation({ mutationFn: () => apiClient.post<TwoFactorSetupResponse>('/api/v1/user/2fa/setup', {}) });
+}
+
+export function useTwoFactorEnable() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (code: string) => apiClient.post<string>('/api/v1/user/2fa/enable', { code }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'security'] }),
+    });
+}
+
+export function useTwoFactorDisable() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (code: string) => apiClient.post<string>('/api/v1/user/2fa/disable', { code }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'security'] }),
     });
 }
 
