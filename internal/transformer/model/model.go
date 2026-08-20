@@ -609,6 +609,41 @@ func (r *InternalLLMRequest) IsOpenAIExactReplayRequest() bool {
 	return r.TransformerMetadataValue(TransformerMetadataWSExecutionMode) == TransformerMetadataWSExecutionModeReplayExact
 }
 
+// RequiresUpstreamContinuation reports that this request must stay on the same
+// upstream conversation transport (previous_response_id, conversation handle,
+// or a tool result that is not paired with an assistant tool_call in-body).
+func (r *InternalLLMRequest) RequiresUpstreamContinuation() bool {
+	if r == nil {
+		return false
+	}
+	if r.OpenAIPreviousResponseID() != "" {
+		return true
+	}
+	if len(r.GetOpenAIResponsesOptions().Conversation) > 0 {
+		return true
+	}
+	seenToolCalls := make(map[string]struct{})
+	for _, msg := range r.Messages {
+		if msg.Role == "assistant" {
+			for _, toolCall := range msg.ToolCalls {
+				if toolCallID := strings.TrimSpace(toolCall.ID); toolCallID != "" {
+					seenToolCalls[toolCallID] = struct{}{}
+				}
+			}
+		}
+		if msg.Role != "tool" || msg.ToolCallID == nil {
+			continue
+		}
+		if toolCallID := strings.TrimSpace(*msg.ToolCallID); toolCallID != "" {
+			if _, exists := seenToolCalls[toolCallID]; exists {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+
 func (r *InternalLLMRequest) MarkOpenAIExactReplayRequest() {
 	if r == nil {
 		return

@@ -1918,6 +1918,18 @@ func (o *ResponseOutbound) CanPassthrough(inboundFormat model.APIFormat) bool {
 	return inboundFormat == model.APIFormatOpenAIResponse
 }
 
+// AllowPassthrough rejects raw forwarding when the request needs local rewrite
+// (exact replay) or must stay on the upstream WS conversation.
+func (o *ResponseOutbound) AllowPassthrough(req *model.InternalLLMRequest, hasClientContext bool) bool {
+	if !hasClientContext || req == nil {
+		return false
+	}
+	if req.IsOpenAIExactReplayRequest() || req.RequiresUpstreamContinuation() {
+		return false
+	}
+	return true
+}
+
 // PassthroughConfig implements model.PassthroughCapable.
 // Returns OpenAI Responses-specific passthrough settings.
 func (o *ResponseOutbound) PassthroughConfig() model.PassthroughConfig {

@@ -74,6 +74,11 @@ type PassthroughCapable interface {
 	// Example: Anthropic MessageOutbound returns true when inboundFormat == APIFormatAnthropicMessage.
 	CanPassthrough(inboundFormat APIFormat) bool
 
+	// AllowPassthrough is a per-request veto. Even when CanPassthrough is true,
+	// exact replay / WS continuation / missing client context should fall back
+	// to the full conversion path instead of forwarding raw bytes.
+	AllowPassthrough(req *InternalLLMRequest, hasClientContext bool) bool
+
 	// TransformRequestRaw builds an HTTP request from raw client bytes, rewriting only essential
 	// fields (model name, authorization) while preserving request structure.
 	//

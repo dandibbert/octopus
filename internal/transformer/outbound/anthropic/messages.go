@@ -2067,6 +2067,10 @@ func (o *MessageOutbound) CanPassthrough(inboundFormat model.APIFormat) bool {
 	return inboundFormat == model.APIFormatAnthropicMessage
 }
 
+func (o *MessageOutbound) AllowPassthrough(req *model.InternalLLMRequest, hasClientContext bool) bool {
+	return hasClientContext && req != nil
+}
+
 // PassthroughConfig implements model.PassthroughCapable.
 // Returns Anthropic-specific passthrough settings.
 func (o *MessageOutbound) PassthroughConfig() model.PassthroughConfig {

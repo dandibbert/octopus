@@ -897,17 +897,9 @@ func (ra *relayAttempt) forwardViaHTTP(ctx context.Context) (int, error) {
 	if pt, ok := ra.outAdapter.(model.PassthroughCapable); ok &&
 		ra.metrics.shouldAggregateStats() &&
 		len(ra.rawBody) > 0 &&
-		pt.CanPassthrough(ra.internalRequest.RawAPIFormat) {
-		// Additional checks for OpenAI Responses edge cases
-		if ra.internalRequest.RawAPIFormat == model.APIFormatOpenAIResponse {
-			if ra.c == nil || ra.internalRequest.IsOpenAIExactReplayRequest() || requiresUpstreamWSContinuation(ra.internalRequest) {
-				// Fall through to standard path
-			} else {
-				return ra.forwardViaHTTPPassthrough(ctx, pt)
-			}
-		} else {
-			return ra.forwardViaHTTPPassthrough(ctx, pt)
-		}
+		pt.CanPassthrough(ra.internalRequest.RawAPIFormat) &&
+		pt.AllowPassthrough(ra.internalRequest, ra.c != nil) {
+		return ra.forwardViaHTTPPassthrough(ctx, pt)
 	}
 
 	return ra.forwardViaHTTPStandard(ctx)

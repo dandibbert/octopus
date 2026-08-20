@@ -179,33 +179,5 @@ func isUpstreamQuotaError(message string) bool {
 }
 
 func requiresUpstreamWSContinuation(req *transformerModel.InternalLLMRequest) bool {
-	if req == nil {
-		return false
-	}
-	if req.OpenAIPreviousResponseID() != "" {
-		return true
-	}
-	if len(req.GetOpenAIResponsesOptions().Conversation) > 0 {
-		return true
-	}
-	seenToolCalls := make(map[string]struct{})
-	for _, msg := range req.Messages {
-		if msg.Role == "assistant" {
-			for _, toolCall := range msg.ToolCalls {
-				if toolCallID := strings.TrimSpace(toolCall.ID); toolCallID != "" {
-					seenToolCalls[toolCallID] = struct{}{}
-				}
-			}
-		}
-		if msg.Role != "tool" || msg.ToolCallID == nil {
-			continue
-		}
-		if toolCallID := strings.TrimSpace(*msg.ToolCallID); toolCallID != "" {
-			if _, exists := seenToolCalls[toolCallID]; exists {
-				continue
-			}
-			return true
-		}
-	}
-	return false
+	return req.RequiresUpstreamContinuation()
 }
