@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -65,18 +64,30 @@ func (o *MessagesOutbound) TransformRequest(ctx context.Context, request *model.
 		return nil, fmt.Errorf("failed to marshal gemini request: %w", err)
 	}
 
-	// Build URL
-	parsedUrl, err := url.Parse(strings.TrimSuffix(baseUrl, "/"))
+	parsedBase, err := model.ParseProviderBaseURL(baseUrl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base url: %w", err)
+		return nil, err
+	}
+	parsedUrl := parsedBase.URL
+	if parsedBase.Raw {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, parsedUrl.String(), bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		if key != "" {
+			req.Header.Set("x-goog-api-key", key)
+		}
+		return req, nil
 	}
 
 	// G-H5: When the channel BaseURL omits the API version segment
 	// (`https://generativelanguage.googleapis.com`), the downstream request
 	// would land on `/models/...` which 404s. Fall back to `/v1beta` when
 	// no version prefix is configured; leave explicit `/v1` or `/v1beta`
-	// paths alone.
-	if !pathHasGeminiVersion(parsedUrl.Path) {
+	// paths alone. A trailing "#" skips this fallback (AxonHub-style).
+	if !parsedBase.SkipVersion && !pathHasGeminiVersion(parsedUrl.Path) {
 		parsedUrl.Path = strings.TrimRight(parsedUrl.Path, "/") + "/v1beta"
 	}
 

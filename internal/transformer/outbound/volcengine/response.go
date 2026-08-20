@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/bestruirui/octopus/internal/transformer/model"
@@ -67,12 +66,10 @@ func (o *ResponseOutbound) TransformRequest(ctx context.Context, request *model.
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+key)
 
-	// Parse and set URL
-	parsedUrl, err := url.Parse(strings.TrimSuffix(baseUrl, "/"))
+	parsedUrl, err := model.JoinProviderURL(baseUrl, "/responses")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base url: %w", err)
+		return nil, err
 	}
-	parsedUrl.Path = parsedUrl.Path + "/responses"
 	req.URL = parsedUrl
 	req.Method = http.MethodPost
 

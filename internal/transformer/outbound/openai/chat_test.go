@@ -10,6 +10,42 @@ import (
 	"github.com/bestruirui/octopus/internal/transformer/model"
 )
 
+func chatURLTestContent(s string) *string { return &s }
+
+func TestChatOutboundJoinProviderURLMarkers(t *testing.T) {
+	req := &model.InternalLLMRequest{
+		Model: "gpt-4o",
+		Messages: []model.Message{
+			{Role: "user", Content: model.MessageContent{Content: chatURLTestContent("hi")}},
+		},
+	}
+	outbound := &ChatOutbound{}
+
+	plain, err := outbound.TransformRequest(context.Background(), req, "https://api.openai.com/v1", "sk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.URL.Path != "/v1/chat/completions" {
+		t.Fatalf("plain path = %s", plain.URL.Path)
+	}
+
+	hash, err := outbound.TransformRequest(context.Background(), req, "https://proxy.example.com/gateway#", "sk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash.URL.Path != "/gateway/chat/completions" {
+		t.Fatalf("# path = %s", hash.URL.Path)
+	}
+
+	raw, err := outbound.TransformRequest(context.Background(), req, "https://proxy.example.com/full/chat/completions##", "sk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw.URL.Path != "/full/chat/completions" {
+		t.Fatalf("## path = %s", raw.URL.Path)
+	}
+}
+
 func TestBuildChatCompletionsRequestUsesExplicitWhitelist(t *testing.T) {
 	content := "hello"
 	user := "legacy-user"

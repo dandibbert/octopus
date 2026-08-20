@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/bestruirui/octopus/internal/transformer/model"
 )
@@ -75,11 +73,10 @@ func (o *EmbeddingOutbound) TransformRequest(ctx context.Context, request *model
 	req.Header.Set("Authorization", "Bearer "+key)
 	applyOpenAIOrgProjectHeaders(req, request)
 
-	parsedUrl, err := url.Parse(strings.TrimSuffix(baseUrl, "/"))
+	parsedUrl, err := model.JoinProviderURL(baseUrl, "/embeddings")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base url: %w", err)
+		return nil, err
 	}
-	parsedUrl.Path = parsedUrl.Path + "/embeddings"
 	req.URL = parsedUrl
 	req.Method = http.MethodPost
 	return req, nil

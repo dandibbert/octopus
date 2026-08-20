@@ -73,14 +73,10 @@ func (o *MessageOutbound) TransformRequest(ctx context.Context, request *model.I
 		req.Header.Set("anthropic-beta", strings.Join(betas, ","))
 	}
 
-	// Parse and set URL
-	parsedUrl, err := url.Parse(strings.TrimSuffix(baseUrl, "/"))
+	parsedUrl, err := model.JoinProviderURL(baseUrl, "/messages")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base url: %w", err)
+		return nil, err
 	}
-
-	parsedUrl.Path = parsedUrl.Path + "/messages"
-	// Pass through the original query parameters exactly as-is
 	if request.Query != nil {
 		parsedUrl.RawQuery = request.Query.Encode()
 	}
@@ -131,11 +127,10 @@ func (o *MessageOutbound) TransformRequestRaw(ctx context.Context, rawBody []byt
 	req.Header.Set("anthropic-beta", DefaultAnthropicPassthroughBeta)
 	req.Header.Set("X-API-Key", key)
 
-	parsedUrl, err := url.Parse(strings.TrimSuffix(baseUrl, "/"))
+	parsedUrl, err := model.JoinProviderURL(baseUrl, "/messages")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base url: %w", err)
+		return nil, err
 	}
-	parsedUrl.Path = parsedUrl.Path + "/messages"
 	if query != nil {
 		parsedUrl.RawQuery = query.Encode()
 	}

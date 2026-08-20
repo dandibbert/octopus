@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/samber/lo"
@@ -136,6 +137,36 @@ func TestTransformRequestStreamKeepsAltSse(t *testing.T) {
 
 // pathHasGeminiVersion isolates the small heuristic so future docs-only
 // additions (e.g. v2) are easy to spot in tests.
+func TestTransformRequestHonorsProviderURLMarkers(t *testing.T) {
+	outbound := &MessagesOutbound{}
+
+	hash, err := outbound.TransformRequest(
+		context.Background(),
+		newGeminiRequestForRouting(false),
+		"https://proxy.example.com/custom#",
+		"secret-key",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(hash.URL.Path, "/custom/models/") {
+		t.Fatalf("# should skip /v1beta fallback, got %s", hash.URL.Path)
+	}
+
+	raw, err := outbound.TransformRequest(
+		context.Background(),
+		newGeminiRequestForRouting(false),
+		"https://proxy.example.com/full/generate##",
+		"secret-key",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw.URL.Path != "/full/generate" {
+		t.Fatalf("## should keep exact path, got %s", raw.URL.Path)
+	}
+}
+
 func TestPathHasGeminiVersion(t *testing.T) {
 	cases := []struct {
 		path string

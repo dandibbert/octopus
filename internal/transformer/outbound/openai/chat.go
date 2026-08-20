@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/bestruirui/octopus/internal/transformer/model"
@@ -118,11 +117,10 @@ func (o *ChatOutbound) TransformRequest(ctx context.Context, request *model.Inte
 	req.Header.Set("Authorization", "Bearer "+key)
 	applyOpenAIOrgProjectHeaders(req, request)
 
-	parsedUrl, err := url.Parse(strings.TrimSuffix(baseUrl, "/"))
+	parsedUrl, err := model.JoinProviderURL(baseUrl, "/chat/completions")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base url: %w", err)
+		return nil, err
 	}
-	parsedUrl.Path = parsedUrl.Path + "/chat/completions"
 	req.URL = parsedUrl
 	req.Method = http.MethodPost
 	return req, nil
