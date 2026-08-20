@@ -166,11 +166,16 @@ func (h *earlyHeartbeat) WriteSSEError(statusCode int, message string) {
 		"code":    statusCode,
 		"message": message,
 	})
+	h.WriteRaw(append([]byte("event: error\ndata: "), append(payload, []byte("\n\n")...)...))
+}
+
+func (h *earlyHeartbeat) WriteRaw(data []byte) {
+	if h == nil || h.c == nil || len(data) == 0 {
+		return
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	_, _ = h.c.Writer.Write([]byte("event: error\ndata: "))
-	_, _ = h.c.Writer.Write(payload)
-	_, _ = h.c.Writer.Write([]byte("\n\n"))
+	_, _ = h.c.Writer.Write(data)
 	h.c.Writer.Flush()
 }
 

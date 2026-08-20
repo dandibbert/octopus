@@ -20,6 +20,11 @@ type Inbound interface {
 	// 流式场景：将储存的流式响应聚合为完整的响应
 	// 非流式场景：返回储存的完整响应
 	GetInternalResponse(ctx context.Context) (*InternalLLMResponse, error)
+
+	// TransformError converts a relay/upstream failure into the inbound
+	// client protocol. mode distinguishes a still-mutable HTTP JSON error
+	// from a stream that has already committed headers.
+	TransformError(ctx context.Context, statusCode int, message string, mode ErrorOutputMode) ([]byte, error)
 }
 
 type Outbound interface {

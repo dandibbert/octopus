@@ -1617,6 +1617,58 @@ func (i *MessagesInbound) GetInternalResponse(ctx context.Context) (*model.Inter
 	return i.streamAggregator.BuildAndReset(), nil
 }
 
+func (i *MessagesInbound) TransformError(ctx context.Context, statusCode int, message string, mode model.ErrorOutputMode) ([]byte, error) {
+	if message == "" {
+		message = "channel failed"
+	}
+	errType := anthropicErrorType(statusCode)
+	payload := AnthropicError{
+		Type: "error",
+		Error: ErrorDetail{
+			Type:    errType,
+			Message: message,
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	if mode == model.ErrorOutputCommittedStream {
+		return formatSSEEvent("error", body), nil
+	}
+	return body, nil
+}
+
+func anthropicErrorType(statusCode int) string {
+	switch statusCode {
+	case 400:
+		return "invalid_request_error"
+	case 401:
+		return "authentication_error"
+	case 402:
+		return "billing_error"
+	case 403:
+		return "permission_error"
+	case 404:
+		return "not_found_error"
+	case 409:
+		return "conflict_error"
+	case 413:
+		return "request_too_large"
+	case 429:
+		return "rate_limit_error"
+	case 504:
+		return "timeout_error"
+	case 529:
+		return "overloaded_error"
+	default:
+		if statusCode >= 400 && statusCode < 500 {
+			return "invalid_request_error"
+		}
+		return "api_error"
+	}
+}
+
 // mergeToolCall merges a tool call delta into the existing tool calls slice
 func mergeToolCall(toolCalls []model.ToolCall, delta model.ToolCall) []model.ToolCall {
 	// Find existing tool call by index

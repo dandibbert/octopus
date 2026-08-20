@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/samber/lo"
@@ -256,14 +257,19 @@ func (i *ResponseInbound) processStreamEvents(ctx context.Context, events []mode
 				continue
 			}
 			i.responseCompleted = true
+			if !i.hasResponseCreated {
+				out = append(out, i.enqueueErrorEvent("server_error", event.Error.Detail.Message))
+				continue
+			}
 			response := &ResponsesResponse{
 				Object:    "response",
 				ID:        i.responseID,
 				Model:     i.model,
 				CreatedAt: i.createdAt,
+				Output:    []ResponsesItem{},
 				Status:    lo.ToPtr("failed"),
 				Error: &ResponsesError{
-					Code:    500,
+					Code:    "server_error",
 					Message: event.Error.Detail.Message,
 				},
 			}
@@ -293,6 +299,23 @@ func (i *ResponseInbound) enqueueEvent(ev *ResponsesStreamEvent) []byte {
 		return nil
 	}
 
+	return formatSSEData(data)
+}
+
+func (i *ResponseInbound) enqueueErrorEvent(code, message string) []byte {
+	ev := &ResponsesErrorEvent{
+		Type:           "error",
+		SequenceNumber: i.sequenceNumber,
+		Code:           code,
+		Message:        message,
+		Param:          nil,
+	}
+	i.sequenceNumber++
+
+	data, err := json.Marshal(ev)
+	if err != nil {
+		return nil
+	}
 	return formatSSEData(data)
 }
 
@@ -865,6 +888,34 @@ func (i *ResponseInbound) GetInternalResponse(ctx context.Context) (*model.Inter
 	return i.streamAggregator.BuildAndReset(), nil
 }
 
+func (i *ResponseInbound) TransformError(ctx context.Context, statusCode int, message string, mode model.ErrorOutputMode) ([]byte, error) {
+	if message == "" {
+		message = "channel failed"
+	}
+	if statusCode <= 0 {
+		statusCode = http.StatusBadGateway
+	}
+	if mode != model.ErrorOutputCommittedStream {
+		return formatOpenAIChatError(statusCode, message, model.ErrorOutputHTTPJSON)
+	}
+	if !i.hasResponseCreated {
+		return i.enqueueErrorEvent(openAIErrorCode(statusCode), message), nil
+	}
+	resp := &ResponsesResponse{
+		Object:    "response",
+		ID:        i.responseID,
+		Model:     i.model,
+		CreatedAt: i.createdAt,
+		Output:    []ResponsesItem{},
+		Status:    lo.ToPtr("failed"),
+		Error: &ResponsesError{
+			Code:    openAIErrorCode(statusCode),
+			Message: message,
+		},
+	}
+	return i.enqueueEvent(&ResponsesStreamEvent{Type: "response.failed", Response: resp}), nil
+}
+
 // formatSSEData formats data as SSE data line
 func formatSSEData(data []byte) []byte {
 	return []byte(fmt.Sprintf("data: %s\n\n", string(data)))
@@ -1118,8 +1169,19 @@ type ResponsesUsage struct {
 }
 
 type ResponsesError struct {
-	Code    int    `json:"code"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+// ResponsesErrorEvent is emitted when the stream has already committed but
+// no Response object exists yet. In that phase the Responses API uses a
+// top-level error event rather than response.failed.
+type ResponsesErrorEvent struct {
+	Type           string  `json:"type"`
+	SequenceNumber int     `json:"sequence_number"`
+	Code           string  `json:"code"`
+	Message        string  `json:"message"`
+	Param          *string `json:"param"`
 }
 
 type ResponsesStreamEvent struct {

@@ -2035,3 +2035,166 @@ func setupRelayTestDB(t *testing.T) context.Context {
 
 	return context.Background()
 }
+
+func TestWriteInboundErrorUsesClientProtocol(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	writeInboundError(c, nil, inbound.Get(inbound.InboundTypeAnthropic), http.StatusTooManyRequests, "channel failed")
+
+	if writer.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d", writer.Code)
+	}
+	body := writer.Body.String()
+	if !strings.Contains(body, `"type":"error"`) || !strings.Contains(body, `"type":"rate_limit_error"`) {
+		t.Fatalf("expected anthropic error body, got %s", body)
+	}
+	if strings.Contains(body, `"message":"channel failed"`) && strings.Contains(body, `"code":429`) && !strings.Contains(body, `"type":"error"`) {
+		t.Fatalf("fell back to generic resp.Error shape: %s", body)
+	}
+}
+
+func TestWriteInboundErrorRequestedStreamStillJSONBeforeCommit(t *testing.T) {
+	cases := []struct {
+		name        string
+		inboundType inbound.InboundType
+		wantType    string
+	}{
+		{"openai-chat", inbound.InboundTypeOpenAIChat, `"type":"rate_limit_error"`},
+		{"anthropic", inbound.InboundTypeAnthropic, `"type":"rate_limit_error"`},
+		{"openai-responses", inbound.InboundTypeOpenAIResponse, `"type":"rate_limit_error"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			writer := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(writer)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"stream":true}`))
+
+			writeInboundError(c, nil, inbound.Get(tc.inboundType), http.StatusTooManyRequests, "channel failed")
+
+			if writer.Code != http.StatusTooManyRequests {
+				t.Fatalf("status = %d", writer.Code)
+			}
+			ct := writer.Header().Get("Content-Type")
+			if !strings.Contains(ct, "application/json") {
+				t.Fatalf("Content-Type = %q", ct)
+			}
+			body := writer.Body.String()
+			if strings.HasPrefix(strings.TrimSpace(body), "data:") || strings.Contains(body, "event:") {
+				t.Fatalf("pre-commit stream request must stay JSON, got %s", body)
+			}
+			if !strings.Contains(body, tc.wantType) {
+				t.Fatalf("expected %s in %s", tc.wantType, body)
+			}
+			if tc.inboundType == inbound.InboundTypeOpenAIResponse && strings.Contains(body, `"object":"response"`) {
+				t.Fatalf("pre-stream Responses error must not be a failed response object: %s", body)
+			}
+			var probe any
+			if err := json.Unmarshal(writer.Body.Bytes(), &probe); err != nil {
+				t.Fatalf("body is not JSON: %v %s", err, body)
+			}
+		})
+	}
+}
+
+func TestWriteInboundErrorCommittedStreamUsesProtocolEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	hb := &earlyHeartbeat{c: c, done: make(chan struct{})}
+	close(hb.done)
+	hb.writeSSEHeaderLocked()
+
+	writeInboundError(c, hb, inbound.Get(inbound.InboundTypeOpenAIChat), http.StatusBadGateway, "channel failed")
+
+	body := writer.Body.String()
+	if !strings.Contains(body, "data: ") || !strings.Contains(body, `"code":"server_error"`) {
+		t.Fatalf("committed OpenAI stream should emit SSE error, got %q", body)
+	}
+}
+
+func TestWriteInboundErrorCommittedResponsesBeforeCreateUsesErrorEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	hb := &earlyHeartbeat{c: c, done: make(chan struct{})}
+	close(hb.done)
+	hb.writeSSEHeaderLocked()
+
+	writeInboundError(c, hb, inbound.Get(inbound.InboundTypeOpenAIResponse), http.StatusTooManyRequests, "channel failed")
+
+	body := writer.Body.String()
+	if !strings.Contains(body, `"type":"error"`) || strings.Contains(body, `"type":"response.failed"`) {
+		t.Fatalf("expected top-level Responses error event before response.created, got %s", body)
+	}
+	dataLine := ""
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "data:") {
+			dataLine = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			break
+		}
+	}
+	if dataLine == "" {
+		t.Fatalf("missing SSE data line in %s", body)
+	}
+	var ev struct {
+		Type    string  `json:"type"`
+		Code    string  `json:"code"`
+		Message string  `json:"message"`
+		Param   *string `json:"param"`
+	}
+	if err := json.Unmarshal([]byte(dataLine), &ev); err != nil {
+		t.Fatalf("unmarshal: %v data=%s", err, dataLine)
+	}
+	if ev.Type != "error" || ev.Code != "rate_limit_exceeded" || ev.Message != "channel failed" {
+		t.Fatalf("unexpected error event %+v", ev)
+	}
+	if !strings.Contains(dataLine, `"param":null`) {
+		t.Fatalf("expected param:null, got %s", dataLine)
+	}
+}
+
+func TestWriteInboundErrorUsesWriterCommitStateWithoutHeartbeat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	c.Header("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.Flush()
+
+	writeInboundError(c, nil, inbound.Get(inbound.InboundTypeOpenAIChat), http.StatusBadGateway, "channel failed")
+
+	if writer.Code != http.StatusOK {
+		t.Fatalf("committed status changed to %d", writer.Code)
+	}
+	if body := writer.Body.String(); !strings.Contains(body, "data: ") || !strings.Contains(body, `"code":"server_error"`) {
+		t.Fatalf("expected committed SSE error without heartbeat, got %q", body)
+	}
+}
+
+func TestWriteInboundErrorNilContextIsSafe(t *testing.T) {
+	writeInboundError(nil, nil, inbound.Get(inbound.InboundTypeOpenAIChat), http.StatusBadGateway, "channel failed")
+}
+
+func TestWriteInboundErrorNilRequestUsesBackgroundContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = nil
+
+	writeInboundError(c, nil, inbound.Get(inbound.InboundTypeOpenAIChat), http.StatusBadGateway, "channel failed")
+
+	if writer.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d", writer.Code)
+	}
+	if !strings.Contains(writer.Body.String(), `"code":"server_error"`) {
+		t.Fatalf("unexpected body: %s", writer.Body.String())
+	}
+}

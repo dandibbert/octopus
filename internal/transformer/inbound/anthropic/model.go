@@ -536,7 +536,7 @@ type ErrorDetail struct {
 type AnthropicError struct {
 	Type       string      `json:"type,omitempty"`
 	StatusCode int         `json:"-"`
-	RequestID  string      `json:"request_id"`
+	RequestID  string      `json:"request_id,omitempty"`
 	Error      ErrorDetail `json:"error"`
 }
 

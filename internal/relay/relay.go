@@ -450,9 +450,9 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		if result.ResetConversation {
 			metrics.SaveWithChannelStats(c.Request.Context(), false, result.Err, iter.Attempts(), false)
 			if publicErr, ok := classifyWSPublicError(result.Err, result.StatusCode); ok {
-				hb.FlushOrError(c, publicErr.Status, publicErr.Message)
+				writeInboundError(c, hb, inAdapter, publicErr.Status, publicErr.Message)
 			} else {
-				hb.FlushOrError(c, result.StatusCode, result.Err.Error())
+				writeInboundError(c, hb, inAdapter, result.StatusCode, result.Err.Error())
 			}
 			return
 		}
@@ -471,7 +471,7 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 	if responsesPassthroughRequired && !responsesPassthroughCapableFound {
 		err := fmt.Errorf("openai responses native tools require an openai responses channel")
 		metrics.SaveWithChannelStats(c.Request.Context(), false, err, iter.Attempts(), false)
-		hb.FlushOrError(c, http.StatusBadRequest, "当前请求包含 OpenAI Responses 原生工具，仅支持 OpenAI Responses 通道直通")
+		writeInboundError(c, hb, inAdapter, http.StatusBadRequest, "当前请求包含 OpenAI Responses 原生工具，仅支持 OpenAI Responses 通道直通")
 		return
 	}
 	if lastErr != nil {
@@ -479,7 +479,7 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 	}
 	metrics.SaveWithChannelStats(c.Request.Context(), false, lastErr, iter.Attempts(), false)
 	if errors.Is(lastErr, price.ErrUnknownBillingPrice) {
-		hb.FlushOrError(c, http.StatusUnprocessableEntity, "billing price is unknown")
+		writeInboundError(c, hb, inAdapter, http.StatusUnprocessableEntity, "billing price is unknown")
 		return
 	}
 
@@ -488,14 +488,49 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		if lastResult.RetryAfter > 0 {
 			c.Header("Retry-After", fmt.Sprintf("%d", int(lastResult.RetryAfter.Seconds())))
 		}
-		hb.FlushOrError(c, lastResult.StatusCode, "channel failed")
+		writeInboundError(c, hb, inAdapter, lastResult.StatusCode, "channel failed")
 		return
 	}
 	if lastResult.StatusCode > 0 {
-		hb.FlushOrError(c, lastResult.StatusCode, "channel failed")
+		writeInboundError(c, hb, inAdapter, lastResult.StatusCode, "channel failed")
 		return
 	}
-	hb.FlushOrError(c, http.StatusBadGateway, "channel failed")
+	writeInboundError(c, hb, inAdapter, http.StatusBadGateway, "channel failed")
+}
+
+func writeInboundError(c *gin.Context, hb *earlyHeartbeat, in model.Inbound, statusCode int, message string) {
+	if c == nil {
+		return
+	}
+	if statusCode <= 0 {
+		statusCode = http.StatusBadGateway
+	}
+	responseCommitted := c.Writer != nil && c.Writer.Written()
+	mode := model.ErrorOutputHTTPJSON
+	if responseCommitted {
+		mode = model.ErrorOutputCommittedStream
+	}
+	requestCtx := context.Background()
+	if c.Request != nil {
+		requestCtx = c.Request.Context()
+	}
+	if in != nil {
+		body, err := in.TransformError(requestCtx, statusCode, message, mode)
+		if err == nil && len(body) > 0 {
+			if responseCommitted {
+				if hb != nil {
+					hb.WriteRaw(body)
+				} else {
+					_, _ = c.Writer.Write(body)
+					c.Writer.Flush()
+				}
+				return
+			}
+			c.Data(statusCode, "application/json; charset=utf-8", body)
+			return
+		}
+	}
+	hb.FlushOrError(c, statusCode, message)
 }
 
 func circuitFailureKind(retryEnabled bool, statusCode int) balancer.FailureKind {

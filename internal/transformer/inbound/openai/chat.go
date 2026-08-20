@@ -86,3 +86,62 @@ func (i *ChatInbound) GetInternalResponse(ctx context.Context) (*model.InternalL
 	}
 	return i.streamAggregator.BuildAndReset(), nil
 }
+
+func (i *ChatInbound) TransformError(ctx context.Context, statusCode int, message string, mode model.ErrorOutputMode) ([]byte, error) {
+	return formatOpenAIChatError(statusCode, message, mode)
+}
+
+func formatOpenAIChatError(statusCode int, message string, mode model.ErrorOutputMode) ([]byte, error) {
+	if message == "" {
+		message = "channel failed"
+	}
+	payload := map[string]any{
+		"error": map[string]any{
+			"message": message,
+			"type":    openAIErrorType(statusCode),
+			"code":    openAIErrorCode(statusCode),
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	if mode == model.ErrorOutputCommittedStream {
+		return []byte("data: " + string(body) + "\n\n"), nil
+	}
+	return body, nil
+}
+
+func openAIErrorType(statusCode int) string {
+	switch statusCode {
+	case 400, 422:
+		return "invalid_request_error"
+	case 401:
+		return "authentication_error"
+	case 403:
+		return "permission_error"
+	case 404:
+		return "not_found_error"
+	case 429:
+		return "rate_limit_error"
+	default:
+		return "api_error"
+	}
+}
+
+func openAIErrorCode(statusCode int) string {
+	switch statusCode {
+	case 400, 422:
+		return "invalid_request"
+	case 401:
+		return "invalid_api_key"
+	case 403:
+		return "permission_denied"
+	case 404:
+		return "not_found"
+	case 429:
+		return "rate_limit_exceeded"
+	default:
+		return "server_error"
+	}
+}
