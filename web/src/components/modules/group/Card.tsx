@@ -70,6 +70,7 @@ function EditDialogContent({ group, displayMembers, isSubmitting, onSubmit }: Ed
                     isSubmitting={isSubmitting}
                     onCancel={() => setIsOpen(false)}
                     onSubmit={(v) => onSubmit(v, () => setIsOpen(false))}
+                    groupId={group.id}
                 />
             </MorphingDialogDescription>
         </>

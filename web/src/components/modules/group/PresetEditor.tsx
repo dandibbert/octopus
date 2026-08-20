@@ -122,6 +122,7 @@ export function PresetEditorContent({ preset }: PresetEditorContentProps) {
             >
                 <GroupEditor
                     key={`preset-${preset.id}`}
+                    groupId={preset.group_id}
                     initial={{
                         name: preset.name,
                         match_regex: preset.match_regex ?? '',

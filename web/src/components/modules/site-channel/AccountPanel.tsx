@@ -32,6 +32,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RewriteEditor } from '@/components/modules/rewrite/Editor';
 import { toast } from '@/components/common/Toast';
 import { cn } from '@/lib/utils';
 import { useSettingStore } from '@/stores/setting';
@@ -1218,15 +1219,16 @@ export function SiteAccountPanel({
                                         </div>
 
                                         <div className="space-y-4">
-                                            <label className="grid gap-2 text-sm">
+                                            <div className="grid gap-2 text-sm">
                                                 <span className="font-medium">{t('siteChannel.advanced.paramOverride')}</span>
-                                                <textarea
+                                                <RewriteEditor
                                                     value={form.param_override}
-                                                    onChange={(event) => handleAdvancedParamChange(channel.channel_id, event.target.value)}
-                                                    placeholder={t('siteChannel.advanced.paramOverridePlaceholder')}
-                                                    className="min-h-40 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    onChange={(next) => handleAdvancedParamChange(channel.channel_id, next)}
+                                                    scope="channel"
+                                                    channelId={channel.channel_id}
+                                                    compact
                                                 />
-                                            </label>
+                                            </div>
                                         </div>
                                     </div>
                                 );

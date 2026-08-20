@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, X, Plus } from 'lucide-react';
+import { RewriteEditor } from '@/components/modules/rewrite/Editor';
 
 export interface ChannelKeyFormItem {
     id?: number;
@@ -69,6 +70,7 @@ export interface ChannelFormProps {
     onCancel?: () => void;
     cancelText?: string;
     idPrefix?: string;
+    channelId?: number;
 }
 
 import {
@@ -88,6 +90,7 @@ export function ChannelForm({
     onCancel,
     cancelText,
     idPrefix = 'channel',
+    channelId,
 }: ChannelFormProps) {
     const t = useTranslations('channel.form');
     const billingRequiresSKU = formData.billing_basis === 'requested' || formData.billing_basis === 'fixed_sku';
@@ -696,15 +699,15 @@ export function ChannelForm({
                         </div>
 
                         <div className="space-y-2">
-                            <label htmlFor={`${idPrefix}-param-override`} className="text-sm font-medium text-card-foreground">
+                            <label className="text-sm font-medium text-card-foreground">
                                 {t('paramOverride')}
                             </label>
-                            <textarea
-                                id={`${idPrefix}-param-override`}
+                            <p className="text-xs text-muted-foreground">{t('paramOverrideHint')}</p>
+                            <RewriteEditor
                                 value={formData.param_override}
-                                onChange={(e) => onFormDataChange({ ...formData, param_override: e.target.value })}
-                                placeholder={t('paramOverridePlaceholder')}
-                                className="min-h-28 w-full rounded-xl border border-border bg-background px-3 py-2 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm"
+                                onChange={(next) => onFormDataChange({ ...formData, param_override: next })}
+                                scope="channel"
+                                channelId={channelId}
                             />
                         </div>
                     </AccordionContent>

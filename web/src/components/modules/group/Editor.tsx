@@ -19,6 +19,7 @@ import { MemberList } from './ItemList';
 import { matchesGroupName, memberKey, normalizeKey, MODE_LABELS } from './utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/animate-ui/components/animate/tooltip';
 import { HelpCircle } from 'lucide-react';
+import { RewriteEditor } from '@/components/modules/rewrite/Editor';
 
 
 
@@ -265,6 +266,7 @@ export function GroupEditor({
     onSubmit,
     onCancel,
     nameLabel,
+    groupId,
 }: {
     initial?: Partial<GroupEditorValues>;
     submitText: string;
@@ -273,6 +275,7 @@ export function GroupEditor({
     onSubmit: (values: GroupEditorValues) => void;
     onCancel?: () => void;
     nameLabel?: string;
+    groupId?: number;
 }) {
     const t = useTranslations('group');
     const { data: modelChannels = [] } = useModelChannelList();
@@ -644,11 +647,12 @@ export function GroupEditor({
                                     <div className="text-sm font-medium">{t('form.paramOverride')}</div>
                                     <div className="text-xs text-muted-foreground">{t('form.paramOverrideHint')}</div>
                                 </div>
-                                <textarea
+                                <RewriteEditor
                                     value={paramOverride}
-                                    onChange={(event) => setParamOverride(event.target.value)}
-                                    placeholder={t('form.paramOverridePlaceholder')}
-                                    className="min-h-28 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    onChange={setParamOverride}
+                                    scope="group"
+                                    groupId={groupId}
+                                    channelId={selectedMembers[0]?.channel_id}
                                 />
                                 {paramOverrideError && <p className="text-xs text-destructive">{paramOverrideError}</p>}
                             </div>
