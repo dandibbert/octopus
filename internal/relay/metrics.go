@@ -9,6 +9,7 @@ import (
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
 	"github.com/bestruirui/octopus/internal/price"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	transformerModel "github.com/bestruirui/octopus/internal/transformer/model"
 	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/bestruirui/octopus/internal/utils/tokenizer"
@@ -50,6 +51,7 @@ type RelayMetrics struct {
 	UsageEstimated   bool
 	PriceEstimated   bool
 	ModelMismatch    bool
+	RewriteSummary   rewrite.Summary
 }
 
 func NewRelayMetrics(apiKeyID int, requestModel string, rawBody []byte, req *transformerModel.InternalLLMRequest) *RelayMetrics {

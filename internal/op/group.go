@@ -8,6 +8,7 @@ import (
 
 	"github.com/bestruirui/octopus/internal/db"
 	"github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	"github.com/bestruirui/octopus/internal/utils/cache"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -136,6 +137,9 @@ func GroupCreate(group *model.Group, ctx context.Context) error {
 			return err
 		}
 	}
+	if err := rewrite.ValidateRawConfigPtr(group.ParamOverride, rewrite.ScopeGroup); err != nil {
+		return err
+	}
 	if err := db.GetDB().WithContext(ctx).Create(group).Error; err != nil {
 		return err
 	}
@@ -199,6 +203,9 @@ func GroupUpdate(req *model.GroupUpdateRequest, ctx context.Context) (*model.Gro
 		updates.CustomHeader = append([]model.CustomHeader(nil), (*req.CustomHeader)...)
 	}
 	if req.ParamOverride != nil {
+		if err := rewrite.ValidateRawConfigPtr(req.ParamOverride, rewrite.ScopeGroup); err != nil {
+			return nil, err
+		}
 		selectFields = append(selectFields, "param_override")
 		updates.ParamOverride = req.ParamOverride
 	}

@@ -1,16 +1,14 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/bestruirui/octopus/internal/apperror"
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	"github.com/bestruirui/octopus/internal/server/middleware"
 	"github.com/bestruirui/octopus/internal/server/resp"
 	"github.com/bestruirui/octopus/internal/server/router"
@@ -19,14 +17,7 @@ import (
 )
 
 func validateGroupParamOverride(raw *string) error {
-	if raw == nil || strings.TrimSpace(*raw) == "" {
-		return nil
-	}
-	var value map[string]any
-	if err := json.Unmarshal([]byte(*raw), &value); err != nil {
-		return fmt.Errorf("param_override must be a valid JSON object")
-	}
-	return nil
+	return rewrite.ValidateRawConfigPtr(raw, rewrite.ScopeGroup)
 }
 
 func init() {

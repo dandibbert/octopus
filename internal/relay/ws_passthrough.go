@@ -10,6 +10,7 @@ import (
 	"time"
 
 	dbmodel "github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	transformerModel "github.com/bestruirui/octopus/internal/transformer/model"
 	openaiOutbound "github.com/bestruirui/octopus/internal/transformer/outbound/openai"
 	"github.com/bestruirui/octopus/internal/utils/log"
@@ -60,18 +61,24 @@ func (ra *relayAttempt) forwardViaWSPassthrough(ctx context.Context) (int, error
 	if continuation {
 		preferredConnID, _ = getWSResponseConn(currentPreviousResponseID(ra.internalRequest))
 	}
-	pc := TryUpstreamWSWithPreference(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ChannelKey, ra.usedKey.ID, ra.clientRequestHeaders(), preferredConnID)
+
+	payload, err := ra.buildWSPassthroughRequestPayload()
+	if err != nil {
+		return -1, nil
+	}
+	handshake := ra.prepareWSHandshakeHeaders()
+	payload, handshake, err = ra.applyRewriteToBytes(payload, handshake, rewrite.TransportWS)
+	if err != nil {
+		return rewriteStatusCode(err), err
+	}
+	ra.wsFinalHeaders = handshake
+	ra.metrics.SetTransportRequestPayload(payload, ra.internalRequest.Model)
+
+	pc := TryUpstreamWSWithHeaders(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ID, handshake, preferredConnID)
 	if pc == nil {
 		log.Debugf("upstream WS passthrough unavailable for channel %s (key=%d, continuation=%t)", ra.channel.Name, ra.usedKey.ID, continuation)
 		return -1, nil
 	}
-
-	payload, err := ra.buildWSPassthroughRequestPayload()
-	if err != nil {
-		wsUpstreamPool.Put(pc)
-		return -1, nil
-	}
-	ra.metrics.SetTransportRequestPayload(payload, ra.internalRequest.Model)
 	if err := wsUpstreamPool.SendRaw(ctx, pc, payload); err != nil {
 		log.Warnf("upstream WS passthrough send failed for channel %s: %v", ra.channel.Name, err)
 		wsUpstreamPool.RemoveConn(pc)
@@ -119,7 +126,7 @@ func (ra *relayAttempt) forwardViaWSPassthrough(ctx context.Context) (int, error
 }
 
 func (ra *relayAttempt) retryViaFreshUpstreamWSPassthrough(ctx context.Context, payload []byte) (int, error, bool) {
-	redialed := TryUpstreamWSWithPreference(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ChannelKey, ra.usedKey.ID, ra.clientRequestHeaders(), "", true)
+	redialed := TryUpstreamWSWithHeaders(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ID, ra.wsHandshakeOrDefault(), "", true)
 	if redialed == nil {
 		return 0, nil, false
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/bestruirui/octopus/internal/price"
 	"github.com/bestruirui/octopus/internal/relay/balancer"
 	"github.com/bestruirui/octopus/internal/relay/stream"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	"github.com/bestruirui/octopus/internal/server/resp"
 	"github.com/bestruirui/octopus/internal/transformer/inbound"
 	"github.com/bestruirui/octopus/internal/transformer/model"
@@ -701,7 +702,21 @@ func (ra *relayAttempt) forwardViaWS(ctx context.Context) (int, error) {
 	if continuation {
 		preferredConnID, _ = getWSResponseConn(currentPreviousResponseID(ra.internalRequest))
 	}
-	pc := TryUpstreamWSWithPreference(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ChannelKey, ra.usedKey.ID, ra.clientRequestHeaders(), preferredConnID)
+
+	responsesReq := openaiOutbound.ConvertToResponsesRequest(ra.internalRequest)
+	reqBody, err := json.Marshal(responsesReq)
+	if err != nil {
+		return -1, nil
+	}
+	handshake := ra.prepareWSHandshakeHeaders()
+	reqBody, handshake, err = ra.applyRewriteToBytes(reqBody, handshake, rewrite.TransportWS)
+	if err != nil {
+		return rewriteStatusCode(err), err
+	}
+	ra.wsFinalHeaders = handshake
+	ra.metrics.SetTransportRequestPayload(reqBody, ra.internalRequest.Model)
+
+	pc := TryUpstreamWSWithHeaders(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ID, handshake, preferredConnID)
 	if pc == nil {
 		log.Debugf("upstream WS unavailable for channel %s (key=%d, continuation=%t)", ra.channel.Name, ra.usedKey.ID, continuation)
 		return -1, nil // WS not available
@@ -710,31 +725,6 @@ func (ra *relayAttempt) forwardViaWS(ctx context.Context) (int, error) {
 	log.Debugf("using upstream WebSocket for channel %s (key=%d)", ra.channel.Name, ra.usedKey.ID)
 	log.Debugf("upstream WS selected (channel=%s, key=%d, continuation=%t, previous_response_id=%s)",
 		ra.channel.Name, ra.usedKey.ID, continuation, currentPreviousResponseID(ra.internalRequest))
-
-	// Build the Responses API request body
-	responsesReq := openaiOutbound.ConvertToResponsesRequest(ra.internalRequest)
-	reqBody, err := json.Marshal(responsesReq)
-	if err != nil {
-		wsUpstreamPool.Put(pc)
-		return -1, nil // fall through to HTTP
-	}
-	wsRequest := &http.Request{
-		Header: http.Header{"Content-Type": []string{"application/json"}},
-		Body:   io.NopCloser(bytes.NewReader(reqBody)),
-	}
-	if err := helper.ApplyParamOverrides(wsRequest, ra.groupParamOverride, ra.channel.ParamOverride); err != nil {
-		wsUpstreamPool.Put(pc)
-		return 0, err
-	}
-	if wsRequest.Body != nil {
-		if overriddenBody, readErr := io.ReadAll(wsRequest.Body); readErr == nil {
-			reqBody = overriddenBody
-		} else {
-			wsUpstreamPool.Put(pc)
-			return 0, readErr
-		}
-	}
-	ra.metrics.SetTransportRequestPayload(reqBody, ra.internalRequest.Model)
 
 	// Send response.create message
 	if err := wsUpstreamPool.SendResponseCreate(ctx, pc, reqBody); err != nil {
@@ -797,7 +787,7 @@ func (ra *relayAttempt) forwardViaWS(ctx context.Context) (int, error) {
 func (ra *relayAttempt) retryViaFreshUpstreamWS(ctx context.Context, reqBody []byte) (int, error, bool) {
 	log.Debugf("attempting fresh upstream WS redial (channel=%s, key=%d, previous_response_id=%s)",
 		ra.channel.Name, ra.usedKey.ID, currentPreviousResponseID(ra.internalRequest))
-	redialed := TryUpstreamWS(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ChannelKey, ra.usedKey.ID, ra.clientRequestHeaders(), true)
+	redialed := TryUpstreamWSWithHeaders(ctx, ra.channel, ra.channel.GetBaseUrl(), ra.usedKey.ID, ra.wsHandshakeOrDefault(), "", true)
 	if redialed == nil {
 		log.Debugf("fresh upstream WS redial unavailable (channel=%s, key=%d)", ra.channel.Name, ra.usedKey.ID)
 		return 0, nil, false
@@ -956,18 +946,10 @@ func (ra *relayAttempt) forwardViaHTTPPassthrough(ctx context.Context, pt model.
 		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Apply param overrides
-	if err := ra.applyParamOverride(outboundRequest); err != nil {
-		return 0, err
+	if _, err := ra.prepareOutboundRequest(outboundRequest, rewrite.TransportHTTP); err != nil {
+		return rewriteStatusCode(err), err
 	}
 
-	// Copy headers
-	ra.copyHeaders(outboundRequest)
-	if ra.channel.Type == outbound.OutboundTypeOpenAIResponse {
-		outboundRequest.Header.Set("Content-Type", "application/json")
-	}
-
-	// Send request
 	response, err := ra.sendRequest(outboundRequest)
 	if err != nil {
 		return 0, fmt.Errorf("failed to send request: %w", err)
@@ -1038,17 +1020,10 @@ func (ra *relayAttempt) forwardViaHTTPStandard(ctx context.Context) (int, error)
 		log.Warnf("failed to create request: %v", err)
 		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
-	if err := ra.applyParamOverride(outboundRequest); err != nil {
-		return 0, err
+	if _, err := ra.prepareOutboundRequest(outboundRequest, rewrite.TransportHTTP); err != nil {
+		return rewriteStatusCode(err), err
 	}
 
-	// 复制请求头
-	ra.copyHeaders(outboundRequest)
-	if ra.channel.Type == outbound.OutboundTypeOpenAIResponse {
-		outboundRequest.Header.Set("Content-Type", "application/json")
-	}
-
-	// 发送请求
 	response, err := ra.sendRequest(outboundRequest)
 	if err != nil {
 		return 0, fmt.Errorf("failed to send request: %w", err)
@@ -1117,15 +1092,10 @@ func (ra *relayAttempt) getStreamWriter() StreamWriter {
 	return ra.c.Writer
 }
 
-// applyParamOverride merges group->channel JSON request overrides and records the final upstream payload.
+// applyParamOverride is kept as a thin alias for older tests.
 func (ra *relayAttempt) applyParamOverride(outboundRequest *http.Request) error {
-	if err := helper.ApplyParamOverrides(outboundRequest, ra.groupParamOverride, ra.channel.ParamOverride); err != nil {
-		return err
-	}
-	if requestBody, readErr := readOutboundRequestBody(outboundRequest); readErr == nil {
-		ra.metrics.SetTransportRequestPayload(requestBody, ra.internalRequest.Model)
-	}
-	return nil
+	_, err := ra.prepareOutboundRequest(outboundRequest, rewrite.TransportHTTP)
+	return err
 }
 
 // copyHeaders 复制请求头，过滤 hop-by-hop 头

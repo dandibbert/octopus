@@ -9,6 +9,7 @@ import (
 
 	"github.com/bestruirui/octopus/internal/db"
 	"github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	"gorm.io/gorm"
 )
 
@@ -339,6 +340,9 @@ func GroupPresetUpdate(presetID int, req *model.GroupPresetUpdateRequest, ctx co
 			preset.CustomHeader = append([]model.CustomHeader(nil), (*req.CustomHeader)...)
 		}
 		if req.ParamOverride != nil {
+			if err := rewrite.ValidateRawConfigPtr(req.ParamOverride, rewrite.ScopeGroup); err != nil {
+				return err
+			}
 			preset.ParamOverride = req.ParamOverride
 		}
 		if req.Items != nil {

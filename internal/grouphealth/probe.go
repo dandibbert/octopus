@@ -10,6 +10,7 @@ import (
 
 	"github.com/bestruirui/octopus/internal/helper"
 	"github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	transformerModel "github.com/bestruirui/octopus/internal/transformer/model"
 	"github.com/bestruirui/octopus/internal/transformer/outbound"
 )
@@ -56,7 +57,22 @@ func (p *Prober) RunCandidate(ctx context.Context, channel model.Channel, usedKe
 	if request.Header.Get("User-Agent") == "" {
 		request.Header.Set("User-Agent", "")
 	}
-	if err := helper.ApplyParamOverride(request, channel.ParamOverride); err != nil {
+	plan, err := rewrite.CompileCached(channel.ParamOverride, rewrite.ScopeChannel)
+	if err != nil {
+		result.ErrorMessage = err.Error()
+		result.DurationMS = time.Since(startedAt).Milliseconds()
+		return result
+	}
+	if _, err := rewrite.PrepareRequest(request, rewrite.TransportHTTP, rewrite.Context{
+		RequestOriginalModel:   modelName,
+		RequestNormalizedModel: modelName,
+		RequestSource:          "health_check",
+		RequestMethod:          http.MethodPost,
+		RouteRoutedModel:       modelName,
+		RouteChannelID:         channel.ID,
+		RouteChannelName:       channel.Name,
+		FlagsIsHealthCheck:     true,
+	}, nil, plan); err != nil {
 		result.ErrorMessage = err.Error()
 		result.DurationMS = time.Since(startedAt).Milliseconds()
 		return result

@@ -1,82 +1,40 @@
 package helper
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"strings"
+
+	"github.com/bestruirui/octopus/internal/rewrite"
 )
 
-// ApplyParamOverrides merges JSON-object overrides into an outbound JSON request body.
-// Overrides are applied left-to-right, so later scopes win. JSON null means delete the
-// final request field, but remains an ordinary merge value until the final application;
-// this lets a later scope restore a value deleted by an earlier scope.
-// Empty/invalid overrides, nil bodies, and non-object request bodies are ignored.
+// ApplyParamOverrides compiles each override as a rewrite plan and applies them
+// left-to-right. Later scopes win. Legacy top-level JSON objects still compile
+// to set/delete operations. Prefer relay.prepareOutboundRequest for production
+// HTTP/WS paths so header rewrite and transport invariants stay consistent.
+//
+// Deprecated: use rewrite.ParseAndCompile + rewrite.Apply.
 func ApplyParamOverrides(request *http.Request, paramOverrides ...*string) error {
-	if request == nil || request.Body == nil || len(paramOverrides) == 0 {
+	if request == nil || len(paramOverrides) == 0 {
 		return nil
 	}
-
-	body, err := io.ReadAll(request.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read request body: %w", err)
-	}
-
-	restoreBody := func() {
-		request.Body = io.NopCloser(bytes.NewReader(body))
-		request.ContentLength = int64(len(body))
-		request.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(body)), nil
+	plans := make([]*rewrite.Plan, 0, len(paramOverrides))
+	for i, raw := range paramOverrides {
+		scope := rewrite.ScopeChannel
+		if len(paramOverrides) > 1 && i == 0 {
+			scope = rewrite.ScopeGroup
+		}
+		plan, err := rewrite.ParseAndCompile(raw, scope)
+		if err != nil {
+			return err
+		}
+		if plan != nil {
+			plans = append(plans, plan)
 		}
 	}
-
-	var bodyMap map[string]any
-	if err := json.Unmarshal(body, &bodyMap); err != nil {
-		restoreBody()
+	if len(plans) == 0 {
 		return nil
 	}
-
-	merged := make(map[string]any)
-	configured := false
-	for _, raw := range paramOverrides {
-		if raw == nil || strings.TrimSpace(*raw) == "" {
-			continue
-		}
-		var override map[string]any
-		if err := json.Unmarshal([]byte(*raw), &override); err != nil {
-			continue
-		}
-		for key, value := range override {
-			merged[key] = value
-		}
-		configured = true
-	}
-	if !configured {
-		restoreBody()
-		return nil
-	}
-
-	for key, value := range merged {
-		if value == nil {
-			delete(bodyMap, key)
-			continue
-		}
-		bodyMap[key] = value
-	}
-
-	modifiedBody, err := json.Marshal(bodyMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request body with param override: %w", err)
-	}
-
-	request.Body = io.NopCloser(bytes.NewReader(modifiedBody))
-	request.ContentLength = int64(len(modifiedBody))
-	request.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(bytes.NewReader(modifiedBody)), nil
-	}
-	return nil
+	_, err := rewrite.ApplyToRequest(request, rewrite.TransportHTTP, rewrite.Context{}, nil, plans...)
+	return err
 }
 
 // ApplyParamOverride keeps the legacy single-scope API for callers outside relay.

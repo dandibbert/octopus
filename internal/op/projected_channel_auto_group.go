@@ -2,12 +2,11 @@ package op
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/dlclark/regexp2"
 )
@@ -163,16 +162,6 @@ func splitChannelModelNames(values ...string) []string {
 }
 
 func ValidateJSONOverrideObject(value string) error {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return nil
-	}
-	var decoded any
-	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
-		return err
-	}
-	if _, ok := decoded.(map[string]any); !ok {
-		return fmt.Errorf("param_override must be a JSON object")
-	}
-	return nil
+	raw := value
+	return rewrite.ValidateRawConfigPtr(&raw, rewrite.ScopeChannel)
 }

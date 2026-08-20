@@ -9,6 +9,7 @@ import (
 
 	"github.com/bestruirui/octopus/internal/db"
 	"github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	model2 "github.com/bestruirui/octopus/internal/transformer/outbound"
 	"github.com/bestruirui/octopus/internal/utils/cache"
 	"github.com/bestruirui/octopus/internal/utils/log"
@@ -94,6 +95,9 @@ func ChannelCreate(channel *model.Channel, ctx context.Context) error {
 	normalizeChannelBillingFields(channel)
 	if !channel.BillingBasis.Valid() || !channel.BillingUnknownPolicy.Valid() || !channel.ProviderUnknownPolicy.Valid() {
 		return fmt.Errorf("invalid billing configuration")
+	}
+	if err := rewrite.ValidateRawConfigPtr(channel.ParamOverride, rewrite.ScopeChannel); err != nil {
+		return err
 	}
 	if err := db.GetDB().WithContext(ctx).Create(channel).Error; err != nil {
 		return err
@@ -334,6 +338,9 @@ func ChannelUpdate(req *model.ChannelUpdateRequest, ctx context.Context) (*model
 		updates.WSMode = req.WSMode.Normalize()
 	}
 	if req.ParamOverride != nil {
+		if err := rewrite.ValidateRawConfigPtr(req.ParamOverride, rewrite.ScopeChannel); err != nil {
+			return nil, err
+		}
 		selectFields = append(selectFields, "param_override")
 		updates.ParamOverride = req.ParamOverride
 	}

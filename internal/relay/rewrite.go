@@ -1,0 +1,198 @@
+package relay
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"strconv"
+
+	dbmodel "github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/rewrite"
+	"github.com/bestruirui/octopus/internal/transformer/outbound"
+	"github.com/bestruirui/octopus/internal/utils/log"
+	"github.com/tidwall/gjson"
+)
+
+func isSyntheticGroup(groupID int) bool {
+	return groupID <= 0
+}
+
+func (ra *relayAttempt) rewritePlans() (*rewrite.Plan, *rewrite.Plan, error) {
+	var groupPlan *rewrite.Plan
+	var err error
+	if !ra.directExecution && !isSyntheticGroup(ra.groupID) {
+		groupPlan, err = rewrite.CompileCached(ra.groupParamOverride, rewrite.ScopeGroup)
+		if err != nil {
+			return nil, nil, rewrite.ConfigCompileError(err)
+		}
+	}
+	var channelRaw *string
+	if ra.channel != nil {
+		channelRaw = ra.channel.ParamOverride
+	}
+	channelPlan, err := rewrite.CompileCached(channelRaw, rewrite.ScopeChannel)
+	if err != nil {
+		return nil, nil, rewrite.ConfigCompileError(err)
+	}
+	return groupPlan, channelPlan, nil
+}
+
+func (ra *relayAttempt) rewriteContext(transport rewrite.Transport) rewrite.Context {
+	ctx := rewrite.Context{
+		RequestOriginalModel:   ra.requestModel,
+		RequestNormalizedModel: ra.requestModel,
+		RequestSource:          ra.metrics.RequestSource,
+		RouteRoutedModel:       ra.requestModel,
+		RouteChannelID:         ra.channel.ID,
+		RouteChannelName:       ra.channel.Name,
+		RouteChannelType:       outboundFormatName(ra.channel.Type),
+		RouteGroupID:           ra.groupID,
+		AuthAPIKeyID:           ra.apiKeyID,
+		FlagsIsChannelTest:     ra.directExecution && ra.metrics.RequestSource != dbmodel.RelayLogRequestSourcePlayground,
+		FlagsIsHealthCheck:     ra.metrics.RequestSource == dbmodel.RelayLogRequestSourceHealthCheck,
+		FlagsIsPlayground:      ra.metrics.RequestSource == dbmodel.RelayLogRequestSourcePlayground,
+	}
+	if ra.internalRequest != nil {
+		ctx.RequestNormalizedModel = ra.internalRequest.Model
+		ctx.RouteTransportModelBeforeRewrite = ra.internalRequest.Model
+		ctx.RouteInboundFormat = string(ra.internalRequest.RawAPIFormat)
+		if ra.internalRequest.Stream != nil {
+			ctx.RequestStream = *ra.internalRequest.Stream
+		}
+		if ra.c != nil && ra.c.Request != nil {
+			ctx.RequestPath = ra.c.Request.URL.Path
+			ctx.RequestMethod = ra.c.Request.Method
+		}
+	}
+	ctx.RouteOutboundFormat = outboundFormatName(ra.channel.Type)
+	_ = transport
+	return ctx
+}
+
+func outboundFormatName(channelType outbound.OutboundType) string {
+	switch channelType {
+	case outbound.OutboundTypeOpenAIChat:
+		return "openai_chat"
+	case outbound.OutboundTypeOpenAIResponse:
+		return "openai_responses"
+	case outbound.OutboundTypeAnthropic:
+		return "anthropic_messages"
+	case outbound.OutboundTypeGemini:
+		return "gemini"
+	case outbound.OutboundTypeVolcengine:
+		return "volcengine"
+	case outbound.OutboundTypeOpenAIEmbedding:
+		return "openai_embedding"
+	default:
+		return strconv.Itoa(int(channelType))
+	}
+}
+
+func (ra *relayAttempt) prepareOutboundRequest(req *http.Request, transport rewrite.Transport) (*rewrite.Result, error) {
+	if req == nil {
+		return &rewrite.Result{}, nil
+	}
+	ra.copyHeaders(req)
+	if ra.channel != nil && ra.channel.Type == outbound.OutboundTypeOpenAIResponse {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	groupPlan, channelPlan, err := ra.rewritePlans()
+	if err != nil {
+		return nil, err
+	}
+	inbound := http.Header{}
+	if ra.c != nil && ra.c.Request != nil {
+		inbound = ra.c.Request.Header.Clone()
+	}
+	result, err := rewrite.PrepareRequest(req, transport, ra.rewriteContext(transport), inbound, groupPlan, channelPlan)
+	if err != nil {
+		return result, mapRewriteError(err)
+	}
+	if result != nil {
+		if requestBody, readErr := readOutboundRequestBody(req); readErr == nil {
+			ra.metrics.SetTransportRequestPayload(requestBody, ra.internalRequest.Model)
+			if model := gjson.GetBytes(requestBody, "model"); model.Exists() && model.Type == gjson.String {
+				result.Summary.TransportModel = model.String()
+			}
+		}
+		ra.metrics.RewriteSummary = result.Summary
+		if result.Changed {
+			log.Debugw("relay.rewrite",
+				"group_hash", result.Summary.GroupConfigHash,
+				"channel_hash", result.Summary.ChannelConfigHash,
+				"applied", result.Summary.Applied,
+				"skipped", result.Summary.Skipped,
+				"transport_model", result.Summary.TransportModel,
+			)
+		}
+	}
+	return result, nil
+}
+
+func (ra *relayAttempt) applyRewriteToBytes(body []byte, headers http.Header, transport rewrite.Transport) ([]byte, http.Header, error) {
+	groupPlan, channelPlan, err := ra.rewritePlans()
+	if err != nil {
+		return nil, headers, err
+	}
+	inbound := http.Header{}
+	if ra.c != nil && ra.c.Request != nil {
+		inbound = ra.c.Request.Header.Clone()
+	}
+	result, err := rewrite.Apply(rewrite.Input{
+		Body:           body,
+		Headers:        headers,
+		InboundHeaders: inbound,
+		Context:        ra.rewriteContext(transport),
+		Transport:      transport,
+	}, groupPlan, channelPlan)
+	if err != nil {
+		return result.Body, result.Headers, mapRewriteError(err)
+	}
+	ra.metrics.RewriteSummary = result.Summary
+	if model := gjson.GetBytes(result.Body, "model"); model.Exists() && model.Type == gjson.String {
+		result.Summary.TransportModel = model.String()
+		ra.metrics.RewriteSummary.TransportModel = model.String()
+	}
+	return result.Body, result.Headers, nil
+}
+
+func mapRewriteError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if ae, ok := err.(*rewrite.ApplyError); ok {
+		return ae
+	}
+	return err
+}
+
+func rewriteStatusCode(err error) int {
+	if ae, ok := err.(*rewrite.ApplyError); ok && ae.StatusCode > 0 {
+		return ae.StatusCode
+	}
+	return http.StatusBadRequest
+}
+
+func (ra *relayAttempt) prepareWSHandshakeHeaders() http.Header {
+	client := ra.clientRequestHeaders()
+	key := ""
+	if ra.usedKey.ChannelKey != "" {
+		key = ra.usedKey.ChannelKey
+	}
+	return buildUpstreamWSHeaders(client, ra.channel, key)
+}
+
+func (ra *relayAttempt) wsHandshakeOrDefault() http.Header {
+	if ra.wsFinalHeaders != nil {
+		return ra.wsFinalHeaders
+	}
+	return ra.prepareWSHandshakeHeaders()
+}
+
+func shaHeaderSig(sig string) string {
+	if sig == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(sig))
+	return hex.EncodeToString(sum[:])
+}

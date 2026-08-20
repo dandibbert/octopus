@@ -516,7 +516,7 @@ func wsHeaderSignature(headers http.Header) string {
 		}
 		builder.WriteByte('\n')
 	}
-	return builder.String()
+	return shaHeaderSig(builder.String())
 }
 
 func cloneHTTPClientForWSDial(httpClient *http.Client) *http.Client {
@@ -730,10 +730,16 @@ func (p *wsPool) Close() {
 // TryUpstreamWS attempts to get or create a WS connection for an upstream channel.
 // Returns nil if the channel doesn't support WS or connection fails.
 func TryUpstreamWS(ctx context.Context, channel *dbmodel.Channel, baseUrl, key string, keyID int, clientHeaders http.Header, forceRedial ...bool) *pooledConn {
-	return TryUpstreamWSWithPreference(ctx, channel, baseUrl, key, keyID, clientHeaders, "", forceRedial...)
+	headers := buildUpstreamWSHeaders(clientHeaders, channel, key)
+	return TryUpstreamWSWithHeaders(ctx, channel, baseUrl, keyID, headers, "", forceRedial...)
 }
 
 func TryUpstreamWSWithPreference(ctx context.Context, channel *dbmodel.Channel, baseUrl, key string, keyID int, clientHeaders http.Header, preferredConnID string, forceRedial ...bool) *pooledConn {
+	headers := buildUpstreamWSHeaders(clientHeaders, channel, key)
+	return TryUpstreamWSWithHeaders(ctx, channel, baseUrl, keyID, headers, preferredConnID, forceRedial...)
+}
+
+func TryUpstreamWSWithHeaders(ctx context.Context, channel *dbmodel.Channel, baseUrl string, keyID int, finalHeaders http.Header, preferredConnID string, forceRedial ...bool) *pooledConn {
 	if channel == nil || wsUpstreamPool == nil {
 		return nil
 	}
@@ -745,7 +751,10 @@ func TryUpstreamWSWithPreference(ctx context.Context, channel *dbmodel.Channel, 
 		return nil
 	}
 
-	headers := buildUpstreamWSHeaders(clientHeaders, channel, key)
+	headers := finalHeaders.Clone()
+	if headers == nil {
+		headers = http.Header{}
+	}
 	poolKey := newWSPoolKey(channel.ID, keyID, headers)
 	redial := len(forceRedial) > 0 && forceRedial[0]
 
