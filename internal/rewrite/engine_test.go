@@ -121,6 +121,27 @@ func TestConditionsSeePriorOps(t *testing.T) {
 	}
 }
 
+func TestConditionCaseInsensitiveEqInAndRegex(t *testing.T) {
+	raw := `{
+		"$schema":"octopus.request-rewrite/v2",
+		"operations":[
+			{"id":"eq","op":"set","path":"/eq","value":true,"when":{"source":"body","path":"/name","operator":"eq","value":"claude","case_sensitive":false}},
+			{"id":"in","op":"set","path":"/in","value":true,"when":{"source":"body","path":"/name","operator":"in","value":["gpt","claude"],"case_sensitive":false}},
+			{"id":"regex","op":"set","path":"/regex","value":true,"when":{"source":"body","path":"/name","operator":"regex","value":"^claude$","case_sensitive":false}}
+		]
+	}`
+	plan := mustCompile(t, raw, ScopeChannel)
+	res, err := Apply(Input{Body: []byte(`{"name":"CLAUDE"}`)}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"eq", "in", "regex"} {
+		if !strings.Contains(string(res.Body), `"`+field+`":true`) && !strings.Contains(string(res.Body), `"`+field+`": true`) {
+			t.Fatalf("case-insensitive %s did not match: %s", field, res.Body)
+		}
+	}
+}
+
 func TestJSONPointerEscapes(t *testing.T) {
 	raw := `{
 		"$schema":"octopus.request-rewrite/v2",
@@ -386,5 +407,90 @@ func TestDirectChannelSkipsNilGroupPlan(t *testing.T) {
 	}
 	if !strings.Contains(string(res.Body), `"keep":"channel"`) && !strings.Contains(string(res.Body), `"keep": "channel"`) {
 		t.Fatalf("channel rewrite missing: %s", res.Body)
+	}
+}
+
+func TestV2RejectsUnknownFields(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[],"typo_field":true}`
+	if _, err := ParseAndCompile(&raw, ScopeChannel); err == nil {
+		t.Fatal("expected unknown V2 field to be rejected")
+	}
+}
+
+func TestV2LookingConfigRequiresSchema(t *testing.T) {
+	for _, raw := range []string{
+		`{"stage":"outbound_provider"}`,
+		`{"policy":{"on_error":"reject"}}`,
+		`{"allow_sensitive_headers":true}`,
+	} {
+		if _, err := ParseAndCompile(&raw, ScopeChannel); err == nil {
+			t.Fatalf("expected missing schema error for %s", raw)
+		}
+	}
+}
+
+func TestConditionOperatorRequiresTypedValue(t *testing.T) {
+	cases := []string{
+		`{"source":"body","path":"/x","operator":"eq"}`,
+		`{"source":"body","path":"/x","operator":"prefix","value":1}`,
+		`{"source":"body","path":"/x","operator":"gt","value":"1"}`,
+		`{"source":"body","path":"/x","operator":"in","value":"x"}`,
+		`{"source":"body","path":"/x","operator":"type_is","value":"wat"}`,
+	}
+	for _, condition := range cases {
+		raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"x","op":"set","path":"/ok","value":true,"when":` + condition + `}]}`
+		if _, err := ParseAndCompile(&raw, ScopeChannel); err == nil {
+			t.Fatalf("expected invalid condition value for %s", condition)
+		}
+	}
+}
+
+func TestSensitiveHeadersCannotBeRead(t *testing.T) {
+	cases := []string{
+		`{"id":"v","op":"set","path":"/leak","value_from":{"source":"header","path":"Authorization"}}`,
+		`{"id":"t","op":"set","path":"/leak","value_template":"${header:Authorization}"}`,
+		`{"id":"c","op":"set","path":"/ok","value":true,"when":{"source":"header","path":"Authorization","operator":"exists"}}`,
+		`{"id":"h","op":"header_copy","from_header":"Authorization","to_header":"X-Leak"}`,
+		`{"id":"s","op":"sync_fields","path":"/secret","header":"Authorization"}`,
+	}
+	for _, operation := range cases {
+		raw := `{"$schema":"octopus.request-rewrite/v2","allow_sensitive_headers":true,"operations":[` + operation + `]}`
+		if _, err := ParseAndCompile(&raw, ScopeChannel); err == nil {
+			t.Fatalf("expected sensitive header read to be rejected: %s", operation)
+		}
+	}
+}
+
+func TestHeaderSetConflictPolicy(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"h","op":"header_set","header":"X-Test","value":"new","policy":{"on_conflict":"error"}}]}`
+	plan := mustCompile(t, raw, ScopeChannel)
+	_, err := Apply(Input{Body: []byte(`{}`), Headers: http.Header{"X-Test": []string{"old"}}}, plan)
+	if err == nil {
+		t.Fatal("expected header conflict error")
+	}
+}
+
+func TestHTTPAllowsWSOnlyFieldsButWSBlocksThem(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"b","op":"set","path":"/background","value":true}]}`
+	plan := mustCompile(t, raw, ScopeChannel)
+	if _, err := Apply(Input{Body: []byte(`{}`), Headers: http.Header{}, Transport: TransportHTTP}, plan); err != nil {
+		t.Fatalf("HTTP should allow background rewrite: %v", err)
+	}
+	if _, err := Apply(Input{Body: []byte(`{}`), Headers: http.Header{}, Transport: TransportWS}, plan); err == nil {
+		t.Fatal("WS should reject background rewrite")
+	}
+}
+
+func TestArrayOpsCannotBypassProtectedFields(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"s","op":"array_append","path":"/stream","value":true}]}`
+	if _, err := ParseAndCompile(&raw, ScopeChannel); err == nil {
+		t.Fatal("array operation on protected stream field should be rejected")
+	}
+}
+
+func TestReturnErrorStatusRange(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"e","op":"return_error","error":{"status":200,"message":"nope"}}]}`
+	if _, err := ParseAndCompile(&raw, ScopeChannel); err == nil {
+		t.Fatal("return_error should reject non-error status")
 	}
 }

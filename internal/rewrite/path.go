@@ -55,7 +55,10 @@ func parseJSONPointer(raw string) (*parsedPath, error) {
 		case "-":
 			tokens = append(tokens, pathToken{kind: tokenAppend})
 		default:
-			decoded := unescapePointer(part)
+			decoded, err := unescapePointer(part)
+			if err != nil {
+				return nil, err
+			}
 			if decoded == "-1" || (strings.HasPrefix(decoded, "-") && isAllDigits(decoded[1:])) {
 				n, err := strconv.Atoi(decoded)
 				if err != nil {
@@ -82,10 +85,28 @@ func parseJSONPointer(raw string) (*parsedPath, error) {
 	return &parsedPath{raw: raw, tokens: tokens}, nil
 }
 
-func unescapePointer(s string) string {
-	s = strings.ReplaceAll(s, "~1", "/")
-	s = strings.ReplaceAll(s, "~0", "~")
-	return s
+func unescapePointer(s string) (string, error) {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] != '~' {
+			b.WriteByte(s[i])
+			continue
+		}
+		if i+1 >= len(s) {
+			return "", fmt.Errorf("invalid JSON Pointer escape in %q", s)
+		}
+		switch s[i+1] {
+		case '0':
+			b.WriteByte('~')
+		case '1':
+			b.WriteByte('/')
+		default:
+			return "", fmt.Errorf("invalid JSON Pointer escape ~%c in %q", s[i+1], s)
+		}
+		i++
+	}
+	return b.String(), nil
 }
 
 func escapePointer(s string) string {
@@ -203,18 +224,46 @@ func resolvePaths(body []byte, p *parsedPath, createParents bool) ([]resolvedPat
 				if !last && createParents {
 					node := gjson.GetBytes(body, child.gjson)
 					if !node.Exists() {
+						container := intermediateContainerFor(p.tokens[i+1])
 						var err error
-						body, err = sjson.SetRawBytes(body, child.sjson, []byte("{}"))
+						body, err = sjson.SetRawBytes(body, child.sjson, container)
 						if err != nil {
 							return nil, err
 						}
-					} else if node.Type != gjson.JSON || (len(node.Raw) > 0 && node.Raw[0] != '{') {
+					} else if !intermediateContainerMatches(node, p.tokens[i+1]) {
 						return nil, &pathTypeError{path: child.pointer, got: node.Type.String()}
 					}
 				}
 				next = append(next, child)
 			case tokenIndex, tokenLast, tokenNthLast:
-				if current != nil && !gjson.ParseBytes(current).IsArray() && gjson.ValidBytes(current) && len(bytesTrim(current)) > 0 && current[0] != '[' {
+				node := gjson.ParseBytes(current)
+				// RFC 6901 pointer tokens are strings. A decimal token is an array
+				// index only when its parent is actually an array; on an object,
+				// `/0` addresses the literal key "0".
+				if tok.kind == tokenIndex && node.IsObject() {
+					seg := strconv.Itoa(tok.index)
+					child := frame{
+						pointer: fr.pointer + "/" + seg,
+						gjson:   joinGJSON(fr.gjson, pointerEscapeForGJSON(seg)),
+						sjson:   joinSJSON(fr.sjson, seg),
+					}
+					if !last && createParents {
+						childNode := gjson.GetBytes(body, child.gjson)
+						if !childNode.Exists() {
+							container := intermediateContainerFor(p.tokens[i+1])
+							var err error
+							body, err = sjson.SetRawBytes(body, child.sjson, container)
+							if err != nil {
+								return nil, err
+							}
+						} else if !intermediateContainerMatches(childNode, p.tokens[i+1]) {
+							return nil, &pathTypeError{path: child.pointer, got: kindOfRaw([]byte(childNode.Raw))}
+						}
+					}
+					next = append(next, child)
+					continue
+				}
+				if current != nil && !node.IsArray() && gjson.ValidBytes(current) && len(bytesTrim(current)) > 0 && current[0] != '[' {
 					if createParents && last {
 						return nil, &pathTypeError{path: fr.pointer, got: "object"}
 					}
@@ -265,11 +314,10 @@ func resolvePaths(body []byte, p *parsedPath, createParents bool) ([]resolvedPat
 				if !last {
 					return nil, fmt.Errorf("/- is only valid as a terminal append token")
 				}
-				next = append(next, frame{
-					pointer: fr.pointer + "/-",
-					gjson:   joinGJSON(fr.gjson, "-1"),
-					sjson:   joinSJSON(fr.sjson, "-1"),
-				})
+				// `/-` is an append selector for array operations, not a request to
+				// rewrite the current last element. Resolve it to the parent array;
+				// the array operation chooses the insertion index.
+				next = append(next, fr)
 			}
 		}
 		frames = next
@@ -282,6 +330,35 @@ func resolvePaths(body []byte, p *parsedPath, createParents bool) ([]resolvedPat
 		out = append(out, resolvedPath{pointer: fr.pointer, gjson: fr.gjson, sjson: fr.sjson})
 	}
 	return out, nil
+}
+
+func tokenRequiresArrayParent(tok pathToken) bool {
+	switch tok.kind {
+	case tokenLast, tokenNthLast, tokenAppend:
+		return true
+	default:
+		return false
+	}
+}
+
+func intermediateContainerFor(next pathToken) []byte {
+	if next.kind == tokenIndex || tokenRequiresArrayParent(next) {
+		return []byte("[]")
+	}
+	return []byte("{}")
+}
+
+func intermediateContainerMatches(node gjson.Result, next pathToken) bool {
+	if next.kind == tokenIndex {
+		return node.IsArray() || node.IsObject()
+	}
+	if tokenRequiresArrayParent(next) {
+		return node.IsArray()
+	}
+	if next.kind == tokenWildcard {
+		return node.IsArray() || node.IsObject()
+	}
+	return node.IsObject()
 }
 
 type pathTypeError struct {

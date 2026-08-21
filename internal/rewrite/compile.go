@@ -31,6 +31,31 @@ func ValidateRawConfigPtr(raw *string, scope Scope) error {
 	return err
 }
 
+// ValidateTemplateRawConfig applies the normal rewrite validation plus the
+// stricter persistence rules for reusable templates. Templates must use V2 and
+// may never opt into sensitive-header writes, so credentials cannot be baked
+// into a reusable asset.
+func ValidateTemplateRawConfig(raw *string, scope Scope) error {
+	decoded, err := decodeRaw(raw)
+	if err != nil {
+		return err
+	}
+	if decoded == nil || decoded.Config == nil {
+		return validationError("template config is required")
+	}
+	if decoded.Legacy {
+		return validationError("rewrite templates must use the V2 schema")
+	}
+	if len(decoded.Config.Operations) == 0 {
+		return validationError("rewrite template must contain at least one operation")
+	}
+	if decoded.Config.AllowSensitiveHeaders {
+		return validationError("rewrite templates cannot enable sensitive headers")
+	}
+	_, err = compileConfig(decoded.Config, scope, false, decoded.RawHash)
+	return err
+}
+
 func ParseAndCompile(raw *string, scope Scope) (*Plan, error) {
 	decoded, err := decodeRaw(raw)
 	if err != nil {
@@ -151,14 +176,14 @@ func compileOperation(op Operation, scope Scope, parent Policy, allowSensitive b
 		out.template = tpl
 	}
 	if op.When != nil {
-		cond, err := compileCondition(op.When, 0, 0)
+		cond, err := compileCondition(op.When)
 		if err != nil {
 			return compiledOp{}, err
 		}
 		out.when = cond
 	}
 	if op.ItemWhen != nil {
-		cond, err := compileCondition(op.ItemWhen, 0, 0)
+		cond, err := compileCondition(op.ItemWhen)
 		if err != nil {
 			return compiledOp{}, err
 		}
@@ -201,6 +226,9 @@ func compileOperation(op Operation, scope Scope, parent Policy, allowSensitive b
 		if err != nil {
 			return compiledOp{}, err
 		}
+		if err := forbidProtectedBody(op.Path); err != nil {
+			return compiledOp{}, err
+		}
 		if out.valueMode == valueNone {
 			return compiledOp{}, validationError(fmt.Sprintf("operation %q requires a value", op.Op))
 		}
@@ -210,6 +238,9 @@ func compileOperation(op Operation, scope Scope, parent Policy, allowSensitive b
 	case OpArrayRemove:
 		out.path, err = requireBodyPath(op.Path, false)
 		if err != nil {
+			return compiledOp{}, err
+		}
+		if err := forbidProtectedBody(op.Path); err != nil {
 			return compiledOp{}, err
 		}
 		if out.itemWhen == nil {
@@ -241,6 +272,9 @@ func compileOperation(op Operation, scope Scope, parent Policy, allowSensitive b
 		if err := forbidSensitiveHeader(op.ToHeader, scope, allowSensitive); err != nil {
 			return compiledOp{}, err
 		}
+		if isSensitiveHeader(op.FromHeader) {
+			return compiledOp{}, validationError("copying or moving a sensitive source header is not allowed")
+		}
 		if op.Op == OpHeaderMove {
 			if err := forbidProtectedHeader(op.FromHeader); err != nil {
 				return compiledOp{}, err
@@ -262,6 +296,9 @@ func compileOperation(op Operation, scope Scope, parent Policy, allowSensitive b
 		}
 		if retry == RetryNextChannel && scope != ScopeChannel {
 			return compiledOp{}, validationError("retry=next_channel is only allowed on channel scope")
+		}
+		if op.Error.Status != 0 && (op.Error.Status < 400 || op.Error.Status > 599) {
+			return compiledOp{}, validationError("return_error.status must be between 400 and 599")
 		}
 	case OpTrimPrefix, OpTrimSuffix, OpEnsurePrefix, OpEnsureSuffix, OpTrimSpace, OpToLower, OpToUpper:
 		out.path, err = requireBodyPath(op.Path, false)
@@ -313,6 +350,9 @@ func compileOperation(op Operation, scope Scope, parent Policy, allowSensitive b
 		if err != nil {
 			return compiledOp{}, err
 		}
+		if err := forbidProtectedBody(op.Path); err != nil {
+			return compiledOp{}, err
+		}
 		if out.itemWhen == nil {
 			return compiledOp{}, validationError("prune_objects requires item_when")
 		}
@@ -341,8 +381,26 @@ func compileOperation(op Operation, scope Scope, parent Policy, allowSensitive b
 		if err := forbidProtectedHeader(op.Header); err != nil {
 			return compiledOp{}, err
 		}
-		if err := forbidSensitiveHeader(op.Header, scope, allowSensitive); err != nil {
+		if isSensitiveHeader(op.Header) {
+			return compiledOp{}, validationError("sync_fields cannot read or write sensitive headers")
+		}
+		if err := forbidProtectedBody(op.Path); err != nil {
 			return compiledOp{}, err
+		}
+	}
+	if op.ValueFrom != nil {
+		if err := validateReadSource(op.ValueFrom.Source, op.ValueFrom.Path); err != nil {
+			return compiledOp{}, err
+		}
+	}
+	if out.template != nil {
+		for _, part := range out.template.parts {
+			if part.literal {
+				continue
+			}
+			if err := validateReadSource(part.source, part.path); err != nil {
+				return compiledOp{}, err
+			}
 		}
 	}
 	return out, nil
@@ -417,25 +475,32 @@ var protectedBodyWS = map[string]struct{}{
 }
 
 func forbidProtectedBody(path string) error {
-	if _, ok := protectedBodyExact[path]; ok {
-		return validationError(fmt.Sprintf("path %s is protected", path))
-	}
-	if _, ok := protectedBodyWS[path]; ok {
-		return validationError(fmt.Sprintf("path %s is protected in websocket transport", path))
+	for root := range protectedBodyExact {
+		if pathAtOrBelow(path, root) {
+			return validationError(fmt.Sprintf("path %s is protected", path))
+		}
 	}
 	return nil
 }
 
 func isProtectedBody(path string, transport Transport) bool {
-	if _, ok := protectedBodyExact[path]; ok {
-		return true
-	}
-	if transport == TransportWS {
-		if _, ok := protectedBodyWS[path]; ok {
+	for root := range protectedBodyExact {
+		if pathAtOrBelow(path, root) {
 			return true
 		}
 	}
+	if transport == TransportWS {
+		for root := range protectedBodyWS {
+			if pathAtOrBelow(path, root) {
+				return true
+			}
+		}
+	}
 	return false
+}
+
+func pathAtOrBelow(path, root string) bool {
+	return path == root || strings.HasPrefix(path, root+"/")
 }
 
 var forbiddenHeaders = map[string]struct{}{
@@ -504,4 +569,31 @@ func forbidSensitiveHeader(name string, scope Scope, allow bool) error {
 func isSensitiveHeader(name string) bool {
 	_, ok := sensitiveHeaders[strings.ToLower(name)]
 	return ok
+}
+
+func validateReadSource(source ValueSourceType, path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return validationError("read source path is required")
+	}
+	switch source {
+	case ValueSourceBody:
+		if _, err := parseJSONPointer(path); err != nil {
+			return validationError(err.Error())
+		}
+	case ValueSourceHeader:
+		if err := validateHeaderName(path); err != nil {
+			return err
+		}
+		if isSensitiveHeader(path) {
+			return validationError("reading sensitive headers is not allowed")
+		}
+	case ValueSourceContext:
+		if _, _, err := (Context{}).Lookup(path); err != nil && !strings.HasPrefix(path, "request.metadata.") {
+			return validationError(err.Error())
+		}
+	default:
+		return validationError(fmt.Sprintf("unsupported read source %q", source))
+	}
+	return nil
 }

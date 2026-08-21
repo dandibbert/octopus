@@ -187,7 +187,7 @@ func applyRegexReplace(op *compiledOp, state *evalState, transport Transport) (b
 	})
 }
 
-func applyPruneObjects(op *compiledOp, state *evalState) (bool, []string, string, error) {
+func applyPruneObjects(op *compiledOp, state *evalState, transport Transport) (bool, []string, string, error) {
 	paths, err := resolvePaths(state.body, op.path, false)
 	if err != nil {
 		return handlePathErr(err, op.policy)
@@ -201,6 +201,9 @@ func applyPruneObjects(op *compiledOp, state *evalState) (bool, []string, string
 	changed := false
 	touched := make([]string, 0, len(paths))
 	for _, p := range paths {
+		if isProtectedBody(p.pointer, transport) {
+			return false, nil, "", newInvalidInput("cannot rewrite protected field " + p.pointer)
+		}
 		raw, exists, _, err := getRaw(state.body, p.gjson)
 		if err != nil {
 			return handlePathErr(err, op.policy)
@@ -263,9 +266,15 @@ func pruneValue(raw []byte, op *compiledOp, state *evalState, recursive bool) ([
 		changed := false
 		parsed.ForEach(func(key, value gjson.Result) bool {
 			child := []byte(value.Raw)
+			keyName := key.String()
+			keyPath := resolvedPath{
+				sjson:   sjsonEscape(keyName),
+				gjson:   pointerEscapeForGJSON(keyName),
+				pointer: "/" + escapePointer(keyName),
+			}
 			if value.IsObject() && conditionMatchesItem(op.itemWhen, state, child) {
 				var err error
-				result, err = deletePath(result, resolvedPath{sjson: key.String(), gjson: key.String(), pointer: "/" + key.String()})
+				result, err = deletePath(result, keyPath)
 				if err == nil {
 					changed = true
 				}
@@ -274,7 +283,7 @@ func pruneValue(raw []byte, op *compiledOp, state *evalState, recursive bool) ([
 			if value.IsObject() || value.IsArray() {
 				next, did, err := pruneValue(child, op, state, true)
 				if err == nil && did {
-					result, err = setRaw(result, resolvedPath{sjson: key.String(), gjson: key.String(), pointer: "/" + key.String()}, next, false)
+					result, err = setRaw(result, keyPath, next, false)
 					if err == nil {
 						changed = true
 					}
@@ -292,7 +301,9 @@ func conditionMatchesItem(cond *compiledCondition, state *evalState, item []byte
 	if cond == nil {
 		return false
 	}
-	ok, err := cond.eval(evalState{body: item, headers: state.headers, ctx: state.ctx, item: item})
+	itemState := *state
+	itemState.item = item
+	ok, err := cond.eval(itemState)
 	return err == nil && ok
 }
 
@@ -303,7 +314,10 @@ func applyHeaderPass(op *compiledOp, state *evalState) (bool, []string, string, 
 		}
 		return false, nil, "", mapPolicyError(ErrorKindMissing, op.policy, "inbound headers are missing")
 	}
-	names := headerPassNames(op, state)
+	names, err := headerPassNames(op, state)
+	if err != nil {
+		return false, nil, "", err
+	}
 	changed := false
 	touched := make([]string, 0)
 	for name := range state.inbound {
@@ -327,17 +341,17 @@ func applyHeaderPass(op *compiledOp, state *evalState) (bool, []string, string, 
 	return changed, touched, "", nil
 }
 
-func headerPassNames(op *compiledOp, state *evalState) []string {
-	if !op.raw.Value.Present {
-		return nil
+func headerPassNames(op *compiledOp, state *evalState) ([]string, error) {
+	if op.valueMode == valueNone {
+		return nil, nil
 	}
 	raw, err := resolveValue(op, state)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	parsed := gjson.ParseBytes(raw)
 	if parsed.Type == gjson.String {
-		return []string{parsed.String()}
+		return []string{parsed.String()}, nil
 	}
 	if parsed.IsArray() {
 		out := make([]string, 0, len(parsed.Array()))
@@ -346,9 +360,9 @@ func headerPassNames(op *compiledOp, state *evalState) []string {
 				out = append(out, item.String())
 			}
 		}
-		return out
+		return out, nil
 	}
-	return nil
+	return nil, validationError("header_pass value must be a string or string array")
 }
 
 func headerPassAllowed(name string, allow []string, pattern *regexp.Regexp) bool {

@@ -47,7 +47,7 @@ func decodeRaw(raw *string) (*decodedConfig, error) {
 		var cfg Config
 		dec := json.NewDecoder(bytes.NewReader([]byte(trimmed)))
 		dec.DisallowUnknownFields()
-		if err := json.Unmarshal([]byte(trimmed), &cfg); err != nil {
+		if err := dec.Decode(&cfg); err != nil {
 			return nil, validationError(fmt.Sprintf("invalid v2 config: %v", err))
 		}
 		return &decodedConfig{Config: &cfg, RawHash: hash}, nil
@@ -63,10 +63,12 @@ func decodeRaw(raw *string) (*decodedConfig, error) {
 }
 
 func looksLikeV2(probe map[string]json.RawMessage) bool {
-	_, hasOps := probe["operations"]
-	_, hasStage := probe["stage"]
-	_, hasPolicy := probe["policy"]
-	return hasOps || (hasStage && hasPolicy)
+	for _, key := range []string{"operations", "stage", "policy", "allow_sensitive_headers"} {
+		if _, ok := probe[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeLegacyObject(raw []byte) (*Config, error) {

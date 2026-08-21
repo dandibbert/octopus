@@ -56,6 +56,19 @@ func TestHeaderPassNeverCopiesAuth(t *testing.T) {
 	}
 }
 
+func TestHeaderPassPropagatesValueFromMissingError(t *testing.T) {
+	raw := `{
+		"$schema":"octopus.request-rewrite/v2",
+		"policy":{"on_missing":"error"},
+		"operations":[{"id":"pass","op":"header_pass","value_from":{"source":"body","path":"/missing"}}]
+	}`
+	plan := mustCompile(t, raw, ScopeChannel)
+	_, err := Apply(Input{Body: []byte(`{}`), Headers: http.Header{}, InboundHeaders: http.Header{"X-Test": []string{"1"}}}, plan)
+	if err == nil {
+		t.Fatal("header_pass should propagate value_from missing error")
+	}
+}
+
 func TestSyncFieldsHeaderToBody(t *testing.T) {
 	raw := `{
 		"$schema":"octopus.request-rewrite/v2",
@@ -93,5 +106,32 @@ func TestPruneObjectsRemovesMatching(t *testing.T) {
 	}
 	if !strings.Contains(string(res.Body), `"keep"`) {
 		t.Fatalf("keep missing: %s", res.Body)
+	}
+}
+
+func TestPruneItemConditionCanReadFullBodyAndSpecialObjectKeys(t *testing.T) {
+	raw := `{
+		"$schema":"octopus.request-rewrite/v2",
+		"operations":[{
+			"id":"prune",
+			"op":"prune_objects",
+			"path":"/tree",
+			"item_when":{"all":[
+				{"source":"item","path":"/type","operator":"eq","value":"drop"},
+				{"source":"body","path":"/mode","operator":"eq","value":"strict"}
+			]}
+		}]
+	}`
+	plan := mustCompile(t, raw, ScopeChannel)
+	body := []byte(`{"mode":"strict","tree":{"a.b":{"type":"drop"},"a*b":{"type":"keep"}}}`)
+	res, err := Apply(Input{Body: body, Headers: http.Header{}}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(res.Body), `"a.b"`) {
+		t.Fatalf("special-key matching object was not pruned: %s", res.Body)
+	}
+	if !strings.Contains(string(res.Body), `"a*b"`) {
+		t.Fatalf("special-key retained object was lost: %s", res.Body)
 	}
 }

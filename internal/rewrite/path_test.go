@@ -1,6 +1,7 @@
 package rewrite
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 )
@@ -19,6 +20,49 @@ func TestParseJSONPointerEscapes(t *testing.T) {
 	}
 	if p.tokens[1].name != "a~b" {
 		t.Fatalf("tilde unescape failed: %#v", p.tokens[1])
+	}
+}
+
+func TestParseJSONPointerRejectsInvalidEscape(t *testing.T) {
+	if _, err := parseJSONPointer("/metadata/a~2b"); err == nil {
+		t.Fatal("invalid JSON Pointer escape should be rejected")
+	}
+	p, err := parseJSONPointer("/metadata/a~02b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.tokens[1].name != "a~2b" {
+		t.Fatalf("literal tilde sequence decoded incorrectly: %#v", p.tokens[1])
+	}
+}
+
+func TestNumericPointerTokenAddressesObjectKey(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"numeric-key","op":"set","path":"/metadata/0","value":"updated"}]}`
+	plan := mustCompile(t, raw, ScopeChannel)
+	res, err := Apply(Input{Body: []byte(`{"metadata":{"0":"old","1":"keep"}}`)}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(res.Body); got != `{"metadata":{"0":"updated","1":"keep"}}` {
+		t.Fatalf("numeric object key rewrite failed: %s", got)
+	}
+}
+
+func TestArrayAppendTerminalDashTargetsParentArray(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"append","op":"array_append","path":"/messages/-","value":{"role":"system","content":"hint"}}]}`
+	plan := mustCompile(t, raw, ScopeChannel)
+	res, err := Apply(Input{Body: []byte(`{"messages":[{"role":"user","content":"hi"}]}`)}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	if err := json.Unmarshal(res.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Messages) != 2 || payload.Messages[1]["content"] != "hint" {
+		t.Fatalf("terminal dash append targeted wrong node: %s", res.Body)
 	}
 }
 

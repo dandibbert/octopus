@@ -169,9 +169,9 @@ func applyOp(op *compiledOp, plan *Plan, state *evalState, transport Transport) 
 	case OpMove:
 		return applyCopyMove(op, state, transport, true)
 	case OpArrayAppend, OpArrayPrepend, OpArrayInsert:
-		return applyArrayInsert(op, state)
+		return applyArrayInsert(op, state, transport)
 	case OpArrayRemove:
-		return applyArrayRemove(op, state)
+		return applyArrayRemove(op, state, transport)
 	case OpHeaderSet, OpHeaderSetIfAbsent, OpHeaderAdd:
 		return applyHeaderWrite(op, state)
 	case OpHeaderDelete:
@@ -205,6 +205,12 @@ func applyOp(op *compiledOp, plan *Plan, state *evalState, transport Transport) 
 			}
 			return false, nil, "", mapPolicyError(ErrorKindMissing, op.policy, "source header is missing")
 		}
+		if headerExists(state.headers, op.raw.ToHeader) && op.policy.OnConflict == OnConflictKeep {
+			return false, nil, "", nil
+		}
+		if headerExists(state.headers, op.raw.ToHeader) && op.policy.OnConflict == OnConflictError {
+			return false, nil, "", mapPolicyError(ErrorKindConflict, op.policy, "destination header exists")
+		}
 		headerMove(state.headers, op.raw.FromHeader, op.raw.ToHeader)
 		return true, []string{op.raw.FromHeader, op.raw.ToHeader}, "", nil
 	case OpReturnError:
@@ -228,7 +234,7 @@ func applyOp(op *compiledOp, plan *Plan, state *evalState, transport Transport) 
 	case OpRegexReplace:
 		return applyRegexReplace(op, state, transport)
 	case OpPruneObjects:
-		return applyPruneObjects(op, state)
+		return applyPruneObjects(op, state, transport)
 	case OpHeaderPass:
 		return applyHeaderPass(op, state)
 	case OpSyncFields:
@@ -378,7 +384,7 @@ func applyCopyMove(op *compiledOp, state *evalState, transport Transport, move b
 	return changed, touched, modelWarning(op), nil
 }
 
-func applyArrayInsert(op *compiledOp, state *evalState) (bool, []string, string, error) {
+func applyArrayInsert(op *compiledOp, state *evalState, transport Transport) (bool, []string, string, error) {
 	value, err := resolveValue(op, state)
 	if err != nil {
 		return false, nil, "", err
@@ -398,6 +404,9 @@ func applyArrayInsert(op *compiledOp, state *evalState) (bool, []string, string,
 	changed := false
 	touched := make([]string, 0, len(paths))
 	for _, p := range paths {
+		if isProtectedBody(p.pointer, transport) {
+			return false, nil, "", newInvalidInput("cannot rewrite protected field " + p.pointer)
+		}
 		var next []byte
 		switch op.raw.Op {
 		case OpArrayAppend:
@@ -419,7 +428,7 @@ func applyArrayInsert(op *compiledOp, state *evalState) (bool, []string, string,
 	return changed, touched, "", nil
 }
 
-func applyArrayRemove(op *compiledOp, state *evalState) (bool, []string, string, error) {
+func applyArrayRemove(op *compiledOp, state *evalState, transport Transport) (bool, []string, string, error) {
 	paths, err := resolvePaths(state.body, op.path, false)
 	if err != nil {
 		return handlePathErr(err, op.policy)
@@ -430,6 +439,9 @@ func applyArrayRemove(op *compiledOp, state *evalState) (bool, []string, string,
 	changed := false
 	touched := make([]string, 0)
 	for _, p := range paths {
+		if isProtectedBody(p.pointer, transport) {
+			return false, nil, "", newInvalidInput("cannot rewrite protected field " + p.pointer)
+		}
 		next, removed, err := arrayRemoveMatching(state.body, p, op.itemWhen, *state)
 		if err != nil {
 			return handlePathErr(err, op.policy)
@@ -469,26 +481,39 @@ func applyHeaderWrite(op *compiledOp, state *evalState) (bool, []string, string,
 		if exists && op.policy.OnConflict == OnConflictKeep {
 			return false, nil, "", nil
 		}
+		if exists && op.policy.OnConflict == OnConflictError {
+			return false, nil, "", mapPolicyError(ErrorKindConflict, op.policy, "header already exists")
+		}
 		headerSet(state.headers, op.raw.Header, text)
 	}
 	return true, []string{op.raw.Header}, "", nil
 }
 
 func resolveValue(op *compiledOp, state *evalState) ([]byte, error) {
+	var value []byte
+	var err error
 	switch op.valueMode {
 	case valueLiteral:
-		return append([]byte(nil), op.raw.Value.Raw...), nil
+		value = append([]byte(nil), op.raw.Value.Raw...)
 	case valueFrom:
-		return resolveValueFrom(op.raw.ValueFrom, state, op.policy)
+		value, err = resolveValueFrom(op.raw.ValueFrom, state, op.policy)
 	case valueTemplate:
-		text, err := renderTemplate(op.template, state, op.policy)
+		var text string
+		text, err = renderTemplate(op.template, state, op.policy)
 		if err != nil {
 			return nil, err
 		}
-		return encodeJSONString(text), nil
+		value = encodeJSONString(text)
 	default:
 		return nil, validationError("value is required")
 	}
+	if err != nil {
+		return nil, err
+	}
+	if len(value) > MaxGeneratedValue {
+		return nil, newInvalidInput("generated value exceeds limit")
+	}
+	return value, nil
 }
 
 func resolveValueFrom(src *ValueSource, state *evalState, policy Policy) ([]byte, error) {

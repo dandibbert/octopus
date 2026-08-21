@@ -26,15 +26,20 @@ type compiledCondition struct {
 	regex         *regexp.Regexp
 }
 
-func compileCondition(expr *ConditionExpr, depth, nodes int) (*compiledCondition, error) {
+func compileCondition(expr *ConditionExpr) (*compiledCondition, error) {
+	nodes := 0
+	return compileConditionNode(expr, 0, &nodes)
+}
+
+func compileConditionNode(expr *ConditionExpr, depth int, nodes *int) (*compiledCondition, error) {
 	if expr == nil {
 		return nil, validationError("condition is required")
 	}
 	if depth > MaxConditionDepth {
 		return nil, validationError("condition nesting exceeds limit")
 	}
-	nodes++
-	if nodes > MaxConditionNodes {
+	*nodes = *nodes + 1
+	if *nodes > MaxConditionNodes {
 		return nil, validationError("too many condition nodes")
 	}
 	kind := expr.kind()
@@ -48,11 +53,10 @@ func compileCondition(expr *ConditionExpr, depth, nodes int) (*compiledCondition
 			return nil, validationError("all requires at least one child")
 		}
 		for i := range expr.All {
-			child, err := compileCondition(&expr.All[i], depth+1, nodes)
+			child, err := compileConditionNode(&expr.All[i], depth+1, nodes)
 			if err != nil {
 				return nil, err
 			}
-			nodes++
 			out.all = append(out.all, child)
 		}
 	case conditionAny:
@@ -60,15 +64,14 @@ func compileCondition(expr *ConditionExpr, depth, nodes int) (*compiledCondition
 			return nil, validationError("any requires at least one child")
 		}
 		for i := range expr.Any {
-			child, err := compileCondition(&expr.Any[i], depth+1, nodes)
+			child, err := compileConditionNode(&expr.Any[i], depth+1, nodes)
 			if err != nil {
 				return nil, err
 			}
-			nodes++
 			out.any = append(out.any, child)
 		}
 	case conditionNot:
-		child, err := compileCondition(expr.Not, depth+1, nodes)
+		child, err := compileConditionNode(expr.Not, depth+1, nodes)
 		if err != nil {
 			return nil, err
 		}
@@ -105,6 +108,14 @@ func compilePredicate(expr *ConditionExpr, out *compiledCondition) error {
 	if expr.Source == ValueSourceHeader && expr.Path == "" {
 		return validationError("header condition requires path")
 	}
+	if expr.Source == ValueSourceHeader {
+		if err := validateHeaderName(expr.Path); err != nil {
+			return err
+		}
+		if isSensitiveHeader(expr.Path) {
+			return validationError("conditions cannot read sensitive headers")
+		}
+	}
 	if expr.Source == ValueSourceBody || expr.Source == ValueSourceItem {
 		if expr.Path == "" {
 			return validationError("body/item condition requires path")
@@ -135,6 +146,9 @@ func compilePredicate(expr *ConditionExpr, out *compiledCondition) error {
 		if err != nil {
 			return err
 		}
+		if !out.caseSensitive {
+			pattern = "(?i:" + pattern + ")"
+		}
 		re, err := regexp.Compile(pattern)
 		if err != nil {
 			return validationError(fmt.Sprintf("invalid regex: %v", err))
@@ -144,6 +158,37 @@ func compilePredicate(expr *ConditionExpr, out *compiledCondition) error {
 	if expr.Operator == OpExists || expr.Operator == OpMissing {
 		if expr.Value.Present {
 			return validationError("exists/missing do not take a value")
+		}
+		return nil
+	}
+	if !expr.Value.Present {
+		return validationError(fmt.Sprintf("operator %q requires a value", expr.Operator))
+	}
+	switch expr.Operator {
+	case OpPrefix, OpSuffix, OpContains, OpRegex:
+		if expr.Value.Kind != kindString {
+			return validationError(fmt.Sprintf("operator %q requires a string value", expr.Operator))
+		}
+	case OpGT, OpGTE, OpLT, OpLTE:
+		if expr.Value.Kind != kindNumber {
+			return validationError(fmt.Sprintf("operator %q requires a numeric value", expr.Operator))
+		}
+	case OpIn, OpNotIn:
+		if expr.Value.Kind != kindArray {
+			return validationError(fmt.Sprintf("operator %q requires an array value", expr.Operator))
+		}
+	case OpTypeIs:
+		if expr.Value.Kind != kindString {
+			return validationError("type_is requires a string value")
+		}
+		want, err := decodeJSONString(expr.Value.Raw)
+		if err != nil {
+			return err
+		}
+		switch jsonKind(want) {
+		case kindNull, kindBool, kindNumber, kindString, kindObject, kindArray:
+		default:
+			return validationError("type_is value must be null, boolean, number, string, object, or array")
 		}
 	}
 	return nil
@@ -216,9 +261,9 @@ func (c *compiledCondition) evalPredicate(state evalState) (bool, error) {
 	}
 	switch c.operator {
 	case OpEq:
-		return jsonEqual(val, c.value.Raw), nil
+		return jsonEqualWithCase(val, c.value.Raw, c.caseSensitive), nil
 	case OpNeq:
-		return !jsonEqual(val, c.value.Raw), nil
+		return !jsonEqualWithCase(val, c.value.Raw, c.caseSensitive), nil
 	case OpPrefix, OpSuffix, OpContains:
 		left, err := asString(val)
 		if err != nil {
@@ -262,7 +307,7 @@ func (c *compiledCondition) evalPredicate(state evalState) (bool, error) {
 			return cmp <= 0, nil
 		}
 	case OpIn, OpNotIn:
-		ok := jsonIn(val, c.value.Raw)
+		ok := jsonIn(val, c.value.Raw, c.caseSensitive)
 		if c.operator == OpNotIn {
 			return !ok, nil
 		}
@@ -355,8 +400,9 @@ func jsonEqual(a, b []byte) bool {
 		cmp, ok := compareNumbers(a, b)
 		return ok && cmp == 0
 	}
-	var va, vb any
-	if json.Unmarshal(a, &va) != nil || json.Unmarshal(b, &vb) != nil {
+	va, errA := decodeJSONUseNumber(a)
+	vb, errB := decodeJSONUseNumber(b)
+	if errA != nil || errB != nil {
 		return false
 	}
 	aa, _ := json.Marshal(va)
@@ -364,13 +410,37 @@ func jsonEqual(a, b []byte) bool {
 	return bytes.Equal(aa, bb)
 }
 
-func jsonIn(needle, haystack []byte) bool {
+func jsonEqualWithCase(a, b []byte, caseSensitive bool) bool {
+	if caseSensitive {
+		return jsonEqual(a, b)
+	}
+	ka, _ := detectJSONKind(a)
+	kb, _ := detectJSONKind(b)
+	if ka == kindString && kb == kindString {
+		left, errA := decodeJSONString(a)
+		right, errB := decodeJSONString(b)
+		return errA == nil && errB == nil && strings.EqualFold(left, right)
+	}
+	return jsonEqual(a, b)
+}
+
+func decodeJSONUseNumber(raw []byte) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var value any
+	if err := dec.Decode(&value); err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func jsonIn(needle, haystack []byte, caseSensitive bool) bool {
 	res := gjson.ParseBytes(haystack)
 	if !res.IsArray() {
-		return jsonEqual(needle, haystack)
+		return jsonEqualWithCase(needle, haystack, caseSensitive)
 	}
 	for _, item := range res.Array() {
-		if jsonEqual(needle, []byte(item.Raw)) {
+		if jsonEqualWithCase(needle, []byte(item.Raw), caseSensitive) {
 			return true
 		}
 	}
