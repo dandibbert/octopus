@@ -230,6 +230,7 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		apiKeyID:            apiKeyID,
 		requestModel:        requestModel,
 		groupID:             group.ID,
+		groupName:           group.Name,
 		groupSessionTTL:     group.SessionKeepTime,
 		groupCustomHeader:   append([]dbmodel.CustomHeader(nil), group.CustomHeader...),
 		groupParamOverride:  group.ParamOverride,
@@ -374,12 +375,26 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 				channel:              channel,
 				usedKey:              usedKey,
 				firstTokenTimeOutSec: group.FirstTokenTimeOut,
+				retryIndex:           retryNum,
+				retryLastStatus:      result.StatusCode,
+				retryLastErr:         result.Err,
 			}
 
 			result = ra.attempt()
-			if result.Success || result.Written || result.Canceled || result.ResetConversation || result.FirstTokenTimeout || !isRetryableStatus(result.StatusCode) {
+			if result.Success || result.Written || result.Canceled || result.ResetConversation || result.FirstTokenTimeout || result.PolicyRejected || !isRetryableStatus(result.StatusCode) {
 				break
 			}
+		}
+
+		if result.PolicyRejected {
+			lastErr = result.Err
+			lastResult = result
+			if result.RewriteRetry == rewrite.RetryNextChannel {
+				continue
+			}
+			metrics.SaveWithChannelStats(c.Request.Context(), false, result.Err, iter.Attempts(), false)
+			writeRewriteApplyError(c, hb, inAdapter, req.internalRequest.RawAPIFormat, result.Err)
+			return
 		}
 
 		// 同通道重试耗尽后记录熔断器失败
@@ -483,6 +498,10 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 		writeInboundError(c, hb, inAdapter, http.StatusUnprocessableEntity, "billing price is unknown")
 		return
 	}
+	if lastResult.PolicyRejected {
+		writeRewriteApplyError(c, hb, inAdapter, req.internalRequest.RawAPIFormat, lastResult.Err)
+		return
+	}
 
 	// 透传 429/503 状态码和 Retry-After 头，让客户端 SDK 的重试机制接管
 	if isPassthroughStatus(lastResult.StatusCode) {
@@ -502,6 +521,11 @@ func Handler(inboundType inbound.InboundType, c *gin.Context) {
 func writeInboundError(c *gin.Context, hb *earlyHeartbeat, in model.Inbound, statusCode int, message string) {
 	if c == nil {
 		return
+	}
+	// Ensure the early-heartbeat goroutine has fully relinquished the response
+	// writer before we inspect commit state or emit the terminal error.
+	if hb != nil {
+		hb.Hand()
 	}
 	if statusCode <= 0 {
 		statusCode = http.StatusBadGateway
@@ -547,6 +571,19 @@ func (ra *relayAttempt) attempt() attemptResult {
 
 	// 转发请求
 	statusCode, fwdErr := ra.forward()
+	if fwdErr != nil {
+		var rewriteErr *rewrite.ApplyError
+		if errors.As(fwdErr, &rewriteErr) {
+			span.End(dbmodel.AttemptSkipped, statusCode, rewriteErr.PublicMessage)
+			return attemptResult{
+				Success:        false,
+				PolicyRejected: true,
+				RewriteRetry:   rewriteErr.RetryDisposition,
+				Err:            rewriteErr,
+				StatusCode:     statusCode,
+			}
+		}
+	}
 
 	// 更新 channel key 状态
 	ra.usedKey.StatusCode = statusCode

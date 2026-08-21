@@ -13,6 +13,7 @@ import (
 	"github.com/bestruirui/octopus/internal/conf"
 	dbmodel "github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/relay/balancer"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	"github.com/bestruirui/octopus/internal/transformer/model"
 	"github.com/gin-gonic/gin"
 )
@@ -92,6 +93,7 @@ type relayRequest struct {
 	apiKeyID            int
 	requestModel        string
 	groupID             int
+	groupName           string
 	groupSessionTTL     int
 	groupCustomHeader   []dbmodel.CustomHeader
 	groupParamOverride  *string
@@ -131,17 +133,22 @@ type relayAttempt struct {
 	firstTokenTimeOutSec  int
 	firstTokenBudget      *firstTokenBudget
 	retryAfter            time.Duration // forward() 提取后暂存
+	retryIndex            int
+	retryLastStatus       int
+	retryLastErr          error
 	streamTerminalReached atomic.Bool
 	wsFinalHeaders        http.Header
 }
 
 // attemptResult 封装单次尝试的结果
 type attemptResult struct {
-	Success           bool          // 是否成功
-	Written           bool          // 流式响应是否已开始写入（不可重试）
-	Canceled          bool          // 是否由下游请求取消或超时触发
-	ResetConversation bool          // 是否需要立即重置连续会话并停止后续 failover
-	FirstTokenTimeout bool          // 是否由首字超时触发，用于直接切换渠道
+	Success           bool // 是否成功
+	Written           bool // 流式响应是否已开始写入（不可重试）
+	Canceled          bool // 是否由下游请求取消或超时触发
+	ResetConversation bool // 是否需要立即重置连续会话并停止后续 failover
+	FirstTokenTimeout bool // 是否由首字超时触发，用于直接切换渠道
+	PolicyRejected    bool // 请求在本地 rewrite 阶段被阻断，未访问上游
+	RewriteRetry      rewrite.RetryDisposition
 	Err               error         // 失败时的错误
 	StatusCode        int           // 上游 HTTP 状态码（0 = 连接错误）
 	RetryAfter        time.Duration // 解析的 Retry-After 值

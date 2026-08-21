@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -44,6 +45,7 @@ type rewriteValidateRequest struct {
 type rewritePreviewRequest struct {
 	ChannelID     int               `json:"channel_id"`
 	GroupID       int               `json:"group_id"`
+	TargetModel   string            `json:"target_model"`
 	InboundFormat string            `json:"inbound_format"`
 	Path          string            `json:"path"`
 	Body          json.RawMessage   `json:"body"`
@@ -124,8 +126,8 @@ func previewRewrite(c *gin.Context) {
 
 	var group *model.Group
 	groupID := req.GroupID
-	applyGroup := groupID > 0
-	if applyGroup {
+	applyGroup := groupID > 0 || (req.DraftScope == rewrite.ScopeGroup && len(req.DraftConfig) > 0 && string(req.DraftConfig) != "null")
+	if groupID > 0 {
 		loaded, gerr := op.GroupGet(groupID, c.Request.Context())
 		if gerr != nil {
 			resp.Error(c, http.StatusNotFound, "group not found")
@@ -163,6 +165,17 @@ type previewOutboundInput struct {
 func previewOutbound(ctx context.Context, in previewOutboundInput) (gin.H, error) {
 	channel := in.Channel
 	req := in.Request
+	requestModel := ""
+	if in.InternalReq != nil {
+		requestModel = in.InternalReq.Model
+	}
+	targetModel, err := resolvePreviewTargetModel(channel, in.Group, requestModel, req.TargetModel)
+	if err != nil {
+		return nil, err
+	}
+	if in.InternalReq != nil {
+		in.InternalReq.Model = targetModel
+	}
 	groupID := 0
 	if in.Group != nil {
 		groupID = in.Group.ID
@@ -189,18 +202,28 @@ func previewOutbound(ctx context.Context, in previewOutboundInput) (gin.H, error
 		}
 	}
 
-	httpReq, err := in.OutAdapter.TransformRequest(ctx, in.InternalReq, channel.GetBaseUrl(), previewSentinelKey)
+	var httpReq *http.Request
+	if pt, ok := in.OutAdapter.(transformerModel.PassthroughCapable); ok &&
+		len(in.InboundRaw) > 0 && in.InternalReq != nil &&
+		pt.CanPassthrough(in.InternalReq.RawAPIFormat) && pt.AllowPassthrough(in.InternalReq, true) {
+		httpReq, err = pt.TransformRequestRaw(ctx, in.InboundRaw, targetModel, channel.GetBaseUrl(), previewSentinelKey, in.InternalReq.Query)
+	} else {
+		httpReq, err = in.OutAdapter.TransformRequest(ctx, in.InternalReq, channel.GetBaseUrl(), previewSentinelKey)
+	}
 	if err != nil {
 		return nil, err
 	}
-	helper.ApplyCustomHeaders(httpReq.Header, helper.MergeCustomHeaders(groupHeaders, channel.CustomHeader))
+	clientHeaders := http.Header{}
+	for k, v := range req.Headers {
+		clientHeaders.Set(k, v)
+	}
+	applyPreviewClientHeaders(httpReq.Header, clientHeaders)
 	if httpReq.Header.Get("User-Agent") == "" {
 		httpReq.Header.Set("User-Agent", "")
 	}
-	if req.Headers != nil {
-		for k, v := range req.Headers {
-			httpReq.Header.Set(k, v)
-		}
+	helper.ApplyCustomHeaders(httpReq.Header, helper.MergeCustomHeaders(groupHeaders, channel.CustomHeader))
+	if channel.Type == outbound.OutboundTypeOpenAIResponse {
+		httpReq.Header.Set("Content-Type", "application/json")
 	}
 
 	beforeBody, _ := io.ReadAll(httpReq.Body)
@@ -217,7 +240,7 @@ func previewOutbound(ctx context.Context, in previewOutboundInput) (gin.H, error
 		return nil, err
 	}
 
-	rwCtx := previewContext(req, channel, groupID, in.InternalReq.Model)
+	rwCtx := previewContext(req, channel, groupID, requestModel, targetModel)
 	inbound := http.Header{}
 	for k, v := range req.Headers {
 		inbound.Set(k, v)
@@ -276,6 +299,97 @@ func previewOutbound(ctx context.Context, in previewOutboundInput) (gin.H, error
 	}, nil
 }
 
+func resolvePreviewTargetModel(channel *model.Channel, group *model.Group, requestModel, explicitTarget string) (string, error) {
+	if channel == nil {
+		return "", fmt.Errorf("channel is required")
+	}
+	if strings.TrimSpace(explicitTarget) != "" {
+		return strings.TrimSpace(explicitTarget), nil
+	}
+	if group != nil {
+		for _, item := range group.Items {
+			if item.ChannelID == channel.ID && strings.TrimSpace(item.ModelName) != "" {
+				return strings.TrimSpace(item.ModelName), nil
+			}
+		}
+		return "", fmt.Errorf("selected channel is not a member of the group")
+	}
+	if channelName, remoteModel, ok := strings.Cut(strings.TrimSpace(requestModel), "/"); ok && channelName == channel.Name && op.ChannelSupportsModel(channel, remoteModel) {
+		return remoteModel, nil
+	}
+	if op.ChannelSupportsModel(channel, requestModel) {
+		return strings.TrimSpace(requestModel), nil
+	}
+	for _, raw := range []string{channel.Model, channel.CustomModel} {
+		for _, candidate := range strings.Split(raw, ",") {
+			candidate = strings.TrimSpace(candidate)
+			if candidate != "" {
+				return candidate, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("channel has no model available for preview")
+}
+
+func applyPreviewClientHeaders(dst, src http.Header) {
+	if dst == nil || src == nil {
+		return
+	}
+	for key, values := range src {
+		lower := strings.ToLower(strings.TrimSpace(key))
+		if previewBlockedHeader(lower) {
+			continue
+		}
+		if lower == "anthropic-beta" {
+			existing := dst.Get(key)
+			for _, value := range values {
+				existing = mergePreviewCommaHeader(existing, value)
+			}
+			if existing != "" {
+				dst.Set(key, existing)
+			}
+			continue
+		}
+		for _, value := range values {
+			dst.Set(key, value)
+		}
+	}
+}
+
+func previewBlockedHeader(lower string) bool {
+	if strings.HasPrefix(lower, "sec-websocket-") {
+		return true
+	}
+	switch lower {
+	case "authorization", "x-api-key", "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+		"te", "trailer", "transfer-encoding", "upgrade", "content-length", "host", "accept-encoding",
+		"x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-forwarded-port", "x-real-ip",
+		"forwarded", "cf-connecting-ip", "true-client-ip", "x-client-ip", "x-cluster-client-ip":
+		return true
+	default:
+		return false
+	}
+}
+
+func mergePreviewCommaHeader(existing, incoming string) string {
+	seen := map[string]struct{}{}
+	merged := make([]string, 0)
+	for _, raw := range []string{existing, incoming} {
+		for _, part := range strings.Split(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if _, ok := seen[part]; ok {
+				continue
+			}
+			seen[part] = struct{}{}
+			merged = append(merged, part)
+		}
+	}
+	return strings.Join(merged, ",")
+}
+
 func rewriteStatusFromErr(err error) int {
 	if ae, ok := err.(*rewrite.ApplyError); ok && ae.StatusCode > 0 {
 		return ae.StatusCode
@@ -315,15 +429,15 @@ func outboundFormatNameHandler(channelType outbound.OutboundType) string {
 	}
 }
 
-func previewContext(req rewritePreviewRequest, channel *model.Channel, groupID int, modelName string) rewrite.Context {
+func previewContext(req rewritePreviewRequest, channel *model.Channel, groupID int, requestModel, targetModel string) rewrite.Context {
 	return rewrite.Context{
-		RequestOriginalModel:             modelName,
-		RequestNormalizedModel:           modelName,
+		RequestOriginalModel:             requestModel,
+		RequestNormalizedModel:           requestModel,
 		RequestPath:                      req.Path,
 		RequestMethod:                    http.MethodPost,
 		RequestSource:                    "preview",
-		RouteRoutedModel:                 modelName,
-		RouteTransportModelBeforeRewrite: modelName,
+		RouteRoutedModel:                 targetModel,
+		RouteTransportModelBeforeRewrite: targetModel,
 		RouteInboundFormat:               req.InboundFormat,
 		RouteOutboundFormat:              outboundFormatNameHandler(channel.Type),
 		RouteChannelID:                   channel.ID,

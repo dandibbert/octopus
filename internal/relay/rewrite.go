@@ -3,13 +3,17 @@ package relay
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	dbmodel "github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/rewrite"
+	transformerModel "github.com/bestruirui/octopus/internal/transformer/model"
 	"github.com/bestruirui/octopus/internal/transformer/outbound"
 	"github.com/bestruirui/octopus/internal/utils/log"
+	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
 
@@ -42,26 +46,43 @@ func (ra *relayAttempt) rewriteContext(transport rewrite.Transport) rewrite.Cont
 		RequestOriginalModel:   ra.requestModel,
 		RequestNormalizedModel: ra.requestModel,
 		RequestSource:          ra.metrics.RequestSource,
-		RouteRoutedModel:       ra.requestModel,
 		RouteChannelID:         ra.channel.ID,
 		RouteChannelName:       ra.channel.Name,
 		RouteChannelType:       outboundFormatName(ra.channel.Type),
 		RouteGroupID:           ra.groupID,
+		RouteGroupName:         ra.groupName,
+		RetryIndex:             ra.retryIndex,
+		RetryIsRetry:           ra.retryIndex > 0,
+		RetryLastErrorStatus:   ra.retryLastStatus,
 		AuthAPIKeyID:           ra.apiKeyID,
 		FlagsIsChannelTest:     ra.directExecution && ra.metrics.RequestSource != dbmodel.RelayLogRequestSourcePlayground,
 		FlagsIsHealthCheck:     ra.metrics.RequestSource == dbmodel.RelayLogRequestSourceHealthCheck,
 		FlagsIsPlayground:      ra.metrics.RequestSource == dbmodel.RelayLogRequestSourcePlayground,
 	}
 	if ra.internalRequest != nil {
-		ctx.RequestNormalizedModel = ra.internalRequest.Model
+		ctx.RouteRoutedModel = ra.internalRequest.Model
 		ctx.RouteTransportModelBeforeRewrite = ra.internalRequest.Model
 		ctx.RouteInboundFormat = string(ra.internalRequest.RawAPIFormat)
+		ctx.RequestReasoningEffort = ra.internalRequest.ReasoningEffort
+		if len(ra.internalRequest.Metadata) > 0 {
+			ctx.RequestMetadata = make(map[string]string, len(ra.internalRequest.Metadata))
+			for key, value := range ra.internalRequest.Metadata {
+				ctx.RequestMetadata[key] = value
+			}
+		}
 		if ra.internalRequest.Stream != nil {
 			ctx.RequestStream = *ra.internalRequest.Stream
 		}
 		if ra.c != nil && ra.c.Request != nil {
 			ctx.RequestPath = ra.c.Request.URL.Path
 			ctx.RequestMethod = ra.c.Request.Method
+		}
+	}
+	if ra.retryLastErr != nil {
+		var applyErr *rewrite.ApplyError
+		if errors.As(ra.retryLastErr, &applyErr) && applyErr != nil {
+			ctx.RetryLastErrorCode = applyErr.Code
+			ctx.RetryLastErrorType = applyErr.Type
 		}
 	}
 	ctx.RouteOutboundFormat = outboundFormatName(ra.channel.Type)
@@ -195,4 +216,47 @@ func shaHeaderSig(sig string) string {
 	}
 	sum := sha256.Sum256([]byte(sig))
 	return hex.EncodeToString(sum[:])
+}
+
+func writeRewriteApplyError(c *gin.Context, hb *earlyHeartbeat, in transformerModel.Inbound, rawFormat transformerModel.APIFormat, err error) {
+	var applyErr *rewrite.ApplyError
+	if !errors.As(err, &applyErr) || applyErr == nil {
+		writeInboundError(c, hb, in, rewriteStatusCode(err), err.Error())
+		return
+	}
+	if c == nil {
+		return
+	}
+	status := applyErr.StatusCode
+	if status <= 0 {
+		status = http.StatusBadRequest
+	}
+	if c.Writer != nil && c.Writer.Written() {
+		writeInboundError(c, hb, in, status, applyErr.PublicMessage)
+		return
+	}
+	var payload any
+	if rawFormat == transformerModel.APIFormatAnthropicMessage {
+		payload = map[string]any{
+			"type": "error",
+			"error": map[string]any{
+				"type":    applyErr.Type,
+				"message": applyErr.PublicMessage,
+			},
+		}
+	} else {
+		payload = map[string]any{
+			"error": map[string]any{
+				"message": applyErr.PublicMessage,
+				"type":    applyErr.Type,
+				"code":    applyErr.Code,
+			},
+		}
+	}
+	body, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		writeInboundError(c, hb, in, status, applyErr.PublicMessage)
+		return
+	}
+	c.Data(status, "application/json; charset=utf-8", body)
 }

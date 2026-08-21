@@ -112,9 +112,9 @@ func TestEarlyHeartbeat_DelayedFirstHeartbeat(t *testing.T) {
 
 	c, w := newTestGinContext(t)
 	hb := startEarlyHeartbeat(c, true)
-	defer hb.Stop()
 
 	time.Sleep(1200 * time.Millisecond)
+	hb.Hand()
 	if !hb.HeaderWritten() {
 		t.Fatal("expected SSE header after delay")
 	}
@@ -125,6 +125,7 @@ func TestEarlyHeartbeat_DelayedFirstHeartbeat(t *testing.T) {
 	if count := strings.Count(body, ":\n\n"); count != 1 {
 		t.Fatalf("expected exactly 1 delayed heartbeat, got %d in %q", count, body)
 	}
+	hb.Stop()
 }
 
 func TestEarlyHeartbeat_HandBeforeDelayPreventsHeartbeat(t *testing.T) {

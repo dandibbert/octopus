@@ -12,6 +12,7 @@ import (
 	"github.com/bestruirui/octopus/internal/helper"
 	"github.com/bestruirui/octopus/internal/model"
 	"github.com/bestruirui/octopus/internal/op"
+	"github.com/bestruirui/octopus/internal/rewrite"
 	"github.com/bestruirui/octopus/internal/server/middleware"
 	"github.com/bestruirui/octopus/internal/server/resp"
 	"github.com/bestruirui/octopus/internal/server/router"
@@ -123,6 +124,10 @@ func createChannel(c *gin.Context) {
 	if channel.ProxyMode != model.ProxyUsageModePool {
 		channel.ProxyConfigID = nil
 	}
+	if err := rewrite.ValidateRawConfigPtr(channel.ParamOverride, rewrite.ScopeChannel); err != nil {
+		resp.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := op.ChannelCreate(&channel, c.Request.Context()); err != nil {
 		resp.ErrorWithAppError(c, http.StatusInternalServerError, channelError(codeChannelCreateFailed, "channel create failed", err))
 		return
@@ -147,6 +152,12 @@ func updateChannel(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.InvalidJSON(c)
 		return
+	}
+	if req.ParamOverride != nil {
+		if err := rewrite.ValidateRawConfigPtr(req.ParamOverride, rewrite.ScopeChannel); err != nil {
+			resp.Error(c, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	channel, err := op.ChannelUpdate(&req, c.Request.Context())
 	if err != nil {

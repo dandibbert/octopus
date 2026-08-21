@@ -120,9 +120,10 @@ func TestPreviewOutboundAppliesCustomHeaderRewriteAndInvariants(t *testing.T) {
 		]
 	}`
 	channel := &model.Channel{
-		ID:   7,
-		Name: "preview-channel",
-		Type: outbound.OutboundTypeOpenAIChat,
+		ID:    7,
+		Name:  "preview-channel",
+		Type:  outbound.OutboundTypeOpenAIChat,
+		Model: "gpt-4o",
 		CustomHeader: []model.CustomHeader{
 			{HeaderKey: "X-Custom", HeaderValue: "from-channel"},
 		},
@@ -133,6 +134,7 @@ func TestPreviewOutboundAppliesCustomHeaderRewriteAndInvariants(t *testing.T) {
 			InboundFormat: "openai_chat",
 			DraftScope:    rewrite.ScopeChannel,
 			DraftConfig:   json.RawMessage(draft),
+			Headers:       map[string]string{"X-Custom": "from-client"},
 		},
 		Channel:     channel,
 		InboundRaw:  []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`),
@@ -162,5 +164,56 @@ func TestPreviewOutboundAppliesCustomHeaderRewriteAndInvariants(t *testing.T) {
 	}
 	if headers["Content-Type"] != "application/json" {
 		t.Fatalf("content-type=%q", headers["Content-Type"])
+	}
+}
+
+func TestPreviewOutboundUsesGroupRoutedModel(t *testing.T) {
+	channel := &model.Channel{ID: 9, Name: "preview-route", Type: outbound.OutboundTypeOpenAIChat, Model: "remote-model"}
+	group := &model.Group{ID: 3, Name: "alias-model", Items: []model.GroupItem{{ChannelID: 9, ModelName: "remote-model"}}}
+	result, err := previewOutbound(context.Background(), previewOutboundInput{
+		Request:     rewritePreviewRequest{ChannelID: 9, GroupID: 3, InboundFormat: "openai_chat"},
+		Channel:     channel,
+		Group:       group,
+		ApplyGroup:  true,
+		InboundRaw:  []byte(`{"model":"alias-model","messages":[{"role":"user","content":"hi"}]}`),
+		InternalReq: &transformerModel.InternalLLMRequest{Model: "alias-model"},
+		OutAdapter:  stubOutbound{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages := result["stages"].(gin.H)
+	before := string(stages["outbound_before_rewrite"].(json.RawMessage))
+	if !strings.Contains(before, `"model":"remote-model"`) {
+		t.Fatalf("preview did not use routed model: %s", before)
+	}
+}
+
+func TestPreviewOutboundAppliesUnsavedGroupDraftWithoutGroupID(t *testing.T) {
+	draft := `{
+		"$schema":"octopus.request-rewrite/v2",
+		"operations":[{"id":"group-draft","op":"set","path":"/temperature","value":0.4}]
+	}`
+	channel := &model.Channel{ID: 8, Name: "preview-new-group-channel", Type: outbound.OutboundTypeOpenAIChat, Model: "gpt-4o"}
+	result, err := previewOutbound(context.Background(), previewOutboundInput{
+		Request: rewritePreviewRequest{
+			ChannelID:     channel.ID,
+			InboundFormat: "openai_chat",
+			DraftScope:    rewrite.ScopeGroup,
+			DraftConfig:   json.RawMessage(draft),
+		},
+		Channel:     channel,
+		ApplyGroup:  true,
+		InboundRaw:  []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`),
+		InternalReq: &transformerModel.InternalLLMRequest{Model: "gpt-4o"},
+		OutAdapter:  stubOutbound{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages := result["stages"].(gin.H)
+	finalBody := string(stages["final_body"].(json.RawMessage))
+	if !strings.Contains(finalBody, "0.4") {
+		t.Fatalf("unsaved group draft was not applied: %s", finalBody)
 	}
 }

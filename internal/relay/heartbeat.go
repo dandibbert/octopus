@@ -127,12 +127,14 @@ func (h *earlyHeartbeat) Hand() {
 	if h == nil {
 		return
 	}
-	if !h.handed.CompareAndSwap(false, true) {
-		return
+	if h.handed.CompareAndSwap(false, true) {
+		if h.cancel != nil {
+			h.cancel()
+		}
 	}
-	if h.cancel != nil {
-		h.cancel()
-	}
+	// Hand is a synchronization barrier: once it returns, the early-heartbeat
+	// goroutine can no longer mutate the response writer. Always wait for done,
+	// even when another caller already initiated the handoff.
 	<-h.done
 }
 
@@ -180,9 +182,15 @@ func (h *earlyHeartbeat) WriteRaw(data []byte) {
 }
 
 func (h *earlyHeartbeat) FlushOrError(c *gin.Context, statusCode int, message string) {
-	if h != nil && h.HeaderWritten() {
-		h.WriteSSEError(statusCode, message)
-		return
+	if h != nil {
+		// Stop the heartbeat writer before inspecting or writing the response.
+		// This closes the TOCTOU window where HeaderWritten() could be false while
+		// the heartbeat goroutine was concurrently committing the SSE headers.
+		h.Hand()
+		if h.HeaderWritten() {
+			h.WriteSSEError(statusCode, message)
+			return
+		}
 	}
 	resp.Error(c, statusCode, message)
 }

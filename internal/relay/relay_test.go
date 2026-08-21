@@ -994,6 +994,113 @@ func TestHandlerAppliesChannelParamOverride(t *testing.T) {
 	}
 }
 
+func TestHandlerRewriteReturnErrorStopDoesNotFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx := setupRelayTestDB(t)
+
+	firstHits := 0
+	firstServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		firstHits++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer firstServer.Close()
+	secondHits := 0
+	secondServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secondHits++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"should_not_run","object":"chat.completion","created":1,"model":"second-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer secondServer.Close()
+
+	stop := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"deny","op":"return_error","error":{"status":418,"code":"policy_denied","type":"invalid_request_error","message":"blocked by rewrite","retry":"stop"}}]}`
+	first := &model.Channel{Name: "rewrite-stop-first", Type: outbound.OutboundTypeOpenAIChat, Enabled: true, BaseUrls: []model.BaseUrl{{URL: firstServer.URL + "/v1"}}, Model: "first-model", Keys: []model.ChannelKey{{Enabled: true, ChannelKey: "key-1"}}, ParamOverride: &stop}
+	second := &model.Channel{Name: "rewrite-stop-second", Type: outbound.OutboundTypeOpenAIChat, Enabled: true, BaseUrls: []model.BaseUrl{{URL: secondServer.URL + "/v1"}}, Model: "second-model", Keys: []model.ChannelKey{{Enabled: true, ChannelKey: "key-2"}}}
+	if err := op.ChannelCreate(first, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := op.ChannelCreate(second, ctx); err != nil {
+		t.Fatal(err)
+	}
+	group := &model.Group{Name: "rewrite-stop-group", Mode: model.GroupModeFailover}
+	if err := op.GroupCreate(group, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := op.GroupItemAdd(&model.GroupItem{GroupID: group.ID, ChannelID: first.ID, ModelName: "first-model", Priority: 1, Weight: 1}, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := op.GroupItemAdd(&model.GroupItem{GroupID: group.ID, ChannelID: second.ID, ModelName: "second-model", Priority: 2, Weight: 1}, ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"rewrite-stop-group","messages":[{"role":"user","content":"hello"}]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	Handler(inbound.InboundTypeOpenAIChat, c)
+
+	if recorder.Code != 418 {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if firstHits != 0 || secondHits != 0 {
+		t.Fatalf("rewrite stop must not contact upstreams: first=%d second=%d", firstHits, secondHits)
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"policy_denied"`) || !strings.Contains(recorder.Body.String(), "blocked by rewrite") {
+		t.Fatalf("configured rewrite error was not preserved: %s", recorder.Body.String())
+	}
+}
+
+func TestHandlerRewriteReturnErrorNextChannelSkipsProviderFailureAccounting(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx := setupRelayTestDB(t)
+
+	firstHits := 0
+	firstServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		firstHits++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer firstServer.Close()
+	secondHits := 0
+	secondServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secondHits++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_next","object":"chat.completion","created":1,"model":"second-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer secondServer.Close()
+
+	next := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"skip","op":"return_error","error":{"status":400,"message":"use another channel","retry":"next_channel"}}]}`
+	first := &model.Channel{Name: "rewrite-next-first", Type: outbound.OutboundTypeOpenAIChat, Enabled: true, BaseUrls: []model.BaseUrl{{URL: firstServer.URL + "/v1"}}, Model: "first-model", Keys: []model.ChannelKey{{Enabled: true, ChannelKey: "key-1"}}, ParamOverride: &next}
+	second := &model.Channel{Name: "rewrite-next-second", Type: outbound.OutboundTypeOpenAIChat, Enabled: true, BaseUrls: []model.BaseUrl{{URL: secondServer.URL + "/v1"}}, Model: "second-model", Keys: []model.ChannelKey{{Enabled: true, ChannelKey: "key-2"}}}
+	if err := op.ChannelCreate(first, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := op.ChannelCreate(second, ctx); err != nil {
+		t.Fatal(err)
+	}
+	group := &model.Group{Name: "rewrite-next-group", Mode: model.GroupModeFailover}
+	if err := op.GroupCreate(group, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := op.GroupItemAdd(&model.GroupItem{GroupID: group.ID, ChannelID: first.ID, ModelName: "first-model", Priority: 1, Weight: 1}, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := op.GroupItemAdd(&model.GroupItem{GroupID: group.ID, ChannelID: second.ID, ModelName: "second-model", Priority: 2, Weight: 1}, ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"rewrite-next-group","messages":[{"role":"user","content":"hello"}]}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	Handler(inbound.InboundTypeOpenAIChat, c)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if firstHits != 0 || secondHits != 1 {
+		t.Fatalf("next_channel should skip first provider and use second: first=%d second=%d", firstHits, secondHits)
+	}
+}
+
 func TestHandlerAppliesGroupThenChannelRequestOptions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx := setupRelayTestDB(t)
@@ -1074,15 +1181,21 @@ func TestHandlerDirectChannelModelRoute(t *testing.T) {
 		BaseUrls: []model.BaseUrl{{URL: server.URL + "/v1"}}, Model: "direct-model",
 		Keys: []model.ChannelKey{{Enabled: true, ChannelKey: "direct-key"}},
 	}
-	if err := op.ChannelCreate(channel, ctx); err != nil { t.Fatal(err) }
+	if err := op.ChannelCreate(channel, ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"direct-channel/direct-model","messages":[{"role":"user","content":"hello"}]}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	Handler(inbound.InboundTypeOpenAIChat, c)
-	if recorder.Code != http.StatusOK { t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String()) }
-	if upstreamModel != "direct-model" { t.Fatalf("upstream model=%q", upstreamModel) }
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if upstreamModel != "direct-model" {
+		t.Fatalf("upstream model=%q", upstreamModel)
+	}
 
 	blocked := httptest.NewRecorder()
 	blockedCtx, _ := gin.CreateTestContext(blocked)
@@ -1090,7 +1203,9 @@ func TestHandlerDirectChannelModelRoute(t *testing.T) {
 	blockedCtx.Request.Header.Set("Content-Type", "application/json")
 	blockedCtx.Set("supported_models", "allowed-group")
 	Handler(inbound.InboundTypeOpenAIChat, blockedCtx)
-	if blocked.Code != http.StatusBadRequest { t.Fatalf("restricted direct route status=%d, want 400", blocked.Code) }
+	if blocked.Code != http.StatusBadRequest {
+		t.Fatalf("restricted direct route status=%d, want 400", blocked.Code)
+	}
 }
 
 func TestRelayMetricsUsesResponseModelForCostLookup(t *testing.T) {
