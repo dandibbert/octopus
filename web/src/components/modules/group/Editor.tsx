@@ -653,6 +653,7 @@ export function GroupEditor({
                                     scope="group"
                                     groupId={groupId}
                                     channelId={selectedMembers[0]?.channel_id}
+                                    previewModel={selectedMembers[0]?.name}
                                 />
                                 {paramOverrideError && <p className="text-xs text-destructive">{paramOverrideError}</p>}
                             </div>

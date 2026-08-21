@@ -4,6 +4,7 @@ import { Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
     Select,
     SelectContent,
@@ -11,15 +12,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { LiteralEditor } from './LiteralEditor';
+import { ContextPathInput } from './ContextPathInput';
 import {
     CONDITION_OPERATORS,
-    CONTEXT_PATHS,
     conditionKind,
     emptyPredicate,
     type ConditionExpr,
 } from './schema';
 
 const CONDITION_SOURCES = ['body', 'header', 'context', 'item'] as const;
+const STRING_OPERATORS = new Set(['prefix', 'suffix', 'contains', 'regex']);
+const NUMBER_OPERATORS = new Set(['gt', 'gte', 'lt', 'lte']);
+const ARRAY_OPERATORS = new Set(['in', 'not_in']);
+const TYPE_VALUES = ['null', 'boolean', 'number', 'string', 'object', 'array'] as const;
 
 function updateAt(list: ConditionExpr[], index: number, next: ConditionExpr): ConditionExpr[] {
     return list.map((item, i) => (i === index ? next : item));
@@ -47,10 +53,10 @@ export function ConditionBuilder({
     };
 
     return (
-        <div className="space-y-2 rounded-xl border border-border/60 bg-background/40 p-2">
+        <div className="space-y-2 rounded-lg border border-border/40 bg-muted/20 p-2">
             <div className="flex flex-wrap items-center gap-2">
                 <Select value={kind === 'empty' ? 'predicate' : kind} onValueChange={(next) => setKind(next as 'all' | 'any' | 'not' | 'predicate')}>
-                    <SelectTrigger className="h-10 w-32 rounded-xl md:h-9">
+                    <SelectTrigger className="h-8 w-28 rounded-md text-xs">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -61,7 +67,13 @@ export function ConditionBuilder({
                     </SelectContent>
                 </Select>
                 {depth === 0 && value && (
-                    <Button type="button" variant="ghost" size="sm" className="h-10 rounded-lg text-muted-foreground md:h-9" onClick={() => onChange(undefined)}>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 rounded-md px-2 text-xs text-muted-foreground"
+                        onClick={() => onChange(undefined)}
+                    >
                         {t('condClear')}
                     </Button>
                 )}
@@ -90,9 +102,9 @@ export function ConditionBuilder({
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                     <Select
                         value={String(value?.source ?? 'body')}
-                        onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), source: next, path: next === 'context' ? CONTEXT_PATHS[0] : value?.path })}
+                        onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), source: next, path: next === 'context' ? 'request.original_model' : value?.path })}
                     >
-                        <SelectTrigger className="h-10 rounded-xl md:h-9">
+                        <SelectTrigger className="h-8 rounded-md text-xs">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -102,32 +114,29 @@ export function ConditionBuilder({
                         </SelectContent>
                     </Select>
                     {value?.source === 'context' ? (
-                        <Select
-                            value={value.path || CONTEXT_PATHS[0]}
-                            onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), path: next })}
-                        >
-                            <SelectTrigger className="h-10 rounded-xl md:h-9">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {CONTEXT_PATHS.map((path) => (
-                                    <SelectItem key={path} value={path}>{path}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <ContextPathInput value={value.path || 'request.original_model'} onChange={(path) => onChange({ ...(value ?? emptyPredicate()), path })} />
                     ) : (
                         <Input
                             value={value?.path ?? ''}
                             onChange={(event) => onChange({ ...(value ?? emptyPredicate()), path: event.target.value })}
                             placeholder={value?.source === 'header' ? t('header') : t('path')}
-                            className="h-10 rounded-xl md:h-9"
+                            className="h-8 rounded-md font-mono text-xs"
                         />
                     )}
                     <Select
                         value={String(value?.operator ?? 'eq')}
-                        onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), operator: next })}
+                        onValueChange={(next) => {
+                            const current = value ?? emptyPredicate();
+                            let nextValue = current.value;
+                            if (next === 'exists' || next === 'missing') nextValue = undefined;
+                            else if (STRING_OPERATORS.has(next)) nextValue = typeof current.value === 'string' ? current.value : '';
+                            else if (NUMBER_OPERATORS.has(next)) nextValue = typeof current.value === 'number' ? current.value : 0;
+                            else if (ARRAY_OPERATORS.has(next)) nextValue = Array.isArray(current.value) ? current.value : [];
+                            else if (next === 'type_is') nextValue = TYPE_VALUES.includes(current.value as typeof TYPE_VALUES[number]) ? current.value : 'string';
+                            onChange({ ...current, operator: next, value: nextValue });
+                        }}
                     >
-                        <SelectTrigger className="h-10 rounded-xl md:h-9">
+                        <SelectTrigger className="h-8 rounded-md text-xs">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -136,22 +145,65 @@ export function ConditionBuilder({
                             ))}
                         </SelectContent>
                     </Select>
-                    {value?.operator !== 'exists' && value?.operator !== 'missing' && (
+                    {STRING_OPERATORS.has(String(value?.operator ?? 'eq')) && (
                         <Input
-                            value={typeof value?.value === 'string' || typeof value?.value === 'number' || typeof value?.value === 'boolean' ? String(value.value) : value?.value == null ? '' : JSON.stringify(value.value)}
+                            value={typeof value?.value === 'string' ? value.value : ''}
+                            onChange={(event) => onChange({ ...(value ?? emptyPredicate()), value: event.target.value })}
+                            placeholder={t('condValue')}
+                            className="h-8 rounded-md text-xs"
+                        />
+                    )}
+                    {NUMBER_OPERATORS.has(String(value?.operator)) && (
+                        <Input
+                            type="number"
+                            value={typeof value?.value === 'number' ? String(value.value) : '0'}
                             onChange={(event) => {
-                                const raw = event.target.value;
-                                try {
-                                    onChange({ ...(value ?? emptyPredicate()), value: JSON.parse(raw) });
-                                } catch {
-                                    onChange({ ...(value ?? emptyPredicate()), value: raw });
-                                }
+                                const next = Number(event.target.value);
+                                if (Number.isFinite(next)) onChange({ ...(value ?? emptyPredicate()), value: next });
                             }}
                             placeholder={t('condValue')}
-                            className="h-10 rounded-xl md:h-9"
+                            className="h-8 rounded-md text-xs"
+                        />
+                    )}
+                    {ARRAY_OPERATORS.has(String(value?.operator)) && (
+                        <LiteralEditor
+                            value={Array.isArray(value?.value) ? value.value : []}
+                            onChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
+                            allowedKinds={['json']}
+                            arrayOnly
+                            showKind={false}
+                        />
+                    )}
+                    {String(value?.operator) === 'type_is' && (
+                        <Select
+                            value={typeof value?.value === 'string' ? value.value : 'string'}
+                            onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
+                        >
+                            <SelectTrigger className="h-8 rounded-md text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {TYPE_VALUES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    )}
+                    {['eq', 'neq'].includes(String(value?.operator ?? 'eq')) && (
+                        <LiteralEditor
+                            value={value?.value ?? ''}
+                            onChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
+                            placeholder={t('condValue')}
                         />
                     )}
                 </div>
+            )}
+            {(kind === 'predicate' || kind === 'empty') && STRING_OPERATORS.has(String(value?.operator)) && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Switch
+                        checked={value?.case_sensitive !== false}
+                        onCheckedChange={(checked) => onChange({ ...(value ?? emptyPredicate()), case_sensitive: checked })}
+                    />
+                    {t('caseSensitive')}
+                </label>
             )}
         </div>
     );
@@ -170,9 +222,9 @@ function GroupList({
 }) {
     const t = useTranslations('rewrite');
     return (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
             {items.map((item, index) => (
-                <div key={`cond-${depth}-${index}`} className="flex items-start gap-2">
+                <div key={`cond-${depth}-${index}`} className="flex items-start gap-1.5">
                     <div className="min-w-0 flex-1">
                         <ConditionBuilder value={item} onChange={(next) => onChange(updateAt(items, index, next ?? emptyPredicate()))} allowItem={allowItem} depth={depth + 1} />
                     </div>
@@ -180,16 +232,22 @@ function GroupList({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="size-10 rounded-lg p-0 text-muted-foreground md:size-9"
+                        className="size-7 shrink-0 rounded-md p-0 text-muted-foreground hover:text-destructive"
                         onClick={() => onChange(items.filter((_, i) => i !== index))}
                         aria-label={t('remove')}
                     >
-                        <X className="size-4" />
+                        <X className="size-3.5" />
                     </Button>
                 </div>
             ))}
-            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => onChange([...items, emptyPredicate()])}>
-                <Plus className="size-4" />
+            <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 rounded-md px-2 text-xs text-muted-foreground"
+                onClick={() => onChange([...items, emptyPredicate()])}
+            >
+                <Plus className="size-3" />
                 {t('condAdd')}
             </Button>
         </div>

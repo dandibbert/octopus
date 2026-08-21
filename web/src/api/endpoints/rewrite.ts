@@ -1,7 +1,19 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../client';
 
 export type RewriteScope = 'group' | 'channel';
+
+export type RewriteTemplate = {
+    id: number;
+    name: string;
+    description?: string;
+    scope: RewriteScope;
+    config: string;
+    created_at: string;
+    updated_at: string;
+};
+
+export type RewriteTemplateInput = Pick<RewriteTemplate, 'name' | 'description' | 'scope' | 'config'>;
 
 export type RewriteValidateRequest = {
     scope: RewriteScope;
@@ -17,6 +29,7 @@ export type RewriteValidateResult = {
 export type RewritePreviewRequest = {
     channel_id: number;
     group_id?: number;
+    target_model?: string;
     inbound_format?: string;
     path?: string;
     body?: unknown;
@@ -73,5 +86,37 @@ export function usePreviewRewrite() {
     return useMutation({
         mutationFn: (req: RewritePreviewRequest) =>
             apiClient.post<RewritePreviewResult>('/api/v1/rewrite/preview', req),
+    });
+}
+
+export function useRewriteTemplates(scope: RewriteScope, enabled = true) {
+    return useQuery({
+        queryKey: ['rewrite-templates', scope],
+        queryFn: () => apiClient.get<RewriteTemplate[]>(`/api/v1/rewrite/template/list?scope=${scope}`),
+        enabled,
+    });
+}
+
+export function useCreateRewriteTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (req: RewriteTemplateInput) => apiClient.post<RewriteTemplate>('/api/v1/rewrite/template/create', req),
+        onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ['rewrite-templates', variables.scope] }),
+    });
+}
+
+export function useUpdateRewriteTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (req: RewriteTemplate) => apiClient.post<RewriteTemplate>('/api/v1/rewrite/template/update', req),
+        onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ['rewrite-templates', variables.scope] }),
+    });
+}
+
+export function useDeleteRewriteTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id }: { id: number; scope: RewriteScope }) => apiClient.delete<void>(`/api/v1/rewrite/template/delete/${id}`),
+        onSuccess: (_data, variables) => queryClient.invalidateQueries({ queryKey: ['rewrite-templates', variables.scope] }),
     });
 }

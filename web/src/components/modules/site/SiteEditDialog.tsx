@@ -537,7 +537,7 @@ export function SiteEditDialog({ open, onOpenChange, site, onCreated, allTags }:
 
                         <Accordion type="single" collapsible className="w-full rounded-xl border bg-card">
                             <AccordionItem value="advanced" className="border-none">
-                                <AccordionTrigger className="rounded-xl px-4 py-3 text-sm font-medium text-card-foreground transition-colors hover:bg-muted/30 hover:no-underline">
+                                <AccordionTrigger type="button" className="rounded-xl px-4 py-3 text-sm font-medium text-card-foreground transition-colors hover:bg-muted/30 hover:no-underline">
                                     {tSite('dialog.site.advanced')}
                                 </AccordionTrigger>
                                 <AccordionContent className="space-y-4 border-t px-4 pb-4 pt-4">

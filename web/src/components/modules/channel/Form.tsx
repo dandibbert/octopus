@@ -494,7 +494,7 @@ export function ChannelForm({
 
             <Accordion type="single" collapsible className="w-full border rounded-xl bg-card">
                 <AccordionItem value="advanced" className="border-none">
-                    <AccordionTrigger className="text-sm font-medium text-card-foreground py-3 px-4 hover:no-underline hover:bg-muted/30 rounded-xl transition-colors">
+                    <AccordionTrigger type="button" className="text-sm font-medium text-card-foreground py-3 px-4 hover:no-underline hover:bg-muted/30 rounded-xl transition-colors">
                         {t('advanced')}
                     </AccordionTrigger>
                     <AccordionContent className="pt-4 px-4 pb-4 space-y-4 border-t">
@@ -708,6 +708,7 @@ export function ChannelForm({
                                 onChange={(next) => onFormDataChange({ ...formData, param_override: next })}
                                 scope="channel"
                                 channelId={channelId}
+                                previewModel={(formData.custom_model || formData.model).split(',').map((item) => item.trim()).find(Boolean)}
                             />
                         </div>
                     </AccordionContent>

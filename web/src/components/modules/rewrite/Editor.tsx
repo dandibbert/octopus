@@ -1,30 +1,39 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     DragDropContext,
     Draggable,
     Droppable,
     type DropResult,
 } from '@hello-pangea/dnd';
-import { ArrowDown, ArrowUp, ChevronLeft, Copy, GripVertical, Plus, Settings2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, Copy, GripVertical, Settings2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import JsonView from '@uiw/react-json-view';
 import { githubDarkTheme } from '@uiw/react-json-view/githubDark';
 import { githubLightTheme } from '@uiw/react-json-view/githubLight';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmAction } from '@/components/common/ConfirmAction';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePreviewRewrite, useValidateRewrite, type RewriteScope } from '@/api/endpoints/rewrite';
 import { OperationEditor } from './OperationEditor';
+import { RewriteTemplateActions } from './TemplateActions';
+import { AddOperationMenu } from './AddOperationMenu';
 import {
     cloneOp,
     enabledOpCount,
-    newOperation,
     parseRewriteInput,
     serializeConfig,
     type RewriteConfig,
@@ -39,6 +48,7 @@ export function RewriteEditor({
     scope,
     channelId,
     groupId,
+    previewModel,
     compact,
 }: {
     value: string;
@@ -46,6 +56,7 @@ export function RewriteEditor({
     scope: RewriteScope;
     channelId?: number;
     groupId?: number;
+    previewModel?: string;
     compact?: boolean;
 }) {
     const t = useTranslations('rewrite');
@@ -57,6 +68,9 @@ export function RewriteEditor({
     const [selected, setSelected] = useState(0);
     const [localError, setLocalError] = useState('');
     const [previewBody, setPreviewBody] = useState('{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}');
+    const [previewHeaders, setPreviewHeaders] = useState('{}');
+    const [previewFormat, setPreviewFormat] = useState('openai_chat');
+    const [previewTargetModel, setPreviewTargetModel] = useState(previewModel ?? '');
     const [dirty, setDirty] = useState(false);
     const [discardOpen, setDiscardOpen] = useState(false);
     const isMobile = useIsMobile();
@@ -65,12 +79,18 @@ export function RewriteEditor({
     const preview = usePreviewRewrite();
     const { resolvedTheme } = useTheme();
 
+    useEffect(() => {
+        setPreviewTargetModel(previewModel ?? '');
+    }, [previewModel]);
+
+    const parseErrorMessage = (error?: string) => error === 'schema' ? t('invalidSchema') : t('invalidJson');
+
     const resetDraftFromValue = () => {
         const next = parseRewriteInput(value);
         setDraft(next.config);
         setJsonDraft(value);
         setDirty(false);
-        setLocalError(next.error === 'json' || next.error === 'object' ? t('invalidJson') : '');
+        setLocalError(next.kind === 'invalid' ? parseErrorMessage(next.error) : '');
         setSelected(0);
         setTab('rules');
         setMobileDetail(false);
@@ -98,13 +118,6 @@ export function RewriteEditor({
             ...draft,
             operations: draft.operations.map((op, i) => (i === index ? { ...op, ...patch } : op)),
         });
-    };
-
-    const addOp = () => {
-        const next = [...draft.operations, newOperation(draft.operations.length)];
-        emitDraft({ ...draft, operations: next });
-        setSelected(next.length - 1);
-        setMobileDetail(true);
     };
 
     const duplicateOp = (index: number) => {
@@ -145,7 +158,7 @@ export function RewriteEditor({
     const applyJsonTab = () => {
         const next = parseRewriteInput(jsonDraft);
         if (next.kind === 'invalid') {
-            setLocalError(t('invalidJson'));
+            setLocalError(parseErrorMessage(next.error));
             return false;
         }
         setLocalError('');
@@ -182,20 +195,31 @@ export function RewriteEditor({
             return;
         }
         let body: unknown = {};
+        let headers: Record<string, string> = {};
         try {
             body = JSON.parse(previewBody);
         } catch {
             setLocalError(t('previewBodyInvalid'));
             return;
         }
+        try {
+            const parsedHeaders = JSON.parse(previewHeaders) as unknown;
+            if (!parsedHeaders || typeof parsedHeaders !== 'object' || Array.isArray(parsedHeaders)) throw new Error('headers must be an object');
+            headers = Object.fromEntries(Object.entries(parsedHeaders as Record<string, unknown>).map(([key, val]) => [key, String(val)]));
+        } catch {
+            setLocalError(t('previewHeadersInvalid'));
+            return;
+        }
         preview.mutate({
             channel_id: channelId,
             group_id: groupId,
-            inbound_format: 'openai_chat',
+            target_model: previewTargetModel.trim() || previewModel,
+            inbound_format: previewFormat,
             body,
+            headers,
             draft_scope: scope,
             draft_config: draftConfig,
-        });
+        }, { onSuccess: () => setLocalError('') });
     };
 
     const save = () => {
@@ -225,62 +249,95 @@ export function RewriteEditor({
     const current = draft.operations[selected];
 
     return (
-        <div className="space-y-2">
-            <div className={cn('flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/10 px-3 py-2', compact && 'py-1.5')}>
-                <div className="min-w-0">
-                    <div className="text-sm font-medium">{t('title')}</div>
-                    <div className="truncate text-xs text-muted-foreground">{summary}</div>
+        <div className="space-y-1.5">
+            <div className={cn(
+                'flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background px-3',
+                compact ? 'py-1.5' : 'py-2.5'
+            )}>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-medium text-foreground">{t('title')}</span>
+                        <span className="truncate text-xs text-muted-foreground">{summary}</span>
+                    </div>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-10 shrink-0 rounded-xl md:h-9" onClick={openEditor}>
-                    <Settings2 className="size-4" />
-                    {parsed.kind === 'legacy' ? t('convert') : t('configure')}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0 rounded-lg px-3 text-xs"
+                    onClick={openEditor}
+                >
+                    <Settings2 className="size-3.5" />
+                    {parsed.kind === 'legacy' ? t('convert') : parsed.kind === 'empty' ? t('add') : t('configure')}
                 </Button>
             </div>
-            {parsed.kind === 'legacy' && <p className="text-xs text-muted-foreground">{t('legacyHint')}</p>}
-            {localError && !open && <p className="text-xs text-destructive">{localError}</p>}
+            {parsed.kind === 'legacy' && (
+                <p className="px-1 text-xs text-muted-foreground">{t('legacyHint')}</p>
+            )}
+            {localError && !open && (
+                <p className="px-1 text-xs text-destructive">{localError}</p>
+            )}
 
             <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose(); else openEditor(); }}>
                 <DialogContent className="flex h-[min(100dvh,52rem)] max-h-[min(100dvh,52rem)] w-full max-w-[calc(100%-1rem)] flex-col overflow-hidden sm:max-w-5xl md:h-[min(90dvh,52rem)]">
-                    <DialogHeader className="shrink-0 pr-8 text-left">
-                        <DialogTitle>{t('dialogTitle')}</DialogTitle>
-                        <DialogDescription>{t('stageHint')}</DialogDescription>
+                    <DialogHeader className="shrink-0 space-y-1 pr-8 text-left">
+                        <DialogTitle className="text-base">{t('dialogTitle')}</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            {scope === 'group' ? t('scopeGroup') : t('scopeChannel')}
+                            {' · '}
+                            {t('stageHint')}
+                        </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-                        <div className="flex rounded-xl border border-border/70 bg-muted/20 p-0.5">
+                    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2">
+                        <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
                             {(['rules', 'preview', 'json'] as Tab[]).map((item) => (
                                 <button
                                     key={item}
                                     type="button"
                                     onClick={() => setTab(item)}
                                     className={cn(
-                                        'h-10 rounded-lg px-3 text-xs font-medium transition-colors md:h-9',
-                                        tab === item ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
+                                        'h-8 rounded-md px-3 text-xs font-medium transition-colors',
+                                        tab === item
+                                            ? 'bg-background text-foreground shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground',
                                     )}
                                 >
                                     {t(item === 'rules' ? 'tabRules' : item === 'preview' ? 'tabPreview' : 'tabJson')}
                                 </button>
                             ))}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                            <RewriteTemplateActions scope={scope} draft={draft} onApply={emitDraft} />
                             {tab === 'rules' && draft.operations.length > 0 && (
-                                <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl md:h-9" onClick={addOp}>
-                                    <Plus className="size-4" />
-                                    {t('add')}
-                                </Button>
+                                <AddOperationMenu onAdd={(op) => {
+                                    const next = [...draft.operations, op];
+                                    emitDraft({ ...draft, operations: next });
+                                    setSelected(next.length - 1);
+                                    setMobileDetail(true);
+                                }} />
                             )}
-                            <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl md:h-9" onClick={runValidate} disabled={validate.isPending}>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 rounded-lg text-xs text-muted-foreground"
+                                onClick={runValidate}
+                                disabled={validate.isPending}
+                            >
                                 {validate.isPending ? t('validating') : t('validate')}
                             </Button>
                         </div>
                     </div>
 
-                    {validate.data?.ok && !localError && <p className="text-xs text-success">{t('validateOk')}</p>}
-                    {(localError || validate.error) && (
-                        <p className="text-xs text-destructive">{localError || (validate.error instanceof Error ? validate.error.message : t('validateFailed'))}</p>
+                    {(validate.data?.ok && !localError) && (
+                        <p className="shrink-0 text-xs text-success">{t('validateOk')}</p>
                     )}
-                    {scope === 'group' && <p className="text-xs text-muted-foreground">{t('groupWarning')}</p>}
-                    {draft.policy?.on_error === 'warn_and_continue' && <p className="text-xs text-muted-foreground">{t('warnContinueHint')}</p>}
+                    {(localError || validate.error) && (
+                        <p className="shrink-0 text-xs text-destructive">
+                            {localError || (validate.error instanceof Error ? validate.error.message : t('validateFailed'))}
+                        </p>
+                    )}
 
                     <div className="min-h-0 flex-1 overflow-hidden">
                         {tab === 'rules' && (
@@ -289,53 +346,63 @@ export function RewriteEditor({
                                 draft.operations.length > 0 && 'md:grid md:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)]',
                             )}>
                                 <div className={cn(
-                                    'min-h-0 overflow-y-auto pr-1',
+                                    'min-h-0 overflow-y-auto',
                                     isMobile && mobileDetail && 'hidden',
                                     !isMobile && 'block',
                                     draft.operations.length === 0 && 'flex flex-1 flex-col',
                                 )}>
-                                    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <Switch checked={draft.enabled !== false} onCheckedChange={(checked) => emitDraft({ ...draft, enabled: checked })} />
-                                        {t('enabled')}
-                                    </label>
-                                    {scope === 'channel' && (
+                                    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
                                         <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                            <Switch
-                                                checked={draft.allow_sensitive_headers === true}
-                                                onCheckedChange={(checked) => emitDraft({ ...draft, allow_sensitive_headers: checked })}
-                                            />
-                                            {t('allowSensitive')}
+                                            <Switch checked={draft.enabled !== false} onCheckedChange={(checked) => emitDraft({ ...draft, enabled: checked })} />
+                                            {t('enabled')}
                                         </label>
-                                    )}
+                                        {scope === 'channel' && (
+                                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <Switch
+                                                    checked={draft.allow_sensitive_headers === true}
+                                                    onCheckedChange={(checked) => emitDraft({ ...draft, allow_sensitive_headers: checked })}
+                                                />
+                                                {t('allowSensitive')}
+                                            </label>
+                                        )}
                                     </div>
                                     {draft.operations.length === 0 ? (
-                                        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 px-4 py-8 text-center">
+                                        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/60 px-4 py-8 text-center">
                                             <p className="text-sm text-muted-foreground">{t('empty')}</p>
-                                            <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl md:h-9" onClick={addOp}>
-                                                <Plus className="size-4" />
-                                                {t('add')}
-                                            </Button>
+                                            <AddOperationMenu onAdd={(op) => {
+                                                const next = [op];
+                                                emitDraft({ ...draft, operations: next });
+                                                setSelected(0);
+                                                setMobileDetail(true);
+                                            }} />
                                         </div>
                                     ) : (
-                                    <DragDropContext onDragEnd={onDragEnd}>
-                                        <Droppable droppableId="rewrite-ops">
-                                            {(provided) => (
-                                                <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                                                    {draft.operations.map((op, index) => (
-                                                        <Draggable key={`${op.id}-${index}`} draggableId={`${op.id}-${index}`} index={index}>
-                                                            {(drag) => (
-                                                                <div
-                                                                    ref={drag.innerRef}
-                                                                    {...drag.draggableProps}
-                                                                    className={cn(
-                                                                        'rounded-xl border bg-muted/10 p-2',
-                                                                        selected === index ? 'border-border' : 'border-border/50',
-                                                                    )}
-                                                                >
-                                                                    <div className="flex items-start gap-2">
-                                                                        <button type="button" className="mt-1.5 text-muted-foreground" {...drag.dragHandleProps} aria-label={t('reorder')}>
-                                                                            <GripVertical className="size-4" />
+                                        <DragDropContext onDragEnd={onDragEnd}>
+                                            <Droppable droppableId="rewrite-ops">
+                                                {(provided) => (
+                                                    <div ref={provided.innerRef} {...provided.droppableProps} className="divide-y divide-border/40 rounded-lg border border-border/40">
+                                                        {draft.operations.map((op, index) => (
+                                                            <Draggable key={`${op.id}-${index}`} draggableId={`${op.id}-${index}`} index={index}>
+                                                                {(drag, snapshot) => (
+                                                                    <div
+                                                                        ref={drag.innerRef}
+                                                                        {...drag.draggableProps}
+                                                                        className={cn(
+                                                                            'group flex items-center gap-2 px-2 py-1.5 transition-colors',
+                                                                            selected === index
+                                                                                ? 'bg-muted/50'
+                                                                                : 'hover:bg-muted/30',
+                                                                            snapshot.isDragging && 'bg-muted shadow-lg',
+                                                                            op.enabled === false && 'opacity-60',
+                                                                        )}
+                                                                    >
+                                                                        <button
+                                                                            type="button"
+                                                                            className="shrink-0 cursor-grab text-muted-foreground/50 transition-colors hover:text-muted-foreground active:cursor-grabbing"
+                                                                            {...drag.dragHandleProps}
+                                                                            aria-label={t('reorder')}
+                                                                        >
+                                                                            <GripVertical className="size-3.5" />
                                                                         </button>
                                                                         <button
                                                                             type="button"
@@ -345,59 +412,118 @@ export function RewriteEditor({
                                                                                 setMobileDetail(true);
                                                                             }}
                                                                         >
-                                                                            <div className="truncate text-sm font-medium">{index + 1}. {op.name || op.id}</div>
-                                                                            <div className="truncate text-[11px] text-muted-foreground">{op.op}</div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="shrink-0 text-xs text-muted-foreground">{index + 1}.</span>
+                                                                                <span className="truncate text-sm font-medium text-foreground">
+                                                                                    {op.name || op.id}
+                                                                                </span>
+                                                                                {op.when && (
+                                                                                    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">
+                                                                                        {t('hasCondition')}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                                                {op.op}
+                                                                                {op.path && ` · ${op.path}`}
+                                                                                {op.header && ` · ${op.header}`}
+                                                                            </div>
                                                                         </button>
-                                                                        <div className="flex shrink-0 items-center">
-                                                                            <Button type="button" variant="ghost" size="sm" className="size-10 rounded-lg p-0 text-muted-foreground md:size-9" onClick={() => moveOp(index, -1)} aria-label={t('moveUp')}>
-                                                                                <ArrowUp className="size-4" />
+                                                                        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="size-7 rounded-md text-muted-foreground"
+                                                                                onClick={() => moveOp(index, -1)}
+                                                                                disabled={index === 0}
+                                                                                aria-label={t('moveUp')}
+                                                                            >
+                                                                                <ArrowUp className="size-3.5" />
                                                                             </Button>
-                                                                            <Button type="button" variant="ghost" size="sm" className="size-10 rounded-lg p-0 text-muted-foreground md:size-9" onClick={() => moveOp(index, 1)} aria-label={t('moveDown')}>
-                                                                                <ArrowDown className="size-4" />
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="size-7 rounded-md text-muted-foreground"
+                                                                                onClick={() => moveOp(index, 1)}
+                                                                                disabled={index === draft.operations.length - 1}
+                                                                                aria-label={t('moveDown')}
+                                                                            >
+                                                                                <ArrowDown className="size-3.5" />
                                                                             </Button>
-                                                                            <Button type="button" variant="ghost" size="sm" className="size-10 rounded-lg p-0 text-muted-foreground md:size-9" onClick={() => duplicateOp(index)} aria-label={t('duplicate')}>
-                                                                                <Copy className="size-4" />
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="size-7 rounded-md text-muted-foreground"
+                                                                                onClick={() => duplicateOp(index)}
+                                                                                aria-label={t('duplicate')}
+                                                                            >
+                                                                                <Copy className="size-3.5" />
                                                                             </Button>
                                                                         </div>
                                                                     </div>
-                                                                </div>
-                                                            )}
-                                                        </Draggable>
-                                                    ))}
-                                                    {provided.placeholder}
-                                                </div>
-                                            )}
-                                        </Droppable>
-                                    </DragDropContext>
+                                                                )}
+                                                            </Draggable>
+                                                        ))}
+                                                        {provided.placeholder}
+                                                    </div>
+                                                )}
+                                            </Droppable>
+                                        </DragDropContext>
                                     )}
                                 </div>
-                                <div className={cn('min-h-0 overflow-y-auto rounded-xl border border-border/60 p-3', (isMobile && !mobileDetail) || (!isMobile && !current) ? 'hidden' : 'block')}>
+                                <div className={cn(
+                                    'min-h-0 overflow-y-auto rounded-lg border border-border/40 bg-background',
+                                    (isMobile && !mobileDetail) || (!isMobile && !current) ? 'hidden' : 'block',
+                                )}>
                                     {isMobile && mobileDetail && (
-                                        <Button type="button" variant="ghost" size="sm" className="mb-2 h-10 rounded-xl md:h-9" onClick={() => setMobileDetail(false)}>
-                                            <ChevronLeft className="size-4" />
-                                            {t('back')}
-                                        </Button>
+                                        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border/40 bg-background px-3 py-2">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 rounded-lg px-2 text-xs"
+                                                onClick={() => setMobileDetail(false)}
+                                            >
+                                                <ChevronLeft className="size-3.5" />
+                                                {t('back')}
+                                            </Button>
+                                            <span className="truncate text-sm font-medium">
+                                                {current?.name || current?.id || t('ruleDetail')}
+                                            </span>
+                                        </div>
                                     )}
                                     {current ? (
-                                        <div className="space-y-3">
+                                        <div className="p-3">
                                             <OperationEditor
                                                 op={current}
                                                 scope={scope}
                                                 allowSensitive={draft.allow_sensitive_headers}
                                                 onChange={(patch) => updateOp(selected, patch)}
                                             />
-                                            <ConfirmAction
-                                                title={t('removeConfirmTitle')}
-                                                description={t('removeConfirm')}
-                                                onConfirm={() => removeOp(selected)}
-                                            >
-                                                <Button type="button" variant="outline" size="sm" className="h-10 rounded-xl text-destructive md:h-9">
-                                                    {t('remove')}
-                                                </Button>
-                                            </ConfirmAction>
+                                            <div className="mt-4 border-t border-border/40 pt-3">
+                                                <ConfirmAction
+                                                    title={t('removeConfirmTitle')}
+                                                    description={t('removeConfirm')}
+                                                    onConfirm={() => removeOp(selected)}
+                                                >
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 rounded-lg text-xs text-destructive hover:bg-destructive/10"
+                                                    >
+                                                        {t('remove')}
+                                                    </Button>
+                                                </ConfirmAction>
+                                            </div>
                                         </div>
                                     ) : (
-                                        <div className="py-10 text-center text-xs text-muted-foreground">{t('selectOrAdd')}</div>
+                                        <div className="flex min-h-32 items-center justify-center p-4 text-xs text-muted-foreground">
+                                            {t('selectOrAdd')}
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -405,59 +531,106 @@ export function RewriteEditor({
 
                         {tab === 'preview' && (
                             <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
-                                <textarea
-                                    value={previewBody}
-                                    onChange={(event) => setPreviewBody(event.target.value)}
-                                    className="min-h-28 flex-1 w-full resize-none rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs"
-                                />
-                                <Button type="button" className="h-10 rounded-xl md:h-9" onClick={runPreview} disabled={preview.isPending || !channelId}>
-                                    {preview.isPending ? t('previewing') : t('runPreview')}
-                                </Button>
-                                {!channelId && <p className="text-xs text-muted-foreground">{t('previewNeedsChannel')}</p>}
+                                <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2">
+                                    <label className="grid gap-1 text-xs text-muted-foreground">
+                                        <span>{t('previewInboundFormat')}</span>
+                                        <Select value={previewFormat} onValueChange={setPreviewFormat}>
+                                            <SelectTrigger className="h-9 rounded-lg"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="openai_chat">OpenAI Chat Completions</SelectItem>
+                                                <SelectItem value="openai_responses">OpenAI Responses</SelectItem>
+                                                <SelectItem value="anthropic_messages">Anthropic Messages</SelectItem>
+                                                <SelectItem value="openai_embedding">OpenAI Embeddings</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </label>
+                                    <label className="grid gap-1 text-xs text-muted-foreground">
+                                        <span>{t('previewTargetModel')}</span>
+                                        <Input
+                                            value={previewTargetModel}
+                                            onChange={(event) => setPreviewTargetModel(event.target.value)}
+                                            placeholder={previewModel || t('previewTargetModelPlaceholder')}
+                                            className="h-9 rounded-lg"
+                                        />
+                                    </label>
+                                </div>
+                                <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2">
+                                    <div className="space-y-1">
+                                        <span className="text-xs text-muted-foreground">{t('previewBody')}</span>
+                                        <textarea
+                                            value={previewBody}
+                                            onChange={(event) => setPreviewBody(event.target.value)}
+                                            aria-label={t('previewBody')}
+                                            className="min-h-24 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-xs text-muted-foreground">{t('previewHeaders')}</span>
+                                        <textarea
+                                            value={previewHeaders}
+                                            onChange={(event) => setPreviewHeaders(event.target.value)}
+                                            aria-label={t('previewHeaders')}
+                                            placeholder={t('previewHeadersPlaceholder')}
+                                            className="min-h-24 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        className="h-9 rounded-lg"
+                                        onClick={runPreview}
+                                        disabled={preview.isPending || !channelId}
+                                    >
+                                        {preview.isPending ? t('previewing') : t('runPreview')}
+                                    </Button>
+                                    {!channelId && (
+                                        <p className="text-xs text-muted-foreground">{t('previewNeedsChannel')}</p>
+                                    )}
+                                </div>
                                 {preview.error && (
-                                    <p className="text-xs text-destructive">{preview.error instanceof Error ? preview.error.message : t('previewFailed')}</p>
+                                    <p className="shrink-0 text-xs text-destructive">
+                                        {preview.error instanceof Error ? preview.error.message : t('previewFailed')}
+                                    </p>
                                 )}
                                 {preview.data && (
-                                    <div className="space-y-3">
-                                        <div className="text-xs text-muted-foreground">{t('targetFormat')}: {preview.data.target_format}</div>
-                                        <PreviewJson title={t('finalBody')} value={preview.data.stages.final_body} theme={resolvedTheme} />
-                                        <PreviewJson title={t('finalHeaders')} value={preview.data.stages.final_headers} theme={resolvedTheme} />
-                                        {preview.data.trace && preview.data.trace.length > 0 && (
-                                            <div className="rounded-xl border border-border/60 p-3">
-                                                <div className="mb-2 text-xs font-medium">{t('trace')}</div>
-                                                <div className="space-y-1">
-                                                    {preview.data.trace.map((entry) => (
-                                                        <div key={`${entry.operation_id}-${entry.index}`} className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                                                            <span className="font-mono text-foreground">{entry.operation_id}</span>
-                                                            <span>{entry.operation}</span>
-                                                            <span>{entry.status}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+                                        <PreviewStageView data={preview.data} scope={scope} theme={resolvedTheme} t={t} />
                                     </div>
                                 )}
                             </div>
                         )}
 
                         {tab === 'json' && (
-                            <textarea
-                                value={jsonDraft || serializeConfig(draft)}
-                                onChange={(event) => {
-                                    setJsonDraft(event.target.value);
-                                    setDirty(true);
-                                }}
-                                placeholder={t('jsonPlaceholder')}
-                                className="h-full min-h-48 w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
+                            <div className="flex h-full min-h-0 flex-col gap-2">
+                                <textarea
+                                    value={jsonDraft || serializeConfig(draft)}
+                                    onChange={(event) => {
+                                        setJsonDraft(event.target.value);
+                                        setDirty(true);
+                                    }}
+                                    placeholder={t('jsonPlaceholder')}
+                                    className="min-h-0 flex-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                                <p className="shrink-0 text-xs text-muted-foreground">{t('jsonHint')}</p>
+                            </div>
                         )}
                     </div>
 
-                    <DialogFooter className="shrink-0 flex-row justify-end border-t border-border/40 pt-3">
-                        {dirty && <p className="mr-auto text-xs text-muted-foreground">{t('unsaved')}</p>}
-                        <Button type="button" variant="secondary" className="h-11 rounded-xl" onClick={requestClose}>{t('cancel')}</Button>
-                        <Button type="button" className="h-11 rounded-xl" onClick={save}>{t('save')}</Button>
+                    <DialogFooter className="shrink-0 flex-row items-center justify-between border-t border-border/40 pt-3">
+                        <div className="flex items-center gap-2">
+                            {dirty && (
+                                <span className="text-xs text-muted-foreground">{t('unsaved')}</span>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={requestClose}>
+                                {t('cancel')}
+                            </Button>
+                            <Button type="button" className="h-9 rounded-lg" onClick={save}>
+                                {t('save')}
+                            </Button>
+                        </div>
                     </DialogFooter>
                     <ConfirmAction
                         open={discardOpen}
@@ -475,35 +648,189 @@ export function RewriteEditor({
     );
 }
 
-function PreviewJson({ title, value, theme }: { title: string; value: unknown; theme?: string }) {
-    if (value === undefined) return null;
-    const parsed = typeof value === 'string' ? safeParse(value) : value;
-    return (
-        <div className="rounded-xl border border-border/60 p-3">
-            <div className="mb-2 text-xs font-medium">{title}</div>
-            {parsed && typeof parsed === 'object' ? (
-                <JsonView
-                    value={parsed as object}
-                    style={{
-                        ...(theme === 'dark' ? githubDarkTheme : githubLightTheme),
-                        fontSize: '12px',
-                        backgroundColor: 'transparent',
-                    }}
-                    displayDataTypes={false}
-                    displayObjectSize={false}
-                    collapsed={1}
-                />
-            ) : (
-                <pre className="overflow-x-auto text-[11px]">{String(value ?? '')}</pre>
-            )}
-        </div>
-    );
-}
-
 function safeParse(raw: string): unknown {
     try {
         return JSON.parse(raw);
     } catch {
         return raw;
     }
+}
+
+type PreviewStage = 'before' | 'group' | 'final';
+
+function PreviewStageView({
+    data,
+    scope,
+    theme,
+    t,
+}: {
+    data: {
+        target_format: string;
+        stages: {
+            outbound_before_rewrite?: unknown;
+            after_group?: unknown;
+            final_body?: unknown;
+            final_headers?: Record<string, string>;
+        };
+        trace?: Array<{
+            index: number;
+            scope: string;
+            operation_id: string;
+            operation: string;
+            status: string;
+            matched: boolean;
+            changed: boolean;
+            paths?: string[];
+            warning?: string;
+            error_kind?: string;
+            duration_us: number;
+        }>;
+        warnings?: string[];
+        summary?: {
+            applied?: number;
+            skipped?: number;
+            errors?: number;
+            transport_model?: string;
+        };
+    };
+    scope: string;
+    theme?: string;
+    t: (key: string) => string;
+}) {
+    const [stage, setStage] = useState<PreviewStage>('final');
+    const hasGroup = scope === 'group' && data.stages.after_group !== undefined;
+
+    const currentValue = stage === 'before'
+        ? data.stages.outbound_before_rewrite
+        : stage === 'group'
+            ? data.stages.after_group
+            : data.stages.final_body;
+
+    const currentHeaders = stage === 'final' ? data.stages.final_headers : undefined;
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">{t('targetFormat')}:</span>
+                <span className="text-xs font-medium">{data.target_format}</span>
+                {data.summary && (
+                    <span className="text-xs text-muted-foreground">
+                        · {data.summary.applied ?? 0} {t('traceApplied')}
+                        {data.summary.skipped ? ` · ${data.summary.skipped} ${t('traceSkipped')}` : ''}
+                        {data.summary.errors ? ` · ${data.summary.errors} ${t('traceErrors')}` : ''}
+                    </span>
+                )}
+            </div>
+
+            <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
+                {(['before', 'group', 'final'] as PreviewStage[]).map((s) => {
+                    if (s === 'group' && !hasGroup) return null;
+                    return (
+                        <button
+                            key={s}
+                            type="button"
+                            onClick={() => setStage(s)}
+                            className={cn(
+                                'h-7 rounded-md px-2.5 text-xs font-medium transition-colors',
+                                stage === s
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            {s === 'before' ? t('outboundBeforeRewrite') : s === 'group' ? t('afterGroup') : t('finalRequest')}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="rounded-lg border border-border/40 bg-background p-3">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {stage === 'before' ? t('outboundBeforeRewrite') : stage === 'group' ? t('afterGroup') : t('finalBody')}
+                </div>
+                <PreviewJsonValue value={currentValue} theme={theme} />
+                {currentHeaders && Object.keys(currentHeaders).length > 0 && (
+                    <div className="mt-3">
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">{t('finalHeaders')}</div>
+                        <div className="space-y-1">
+                            {Object.entries(currentHeaders).map(([key, value]) => (
+                                <div key={key} className="flex items-baseline gap-2 text-xs">
+                                    <span className="font-mono text-muted-foreground">{key}:</span>
+                                    <span className="font-mono">{value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {data.trace && data.trace.length > 0 && (
+                <div className="rounded-lg border border-border/40 bg-background p-3">
+                    <div className="mb-2 text-xs font-medium text-muted-foreground">{t('trace')}</div>
+                    <div className="space-y-1.5">
+                        {data.trace.map((entry) => (
+                            <div
+                                key={`${entry.operation_id}-${entry.index}`}
+                                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
+                            >
+                                <span className="shrink-0 font-mono text-muted-foreground">
+                                    #{entry.index + 1}
+                                </span>
+                                <span className="font-mono text-foreground">{entry.operation_id}</span>
+                                <span className="text-muted-foreground">{entry.operation}</span>
+                                <span className={cn(
+                                    'rounded px-1 py-0.5 text-[10px] font-medium',
+                                    entry.status === 'applied' && 'bg-success/10 text-success',
+                                    entry.status === 'skipped' && 'bg-muted text-muted-foreground',
+                                    entry.status === 'blocked' && 'bg-warning/10 text-warning',
+                                    entry.status === 'error' && 'bg-destructive/10 text-destructive',
+                                )}>
+                                    {entry.status}
+                                </span>
+                                {entry.changed && entry.paths && entry.paths.length > 0 && (
+                                    <span className="text-muted-foreground">
+                                        {entry.paths.join(', ')}
+                                    </span>
+                                )}
+                                {entry.warning && (
+                                    <span className="text-warning">{entry.warning}</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {data.warnings && data.warnings.length > 0 && (
+                <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
+                    <div className="mb-1 text-xs font-medium text-warning">{t('warnings')}</div>
+                    <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground">
+                        {data.warnings.map((w, i) => (
+                            <li key={i}>{w}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function PreviewJsonValue({ value, theme }: { value: unknown; theme?: string }) {
+    if (value === undefined) return <p className="text-xs text-muted-foreground">—</p>;
+    const parsed = typeof value === 'string' ? safeParse(value) : value;
+    if (parsed && typeof parsed === 'object') {
+        return (
+            <JsonView
+                value={parsed as object}
+                style={{
+                    ...(theme === 'dark' ? githubDarkTheme : githubLightTheme),
+                    fontSize: '12px',
+                    backgroundColor: 'transparent',
+                }}
+                displayDataTypes={false}
+                displayObjectSize={false}
+                collapsed={1}
+            />
+        );
+    }
+    return <pre className="overflow-x-auto text-xs">{String(value ?? '')}</pre>;
 }

@@ -212,7 +212,11 @@ export function newOperation(index: number): RewriteOperation {
 export function looksLikeV2(value: unknown): boolean {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const rec = value as Record<string, unknown>;
-    return rec.$schema === REWRITE_SCHEMA || Array.isArray(rec.operations);
+    return rec.$schema === REWRITE_SCHEMA;
+}
+
+function looksLikeV2WithoutSchema(rec: Record<string, unknown>): boolean {
+    return ['operations', 'stage', 'policy', 'allow_sensitive_headers'].some((key) => key in rec);
 }
 
 export function escapePointer(key: string): string {
@@ -253,7 +257,13 @@ export function parseRewriteInput(raw: string): {
             return { kind: 'invalid', config: emptyConfig(), error: 'object' };
         }
         const rec = parsed as Record<string, unknown>;
+        if ('$schema' in rec && rec.$schema !== REWRITE_SCHEMA) {
+            return { kind: 'invalid', config: emptyConfig(), error: 'schema' };
+        }
         if (looksLikeV2(parsed)) {
+            if (rec.stage !== undefined && rec.stage !== 'outbound_provider') {
+                return { kind: 'invalid', config: emptyConfig(), error: 'schema' };
+            }
             const operations = Array.isArray(rec.operations) ? rec.operations as RewriteOperation[] : [];
             return {
                 kind: 'v2',
@@ -266,6 +276,9 @@ export function parseRewriteInput(raw: string): {
                     operations,
                 },
             };
+        }
+        if (looksLikeV2WithoutSchema(rec)) {
+            return { kind: 'invalid', config: emptyConfig(), error: 'schema' };
         }
         return { kind: 'legacy', config: legacyToV2(rec), legacyFieldCount: Object.keys(rec).length };
     } catch {
@@ -355,4 +368,61 @@ export function conditionKind(expr?: ConditionExpr): 'all' | 'any' | 'not' | 'pr
 
 export function cloneOp(op: RewriteOperation, nextId: string): RewriteOperation {
     return { ...structuredClone(op), id: nextId };
+}
+
+export function changeOperationType(op: RewriteOperation, next: string): RewriteOperation {
+    const base: RewriteOperation = {
+        id: op.id,
+        name: op.name,
+        enabled: op.enabled,
+        op: next,
+        when: op.when,
+        policy: op.policy,
+        path: undefined,
+        from: undefined,
+        to: undefined,
+        header: undefined,
+        from_header: undefined,
+        to_header: undefined,
+        value: undefined,
+        value_from: undefined,
+        value_template: undefined,
+        index: undefined,
+        splat: undefined,
+        recursive: undefined,
+        search: undefined,
+        pattern: undefined,
+        replacement: undefined,
+        item_when: undefined,
+        error: undefined,
+    };
+    if (opNeedsPath(next)) base.path = op.path || '/temperature';
+    if (opNeedsFromTo(next)) {
+        base.from = op.from || '/source';
+        base.to = op.to || '/target';
+    }
+    if (opNeedsHeader(next)) base.header = op.header || 'X-Example';
+    if (opNeedsHeaderFromTo(next)) {
+        base.from_header = op.from_header || 'X-Source';
+        base.to_header = op.to_header || 'X-Target';
+    }
+    if (opNeedsValue(next)) {
+        if (op.value_from) base.value_from = op.value_from;
+        else if (op.value_template) base.value_template = op.value_template;
+        else base.value = op.value ?? '';
+    }
+    if (opNeedsItemWhen(next)) base.item_when = op.item_when ?? { source: 'item', path: '/type', operator: 'eq', value: '' };
+    if (next === 'array_insert') base.index = op.index ?? 0;
+    if (['array_append', 'array_prepend', 'array_insert'].includes(next)) base.splat = op.splat ?? true;
+    if (next === 'prune_objects') base.recursive = op.recursive ?? true;
+    if (next === 'replace') {
+        base.search = op.search ?? '';
+        base.replacement = op.replacement ?? '';
+    }
+    if (next === 'regex_replace' || next === 'header_pass') base.pattern = op.pattern ?? '';
+    if (next === 'regex_replace') base.replacement = op.replacement ?? '';
+    if (next === 'return_error') {
+        base.error = op.error ?? { status: 400, code: 'request_rewrite_blocked', type: 'invalid_request_error', message: '', retry: 'stop' };
+    }
+    return base;
 }
