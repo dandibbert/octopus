@@ -80,6 +80,7 @@ func InitDB(dbType, dsn string, debug bool) error {
 		&model.Group{},
 		&model.GroupItem{},
 		&model.GroupPreset{},
+		&model.RewriteTemplate{},
 		&model.LLMInfo{},
 		&model.ModelAlias{},
 		&model.APIKey{},

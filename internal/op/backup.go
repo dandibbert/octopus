@@ -70,6 +70,9 @@ func DBExportAll(ctx context.Context, includeLogs, includeStats bool) (*model.DB
 	if err := conn.Find(&d.GroupItems).Error; err != nil {
 		return nil, fmt.Errorf("export group_items: %w", err)
 	}
+	if err := conn.Find(&d.RewriteTemplates).Error; err != nil {
+		return nil, fmt.Errorf("export rewrite_templates: %w", err)
+	}
 	if err := conn.Find(&d.LLMInfos).Error; err != nil {
 		return nil, fmt.Errorf("export llm_infos: %w", err)
 	}
@@ -443,14 +446,35 @@ func DBImportIncremental(ctx context.Context, dump *model.DBDump) (*model.DBImpo
 			res.RowsAffected["group_items"]++
 		}
 
-		// 12. LLMInfos (upsert by name - unchanged)
+		// 12. RewriteTemplates (dedup by scope+name). Templates are portable
+		// configuration assets, so keep them in the normal DB backup even when
+		// logs/stats are excluded.
+		for i := range dump.RewriteTemplates {
+			tpl := dump.RewriteTemplates[i]
+			tpl.ID = 0
+			if err := validateRewriteTemplate(&tpl); err != nil {
+				return fmt.Errorf("import rewrite_templates: %w", err)
+			}
+			var existing model.RewriteTemplate
+			if err := tx.Where("scope = ? AND name = ?", tpl.Scope, tpl.Name).First(&existing).Error; err == nil {
+				continue
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("import rewrite_templates: %w", err)
+			}
+			if err := tx.Create(&tpl).Error; err != nil {
+				return fmt.Errorf("import rewrite_templates: %w", err)
+			}
+			res.RowsAffected["rewrite_templates"]++
+		}
+
+		// 13. LLMInfos (upsert by name - unchanged)
 		if n, err := createUpsertAll(tx, dump.LLMInfos, []clause.Column{{Name: "name"}}); err != nil {
 			return fmt.Errorf("import llm_infos: %w", err)
 		} else {
 			res.RowsAffected["llm_infos"] = n
 		}
 
-		// 13. APIKeys (dedup by api_key field)
+		// 14. APIKeys (dedup by api_key field)
 		for i := range dump.APIKeys {
 			key := dump.APIKeys[i]
 			oldID := key.ID
@@ -470,14 +494,14 @@ func DBImportIncremental(ctx context.Context, dump *model.DBDump) (*model.DBImpo
 			res.RowsAffected["api_keys"]++
 		}
 
-		// 14. Settings (upsert by key - unchanged)
+		// 15. Settings (upsert by key - unchanged)
 		if n, err := createUpsertSettings(tx, dump.Settings); err != nil {
 			return fmt.Errorf("import settings: %w", err)
 		} else {
 			res.RowsAffected["settings"] = n
 		}
 
-		// 15. Stats (remap FK IDs, then upsert)
+		// 16. Stats (remap FK IDs, then upsert)
 		if dump.IncludeStats {
 			if n, err := createUpsertAll(tx, dump.StatsTotal, []clause.Column{{Name: "id"}}); err != nil {
 				return fmt.Errorf("import stats_total: %w", err)
@@ -566,7 +590,7 @@ func DBImportIncremental(ctx context.Context, dump *model.DBDump) (*model.DBImpo
 			}
 		}
 
-		// 16. RelayLogs (Snowflake IDs - keep createDoNothing)
+		// 17. RelayLogs (Snowflake IDs - keep createDoNothing)
 		if dump.IncludeLogs {
 			if n, err := createDoNothing(tx, dump.RelayLogs); err != nil {
 				return fmt.Errorf("import relay_logs: %w", err)

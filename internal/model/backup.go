@@ -21,6 +21,7 @@ type DBDump struct {
 	SiteChannelBindings []SiteChannelBinding `json:"site_channel_bindings,omitempty"`
 	Groups              []Group              `json:"groups,omitempty"`
 	GroupItems          []GroupItem          `json:"group_items,omitempty"`
+	RewriteTemplates    []RewriteTemplate    `json:"rewrite_templates,omitempty"`
 	LLMInfos            []LLMInfo            `json:"llm_infos,omitempty"`
 	APIKeys             []APIKey             `json:"api_keys,omitempty"`
 	Settings            []Setting            `json:"settings,omitempty"`

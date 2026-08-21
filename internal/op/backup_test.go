@@ -64,6 +64,46 @@ func TestDBImportPreservesAllAccountsOnCleanDB(t *testing.T) {
 	}
 }
 
+func TestDBBackupRoundTripsRewriteTemplates(t *testing.T) {
+	ctx := setupBackupTestDB(t)
+	config := `{"$schema":"octopus.request-rewrite/v2","stage":"outbound_provider","operations":[{"id":"set-temp","op":"set","path":"/temperature","value":0.2}]}`
+	tpl := &model.RewriteTemplate{
+		Name:        "compat-template",
+		Description: "request rewrite compatibility rules",
+		Scope:       "channel",
+		Config:      config,
+	}
+	if err := RewriteTemplateCreate(tpl, ctx); err != nil {
+		t.Fatalf("create rewrite template: %v", err)
+	}
+
+	dump, err := DBExportAll(ctx, false, false)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	if len(dump.RewriteTemplates) != 1 || dump.RewriteTemplates[0].Name != tpl.Name {
+		t.Fatalf("rewrite template missing from export: %#v", dump.RewriteTemplates)
+	}
+
+	if err := dbpkg.GetDB().Where("1 = 1").Delete(&model.RewriteTemplate{}).Error; err != nil {
+		t.Fatalf("clear rewrite templates: %v", err)
+	}
+	result, err := DBImportIncremental(ctx, dump)
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if result.RowsAffected["rewrite_templates"] != 1 {
+		t.Fatalf("rewrite template import rows=%d", result.RowsAffected["rewrite_templates"])
+	}
+	got, err := RewriteTemplateList("channel", ctx)
+	if err != nil {
+		t.Fatalf("list imported rewrite templates: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != tpl.Name || got[0].Config != config {
+		t.Fatalf("rewrite template import mismatch: %#v", got)
+	}
+}
+
 func TestDBImportWithIDCollisionPreservesAllAccounts(t *testing.T) {
 	ctx := setupBackupTestDB(t)
 
