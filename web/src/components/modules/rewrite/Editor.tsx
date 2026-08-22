@@ -93,6 +93,28 @@ export function RewriteEditor({
         setPreviewTargetModel(previewModel ?? '');
     }, [previewModel]);
 
+    useEffect(() => {
+        if (!open) return;
+        let settleTimer: number | undefined;
+        const scrollFocusedFieldIntoView = () => {
+            const active = document.activeElement;
+            if (!(active instanceof HTMLElement) || !dialogRef.current?.contains(active)) return;
+            active.scrollIntoView({ block: 'center', inline: 'nearest' });
+        };
+        const keepFocusedFieldVisible = () => {
+            window.requestAnimationFrame(scrollFocusedFieldIntoView);
+            window.clearTimeout(settleTimer);
+            settleTimer = window.setTimeout(scrollFocusedFieldIntoView, 120);
+        };
+        window.addEventListener('resize', keepFocusedFieldVisible);
+        window.visualViewport?.addEventListener('resize', keepFocusedFieldVisible);
+        return () => {
+            window.clearTimeout(settleTimer);
+            window.removeEventListener('resize', keepFocusedFieldVisible);
+            window.visualViewport?.removeEventListener('resize', keepFocusedFieldVisible);
+        };
+    }, [open]);
+
     const parseErrorMessage = (error?: string) => error === 'schema' ? t('invalidSchema') : t('invalidJson');
 
     const resetDraftFromValue = () => {
