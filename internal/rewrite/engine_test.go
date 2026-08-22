@@ -274,6 +274,23 @@ func TestDuplicateOperationID(t *testing.T) {
 	}
 }
 
+func TestCompileOperationErrorIncludesIndexAndID(t *testing.T) {
+	raw := `{
+		"$schema":"octopus.request-rewrite/v2",
+		"operations":[
+			{"id":"valid","op":"set","path":"/x","value":1},
+			{"id":"missing-path","op":"set","value":2}
+		]
+	}`
+	_, err := ParseAndCompile(&raw, ScopeChannel)
+	if err == nil {
+		t.Fatal("expected path validation error")
+	}
+	if message := err.Error(); !strings.Contains(message, "operation 1 (missing-path):") {
+		t.Fatalf("expected operation context, got %q", message)
+	}
+}
+
 func TestApplyToRequestSetsGetBody(t *testing.T) {
 	raw := `{
 		"$schema":"octopus.request-rewrite/v2",

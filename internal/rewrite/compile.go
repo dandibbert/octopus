@@ -102,7 +102,7 @@ func compileConfig(cfg *Config, scope Scope, legacy bool, hash string) (*Plan, e
 		ids[op.ID] = struct{}{}
 		cop, err := compileOperation(op, scope, policy, cfg.AllowSensitiveHeaders)
 		if err != nil {
-			return nil, err
+			return nil, validationError(fmt.Sprintf("operation %d (%s): %v", i, op.ID, err))
 		}
 		compiled = append(compiled, cop)
 	}
