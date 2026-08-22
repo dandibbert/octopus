@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     DragDropContext,
     Draggable,
@@ -42,6 +42,14 @@ import {
 
 type Tab = 'rules' | 'preview' | 'json';
 
+function mutationErrorMessage(error: unknown, fallback: string): string {
+    if (error && typeof error === 'object') {
+        if ('rawMessage' in error && typeof error.rawMessage === 'string') return error.rawMessage;
+        if ('message' in error && typeof error.message === 'string') return error.message;
+    }
+    return fallback;
+}
+
 export function RewriteEditor({
     value,
     onChange,
@@ -74,6 +82,7 @@ export function RewriteEditor({
     const [previewTargetModel, setPreviewTargetModel] = useState(previewModel ?? '');
     const [dirty, setDirty] = useState(false);
     const [discardOpen, setDiscardOpen] = useState(false);
+    const dialogRef = useRef<HTMLDivElement>(null);
     const isMobile = useIsMobile();
     const [mobileDetail, setMobileDetail] = useState(false);
     const validate = useValidateRewrite();
@@ -110,6 +119,7 @@ export function RewriteEditor({
 
     const emitDraft = (next: RewriteConfig) => {
         setDraft(next);
+        setJsonDraft(serializeConfig(next));
         setDirty(true);
         if (selected >= next.operations.length) setSelected(Math.max(0, next.operations.length - 1));
     };
@@ -124,7 +134,12 @@ export function RewriteEditor({
     const duplicateOp = (index: number) => {
         const source = draft.operations[index];
         if (!source) return;
-        const copy = cloneOp(source, `${source.id}-copy`);
+        const used = new Set(draft.operations.map((op) => op.id));
+        const base = `${source.id}-copy`;
+        let copyID = base;
+        let suffix = 2;
+        while (used.has(copyID)) copyID = `${base}-${suffix++}`;
+        const copy = cloneOp(source, copyID);
         const operations = [...draft.operations];
         operations.splice(index + 1, 0, copy);
         emitDraft({ ...draft, operations });
@@ -179,7 +194,7 @@ export function RewriteEditor({
             return;
         }
         validate.mutate({ scope, config: parsedConfig }, {
-            onError: (err) => setLocalError(err instanceof Error ? err.message : t('validateFailed')),
+            onError: (err) => setLocalError(mutationErrorMessage(err, t('validateFailed'))),
             onSuccess: () => setLocalError(''),
         });
     };
@@ -223,12 +238,73 @@ export function RewriteEditor({
         }, { onSuccess: () => setLocalError('') });
     };
 
+    const focusValidationError = (message: string, operations: RewriteOperation[] = draft.operations) => {
+        const operationMatch = message.match(/operation (\d+)/i);
+        const duplicateMatch = message.match(/duplicate operation id ["']([^"']+)["']/i);
+        let index = operationMatch ? Number(operationMatch[1]) : -1;
+        if (index < 0 && duplicateMatch) index = operations.findIndex((op) => op.id === duplicateMatch[1]);
+        if (index >= 0 && index < operations.length) setSelected(index);
+        setTab('rules');
+        setMobileDetail(true);
+        window.setTimeout(() => {
+            const root = dialogRef.current;
+            if (!root) return;
+            const placeholder = /missing id|duplicate operation id/i.test(message)
+                ? '操作 ID'
+                : /header/i.test(message)
+                    ? 'Header 名'
+                    : /index/i.test(message)
+                        ? '插入下标'
+                        : /path|pointer/i.test(message)
+                            ? 'JSON 路径，例如 /temperature'
+                            : '';
+            const field = placeholder
+                ? root.querySelector<HTMLElement>(`[placeholder="${placeholder}"]`)
+                : root.querySelector<HTMLElement>('[data-rewrite-primary], [aria-invalid="true"]');
+            field?.focus();
+        }, 50);
+    };
+
     const save = () => {
-        if (tab === 'json' && !applyJsonTab()) return;
-        onChange(serializeConfig(draft));
-        setDirty(false);
-        setOpen(false);
-        setMobileDetail(false);
+        const invalidLiteral = dialogRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+        if (invalidLiteral) {
+            setTab('rules');
+            setLocalError(t('validateFailed'));
+            invalidLiteral.focus();
+            return;
+        }
+        let nextDraft = draft;
+        if (tab === 'json') {
+            const next = parseRewriteInput(jsonDraft);
+            if (next.kind === 'invalid') {
+                setLocalError(parseErrorMessage(next.error));
+                return;
+            }
+            nextDraft = next.config;
+            setDraft(next.config);
+            setJsonDraft(next.kind === 'empty' ? '' : serializeConfig(next.config));
+        }
+        let config: unknown;
+        try {
+            config = JSON.parse(serializeConfig(nextDraft));
+        } catch {
+            setLocalError(t('invalidJson'));
+            return;
+        }
+        validate.mutate({ scope, config }, {
+            onSuccess: () => {
+                onChange(serializeConfig(nextDraft));
+                setLocalError('');
+                setDirty(false);
+                setOpen(false);
+                setMobileDetail(false);
+            },
+            onError: (error) => {
+                const message = mutationErrorMessage(error, t('validateFailed'));
+                setLocalError(message);
+                focusValidationError(message, nextDraft.operations);
+            },
+        });
     };
 
     const close = () => {
@@ -280,7 +356,7 @@ export function RewriteEditor({
             )}
 
             <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose(); else openEditor(); }}>
-                <DialogContent className="flex h-[min(100dvh,52rem)] max-h-[min(100dvh,52rem)] w-full max-w-[calc(100%-1rem)] flex-col overflow-hidden sm:max-w-5xl md:h-[min(90dvh,52rem)]">
+                <DialogContent ref={dialogRef} className="flex h-[min(100dvh,52rem)] max-h-[min(100dvh,52rem)] w-full max-w-[calc(100%-1rem)] flex-col overflow-hidden sm:max-w-5xl md:h-[min(90dvh,52rem)]">
                     <DialogHeader className="shrink-0 space-y-1 pr-8 text-left">
                         <DialogTitle className="text-base">{t('dialogTitle')}</DialogTitle>
                         <DialogDescription className="text-xs">
@@ -291,14 +367,31 @@ export function RewriteEditor({
                     </DialogHeader>
 
                     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2">
-                        <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
+                        <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5" role="tablist" aria-label={t('dialogTitle')}>
                             {(['rules', 'preview', 'json'] as Tab[]).map((item) => (
                                 <button
                                     key={item}
                                     type="button"
                                     onClick={() => setTab(item)}
+                                    onKeyDown={(event) => {
+                                        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                                        event.preventDefault();
+                                        const tabs = ['rules', 'preview', 'json'] as Tab[];
+                                        const offset = event.key === 'ArrowRight' ? 1 : -1;
+                                        const next = tabs[(tabs.indexOf(item) + offset + tabs.length) % tabs.length];
+                                        setTab(next);
+                                        event.currentTarget.parentElement
+                                            ?.querySelector<HTMLButtonElement>(`[data-rewrite-tab="${next}"]`)
+                                            ?.focus();
+                                    }}
+                                    id={`rewrite-tab-${item}`}
+                                    role="tab"
+                                    aria-selected={tab === item}
+                                    aria-controls={`rewrite-panel-${item}`}
+                                    data-rewrite-tab={item}
+                                    tabIndex={tab === item ? 0 : -1}
                                     className={cn(
-                                        'h-8 rounded-md px-3 text-xs font-medium transition-colors',
+                                        'h-8 rounded-md px-3 text-xs font-medium transition-colors motion-reduce:transition-none',
                                         tab === item
                                             ? 'bg-background text-foreground shadow-sm'
                                             : 'text-muted-foreground hover:text-foreground',
@@ -341,7 +434,12 @@ export function RewriteEditor({
                         </p>
                     )}
 
-                    <div className="min-h-0 flex-1 overflow-hidden">
+                    <div
+                        id={`rewrite-panel-${tab}`}
+                        role="tabpanel"
+                        aria-labelledby={`rewrite-tab-${tab}`}
+                        className="min-h-0 flex-1 overflow-hidden"
+                    >
                         {tab === 'rules' && (
                             <div className={cn(
                                 'flex h-full min-h-0 flex-col gap-3',
@@ -432,7 +530,10 @@ export function RewriteEditor({
                                                                                 {op.header && ` · ${op.header}`}
                                                                             </div>
                                                                         </button>
-                                                                        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                                                        <div className={cn(
+                                                                            'flex shrink-0 items-center gap-0.5 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100',
+                                                                            selected === index ? 'opacity-100' : 'opacity-0',
+                                                                        )}>
                                                                             <Button
                                                                                 type="button"
                                                                                 variant="ghost"
@@ -631,7 +732,7 @@ export function RewriteEditor({
                             <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={requestClose}>
                                 {t('cancel')}
                             </Button>
-                            <Button type="button" className="h-9 rounded-lg" onClick={save}>
+                            <Button type="button" className="h-9 rounded-lg" onClick={save} disabled={validate.isPending}>
                                 {t('save')}
                             </Button>
                         </div>
