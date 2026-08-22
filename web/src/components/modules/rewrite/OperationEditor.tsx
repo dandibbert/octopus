@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
@@ -38,11 +38,13 @@ export function OperationEditor({
     op,
     scope,
     allowSensitive,
+    focusRequest,
     onChange,
 }: {
     op: RewriteOperation;
     scope: Scope;
     allowSensitive?: boolean;
+    focusRequest?: number;
     onChange: (patch: Partial<RewriteOperation>) => void;
 }) {
     const t = useTranslations('rewrite');
@@ -50,9 +52,18 @@ export function OperationEditor({
     const [showPolicy, setShowPolicy] = useState(!!op.policy);
     const modelWarning = touchesModel(op);
     const sensitive = isSensitiveHeader(op.header) || isSensitiveHeader(op.from_header) || isSensitiveHeader(op.to_header);
+    const rootRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!focusRequest) return;
+        const timer = window.setTimeout(() => {
+            rootRef.current?.querySelector<HTMLElement>('[data-rewrite-primary]')?.focus();
+        }, 50);
+        return () => window.clearTimeout(timer);
+    }, [focusRequest]);
 
     return (
-        <div className="space-y-3">
+        <div ref={rootRef} className="space-y-3">
             {/* A. Basic info */}
             <div className="space-y-2">
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -91,6 +102,7 @@ export function OperationEditor({
             <div className="space-y-2">
                 {opNeedsPath(String(op.op)) && (
                     <Input
+                        data-rewrite-primary
                         value={op.path ?? ''}
                         onChange={(event) => onChange({ path: event.target.value })}
                         placeholder={t('path')}
@@ -100,6 +112,7 @@ export function OperationEditor({
                 {opNeedsFromTo(String(op.op)) && (
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                         <Input
+                            data-rewrite-primary
                             value={op.from ?? ''}
                             onChange={(event) => onChange({ from: event.target.value })}
                             placeholder={t('from')}
@@ -115,6 +128,7 @@ export function OperationEditor({
                 )}
                 {opNeedsHeader(String(op.op)) && (
                     <Input
+                        data-rewrite-primary
                         value={op.header ?? ''}
                         onChange={(event) => onChange({ header: event.target.value })}
                         placeholder={t('header')}
@@ -124,6 +138,7 @@ export function OperationEditor({
                 {opNeedsHeaderFromTo(String(op.op)) && (
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                         <Input
+                            data-rewrite-primary
                             value={op.from_header ?? ''}
                             onChange={(event) => onChange({ from_header: event.target.value })}
                             placeholder={t('fromHeader')}
@@ -196,6 +211,7 @@ export function OperationEditor({
                 {String(op.op) === 'return_error' && (
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                         <Input
+                            data-rewrite-primary
                             value={op.error?.message ?? ''}
                             onChange={(event) => onChange({ error: { ...(op.error ?? { message: '' }), message: event.target.value } })}
                             placeholder={t('errorMessage')}

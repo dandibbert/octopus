@@ -66,6 +66,7 @@ export function RewriteEditor({
     const [draft, setDraft] = useState<RewriteConfig>(parsed.config);
     const [jsonDraft, setJsonDraft] = useState(value);
     const [selected, setSelected] = useState(0);
+    const [focusRequest, setFocusRequest] = useState(0);
     const [localError, setLocalError] = useState('');
     const [previewBody, setPreviewBody] = useState('{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}');
     const [previewHeaders, setPreviewHeaders] = useState('{}');
@@ -315,6 +316,7 @@ export function RewriteEditor({
                                     emitDraft({ ...draft, operations: next });
                                     setSelected(next.length - 1);
                                     setMobileDetail(true);
+                                    setFocusRequest((current) => current + 1);
                                 }} />
                             )}
                             <Button
@@ -374,6 +376,7 @@ export function RewriteEditor({
                                                 emitDraft({ ...draft, operations: next });
                                                 setSelected(0);
                                                 setMobileDetail(true);
+                                                setFocusRequest((current) => current + 1);
                                             }} />
                                         </div>
                                     ) : (
@@ -501,6 +504,7 @@ export function RewriteEditor({
                                                 op={current}
                                                 scope={scope}
                                                 allowSensitive={draft.allow_sensitive_headers}
+                                                focusRequest={focusRequest}
                                                 onChange={(patch) => updateOp(selected, patch)}
                                             />
                                             <div className="mt-4 border-t border-border/40 pt-3">
