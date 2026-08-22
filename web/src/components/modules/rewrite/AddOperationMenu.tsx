@@ -6,31 +6,20 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { newOperation, type RewriteOperation, type RewriteOp } from './schema';
+import { createOperationId } from './id';
+import { operationLabel } from './labels';
 
-const BODY_OPS: { op: RewriteOp; labelKey: string }[] = [
-    { op: 'set', labelKey: 'opSet' },
-    { op: 'set_if_absent', labelKey: 'opSetIfAbsent' },
-    { op: 'delete', labelKey: 'opDelete' },
-    { op: 'move', labelKey: 'opMove' },
-    { op: 'copy', labelKey: 'opCopy' },
-    { op: 'array_append', labelKey: 'opArrayAppend' },
-    { op: 'array_prepend', labelKey: 'opArrayPrepend' },
-    { op: 'array_insert', labelKey: 'opArrayInsert' },
-    { op: 'array_remove', labelKey: 'opArrayRemove' },
+const BODY_OPS: RewriteOp[] = [
+    'set', 'set_if_absent', 'delete', 'move', 'copy',
+    'array_append', 'array_prepend', 'array_insert', 'array_remove',
 ];
 
-const HEADER_OPS: { op: RewriteOp; labelKey: string }[] = [
-    { op: 'header_set', labelKey: 'opHeaderSet' },
-    { op: 'header_set_if_absent', labelKey: 'opHeaderSetIfAbsent' },
-    { op: 'header_add', labelKey: 'opHeaderAdd' },
-    { op: 'header_delete', labelKey: 'opHeaderDelete' },
-    { op: 'header_copy', labelKey: 'opHeaderCopy' },
-    { op: 'header_move', labelKey: 'opHeaderMove' },
+const HEADER_OPS: RewriteOp[] = [
+    'header_set', 'header_set_if_absent', 'header_add',
+    'header_delete', 'header_copy', 'header_move',
 ];
 
-const CONTROL_OPS: { op: RewriteOp; labelKey: string }[] = [
-    { op: 'return_error', labelKey: 'opReturnError' },
-];
+const CONTROL_OPS: RewriteOp[] = ['return_error'];
 
 function createOperation(op: RewriteOp, id: string): RewriteOperation {
     const base = newOperation(0);
@@ -50,10 +39,22 @@ export function AddOperationMenu({ onAdd }: { onAdd: (op: RewriteOperation) => v
     const [open, setOpen] = useState(false);
 
     const handleSelect = (op: RewriteOp) => {
-        const id = `op-${crypto.randomUUID().slice(0, 8)}`;
-        onAdd(createOperation(op, id));
+        onAdd(createOperation(op, createOperationId()));
         setOpen(false);
     };
+
+    const renderOperation = (op: RewriteOp) => (
+        <Button
+            key={op}
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => handleSelect(op)}
+            className="h-9 w-full justify-start rounded-lg px-2 text-xs font-normal text-foreground hover:bg-muted hover:text-foreground"
+        >
+            {operationLabel(t, op)}
+        </Button>
+    );
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -64,47 +65,17 @@ export function AddOperationMenu({ onAdd }: { onAdd: (op: RewriteOperation) => v
                     <ChevronDown className="size-3.5 opacity-60" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent
-                align="end"
-                collisionPadding={12}
-                className="max-h-[min(28rem,var(--radix-popover-content-available-height))] w-48 overflow-y-auto rounded-xl p-1"
-            >
-                <div className="space-y-1">
+            <PopoverContent align="end" collisionPadding={12} className="w-64 overflow-hidden rounded-xl p-0">
+                <div className="max-h-[min(26rem,var(--radix-popover-content-available-height))] space-y-1 overflow-y-auto overscroll-contain p-1 touch-pan-y [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-2">
                     <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{t('opGroupBody')}</div>
-                    {BODY_OPS.map(({ op, labelKey }) => (
-                        <button
-                            key={op}
-                            type="button"
-                            onClick={() => handleSelect(op)}
-                            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
-                        >
-                            {t(labelKey)}
-                        </button>
-                    ))}
+                    {BODY_OPS.map(renderOperation)}
                     <div className="my-1 h-px bg-border/60" />
-                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{t('opGroupHeader')}</div>
-                    {HEADER_OPS.map(({ op, labelKey }) => (
-                        <button
-                            key={op}
-                            type="button"
-                            onClick={() => handleSelect(op)}
-                            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
-                        >
-                            {t(labelKey)}
-                        </button>
-                    ))}
+                    <div className="px-2 pt-2 pb-0.5 text-xs font-medium text-muted-foreground">{t('opGroupHeader')}</div>
+                    <div className="px-2 pb-1 text-3xs leading-relaxed text-muted-foreground">{t('opGroupHeaderHint')}</div>
+                    {HEADER_OPS.map(renderOperation)}
                     <div className="my-1 h-px bg-border/60" />
                     <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{t('opGroupControl')}</div>
-                    {CONTROL_OPS.map(({ op, labelKey }) => (
-                        <button
-                            key={op}
-                            type="button"
-                            onClick={() => handleSelect(op)}
-                            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
-                        >
-                            {t(labelKey)}
-                        </button>
-                    ))}
+                    {CONTROL_OPS.map(renderOperation)}
                 </div>
             </PopoverContent>
         </Popover>

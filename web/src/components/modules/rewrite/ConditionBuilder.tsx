@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { LiteralEditor } from './LiteralEditor';
 import { ContextPathInput } from './ContextPathInput';
+import { conditionOperatorLabel, conditionSourceLabel } from './labels';
 import {
     CONDITION_OPERATORS,
     conditionKind,
@@ -53,10 +54,10 @@ export function ConditionBuilder({
     };
 
     return (
-        <div className="space-y-2 rounded-lg border border-border/40 bg-muted/20 p-2">
+        <div className="@container/condition min-w-0 space-y-2 rounded-lg border border-border/50 bg-muted/20 p-2">
             <div className="flex flex-wrap items-center gap-2">
                 <Select value={kind === 'empty' ? 'predicate' : kind} onValueChange={(next) => setKind(next as 'all' | 'any' | 'not' | 'predicate')}>
-                    <SelectTrigger className="h-8 w-28 rounded-md text-xs">
+                    <SelectTrigger className="h-8 w-auto min-w-36 rounded-md text-xs">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -99,101 +100,106 @@ export function ConditionBuilder({
                 <ConditionBuilder value={value?.not} onChange={(next) => onChange({ not: next ?? emptyPredicate() })} allowItem={allowItem} depth={depth + 1} />
             )}
             {(kind === 'predicate' || kind === 'empty') && (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-                    <Select
-                        value={String(value?.source ?? 'body')}
-                        onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), source: next, path: next === 'context' ? 'request.original_model' : value?.path })}
-                    >
-                        <SelectTrigger className="h-8 rounded-md text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {CONDITION_SOURCES.filter((source) => allowItem || source !== 'item').map((source) => (
-                                <SelectItem key={source} value={source}>{source}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {value?.source === 'context' ? (
-                        <ContextPathInput value={value.path || 'request.original_model'} onChange={(path) => onChange({ ...(value ?? emptyPredicate()), path })} />
-                    ) : (
-                        <Input
-                            value={value?.path ?? ''}
-                            onChange={(event) => onChange({ ...(value ?? emptyPredicate()), path: event.target.value })}
-                            placeholder={value?.source === 'header' ? t('header') : t('path')}
-                            className="h-8 rounded-md font-mono text-xs"
-                        />
-                    )}
-                    <Select
-                        value={String(value?.operator ?? 'eq')}
-                        onValueChange={(next) => {
-                            const current = value ?? emptyPredicate();
-                            let nextValue = current.value;
-                            if (next === 'exists' || next === 'missing') nextValue = undefined;
-                            else if (STRING_OPERATORS.has(next)) nextValue = typeof current.value === 'string' ? current.value : '';
-                            else if (NUMBER_OPERATORS.has(next)) nextValue = typeof current.value === 'number' ? current.value : 0;
-                            else if (ARRAY_OPERATORS.has(next)) nextValue = Array.isArray(current.value) ? current.value : [];
-                            else if (next === 'type_is') nextValue = TYPE_VALUES.includes(current.value as typeof TYPE_VALUES[number]) ? current.value : 'string';
-                            onChange({ ...current, operator: next, value: nextValue });
-                        }}
-                    >
-                        <SelectTrigger className="h-8 rounded-md text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {CONDITION_OPERATORS.map((op) => (
-                                <SelectItem key={op} value={op}>{op}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {STRING_OPERATORS.has(String(value?.operator ?? 'eq')) && (
-                        <Input
-                            value={typeof value?.value === 'string' ? value.value : ''}
-                            onChange={(event) => onChange({ ...(value ?? emptyPredicate()), value: event.target.value })}
-                            placeholder={t('condValue')}
-                            className="h-8 rounded-md text-xs"
-                        />
-                    )}
-                    {NUMBER_OPERATORS.has(String(value?.operator)) && (
-                        <Input
-                            type="number"
-                            value={typeof value?.value === 'number' ? String(value.value) : '0'}
-                            onChange={(event) => {
-                                const next = Number(event.target.value);
-                                if (Number.isFinite(next)) onChange({ ...(value ?? emptyPredicate()), value: next });
-                            }}
-                            placeholder={t('condValue')}
-                            className="h-8 rounded-md text-xs"
-                        />
-                    )}
-                    {ARRAY_OPERATORS.has(String(value?.operator)) && (
-                        <LiteralEditor
-                            value={Array.isArray(value?.value) ? value.value : []}
-                            onChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
-                            allowedKinds={['json']}
-                            arrayOnly
-                            showKind={false}
-                        />
-                    )}
-                    {String(value?.operator) === 'type_is' && (
+                <div className="@container/predicate grid min-w-0 grid-cols-1 gap-2">
+                    <div className="grid min-w-0 grid-cols-1 gap-2 @2xl/predicate:grid-cols-[minmax(7rem,0.75fr)_minmax(10rem,1.25fr)_minmax(8rem,0.8fr)]">
                         <Select
-                            value={typeof value?.value === 'string' ? value.value : 'string'}
-                            onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
+                            value={String(value?.source ?? 'body')}
+                            onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), source: next, path: next === 'context' ? 'request.original_model' : value?.path })}
                         >
-                            <SelectTrigger className="h-8 rounded-md text-xs">
+                            <SelectTrigger className="h-8 min-w-0 rounded-md text-xs" aria-label={t('condSource')}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {TYPE_VALUES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                                {CONDITION_SOURCES.filter((source) => allowItem || source !== 'item').map((source) => (
+                                    <SelectItem key={source} value={source}>{conditionSourceLabel(t, source)}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
-                    )}
-                    {['eq', 'neq'].includes(String(value?.operator ?? 'eq')) && (
-                        <LiteralEditor
-                            value={value?.value ?? ''}
-                            onChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
-                            placeholder={t('condValue')}
-                        />
-                    )}
+                        {value?.source === 'context' ? (
+                            <ContextPathInput value={value.path || 'request.original_model'} onChange={(path) => onChange({ ...(value ?? emptyPredicate()), path })} />
+                        ) : (
+                            <Input
+                                value={value?.path ?? ''}
+                                onChange={(event) => onChange({ ...(value ?? emptyPredicate()), path: event.target.value })}
+                                placeholder={value?.source === 'header' ? t('header') : t('path')}
+                                aria-label={t('condPath')}
+                                className="h-8 min-w-0 rounded-md font-mono text-xs"
+                            />
+                        )}
+                        <Select
+                            value={String(value?.operator ?? 'eq')}
+                            onValueChange={(next) => {
+                                const current = value ?? emptyPredicate();
+                                let nextValue = current.value;
+                                if (next === 'exists' || next === 'missing') nextValue = undefined;
+                                else if (STRING_OPERATORS.has(next)) nextValue = typeof current.value === 'string' ? current.value : '';
+                                else if (NUMBER_OPERATORS.has(next)) nextValue = typeof current.value === 'number' ? current.value : 0;
+                                else if (ARRAY_OPERATORS.has(next)) nextValue = Array.isArray(current.value) ? current.value : [];
+                                else if (next === 'type_is') nextValue = TYPE_VALUES.includes(current.value as typeof TYPE_VALUES[number]) ? current.value : 'string';
+                                onChange({ ...current, operator: next, value: nextValue });
+                            }}
+                        >
+                            <SelectTrigger className="h-8 min-w-0 rounded-md text-xs" aria-label={t('condOperator')}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CONDITION_OPERATORS.map((op) => (
+                                    <SelectItem key={op} value={op}>{conditionOperatorLabel(t, op)}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="min-w-0">
+                        {STRING_OPERATORS.has(String(value?.operator ?? 'eq')) && (
+                            <Input
+                                value={typeof value?.value === 'string' ? value.value : ''}
+                                onChange={(event) => onChange({ ...(value ?? emptyPredicate()), value: event.target.value })}
+                                placeholder={t('condValue')}
+                                className="h-8 min-w-0 rounded-md text-xs"
+                            />
+                        )}
+                        {NUMBER_OPERATORS.has(String(value?.operator)) && (
+                            <Input
+                                type="number"
+                                value={typeof value?.value === 'number' ? String(value.value) : '0'}
+                                onChange={(event) => {
+                                    const next = Number(event.target.value);
+                                    if (Number.isFinite(next)) onChange({ ...(value ?? emptyPredicate()), value: next });
+                                }}
+                                placeholder={t('condValue')}
+                                className="h-8 min-w-0 rounded-md text-xs"
+                            />
+                        )}
+                        {ARRAY_OPERATORS.has(String(value?.operator)) && (
+                            <LiteralEditor
+                                value={Array.isArray(value?.value) ? value.value : []}
+                                onChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
+                                allowedKinds={['json']}
+                                arrayOnly
+                                showKind={false}
+                            />
+                        )}
+                        {String(value?.operator) === 'type_is' && (
+                            <Select
+                                value={typeof value?.value === 'string' ? value.value : 'string'}
+                                onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
+                            >
+                                <SelectTrigger className="h-8 min-w-0 rounded-md text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {TYPE_VALUES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        )}
+                        {['eq', 'neq'].includes(String(value?.operator ?? 'eq')) && (
+                            <LiteralEditor
+                                value={value?.value ?? ''}
+                                onChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}
+                                placeholder={t('condValue')}
+                            />
+                        )}
+                    </div>
                 </div>
             )}
             {(kind === 'predicate' || kind === 'empty') && STRING_OPERATORS.has(String(value?.operator)) && (
@@ -224,7 +230,7 @@ function GroupList({
     return (
         <div className="space-y-1.5">
             {items.map((item, index) => (
-                <div key={`cond-${depth}-${index}`} className="flex items-start gap-1.5">
+                <div key={`cond-${depth}-${index}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-start gap-1.5">
                     <div className="min-w-0 flex-1">
                         <ConditionBuilder value={item} onChange={(next) => onChange(updateAt(items, index, next ?? emptyPredicate()))} allowItem={allowItem} depth={depth + 1} />
                     </div>
@@ -232,7 +238,7 @@ function GroupList({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="size-7 shrink-0 rounded-md p-0 text-muted-foreground hover:text-destructive"
+                        className="size-8 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => onChange(items.filter((_, i) => i !== index))}
                         aria-label={t('remove')}
                     >

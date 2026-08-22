@@ -7,7 +7,7 @@ import {
     Droppable,
     type DropResult,
 } from '@hello-pangea/dnd';
-import { ArrowDown, ArrowUp, ChevronLeft, Copy, GripVertical, Settings2 } from 'lucide-react';
+import { ChevronLeft, Copy, GripVertical, Settings2, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import JsonView from '@uiw/react-json-view';
 import { githubDarkTheme } from '@uiw/react-json-view/githubDark';
@@ -25,12 +25,15 @@ import {
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmAction } from '@/components/common/ConfirmAction';
+import { ListState } from '@/components/common/ListState';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePreviewRewrite, useValidateRewrite, type RewriteScope } from '@/api/endpoints/rewrite';
 import { OperationEditor } from './OperationEditor';
 import { RewriteTemplateActions } from './TemplateActions';
+import { parseRewritePayload } from './payload';
 import { AddOperationMenu } from './AddOperationMenu';
+import { operationLabel } from './labels';
 import {
     cloneOp,
     enabledOpCount,
@@ -74,6 +77,7 @@ export function RewriteEditor({
     const [draft, setDraft] = useState<RewriteConfig>(parsed.config);
     const [jsonDraft, setJsonDraft] = useState(value);
     const [selected, setSelected] = useState(0);
+    const [checkedOperations, setCheckedOperations] = useState<Set<number>>(new Set());
     const [focusRequest, setFocusRequest] = useState(0);
     const [localError, setLocalError] = useState('');
     const [previewBody, setPreviewBody] = useState('{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}');
@@ -83,11 +87,21 @@ export function RewriteEditor({
     const [dirty, setDirty] = useState(false);
     const [discardOpen, setDiscardOpen] = useState(false);
     const dialogRef = useRef<HTMLDivElement>(null);
+    const rowKeys = useRef(new WeakMap<RewriteOperation, string>());
+    const rowKeySequence = useRef(0);
     const isMobile = useIsMobile();
     const [mobileDetail, setMobileDetail] = useState(false);
     const validate = useValidateRewrite();
     const preview = usePreviewRewrite();
     const { resolvedTheme } = useTheme();
+
+    const getRowKey = (operation: RewriteOperation) => {
+        const existing = rowKeys.current.get(operation);
+        if (existing) return existing;
+        const next = `rewrite-row-${rowKeySequence.current++}`;
+        rowKeys.current.set(operation, next);
+        return next;
+    };
 
     useEffect(() => {
         setPreviewTargetModel(previewModel ?? '');
@@ -124,6 +138,7 @@ export function RewriteEditor({
         setDirty(false);
         setLocalError(next.kind === 'invalid' ? parseErrorMessage(next.error) : '');
         setSelected(0);
+        setCheckedOperations(new Set());
         setTab('rules');
         setMobileDetail(false);
     };
@@ -168,20 +183,24 @@ export function RewriteEditor({
         setSelected(index + 1);
     };
 
-    const moveOp = (index: number, delta: number) => {
-        const nextIndex = index + delta;
-        if (nextIndex < 0 || nextIndex >= draft.operations.length) return;
-        const operations = [...draft.operations];
-        const [moved] = operations.splice(index, 1);
-        operations.splice(nextIndex, 0, moved);
-        emitDraft({ ...draft, operations });
-        setSelected(nextIndex);
-    };
-
     const removeOp = (index: number) => {
         const operations = draft.operations.filter((_, i) => i !== index);
         emitDraft({ ...draft, operations });
+        setCheckedOperations((current) => new Set(
+            [...current]
+                .filter((item) => item !== index)
+                .map((item) => item > index ? item - 1 : item),
+        ));
         setMobileDetail(false);
+    };
+
+    const removeCheckedOperations = () => {
+        if (!checkedOperations.size) return;
+        const operations = draft.operations.filter((_, index) => !checkedOperations.has(index));
+        emitDraft({ ...draft, operations });
+        setCheckedOperations(new Set());
+        setSelected(Math.min(selected, Math.max(0, operations.length - 1)));
+        if (!operations.length) setMobileDetail(false);
     };
 
     const onDragEnd = (result: DropResult) => {
@@ -208,9 +227,9 @@ export function RewriteEditor({
     const runValidate = () => {
         if (tab === 'json' && !applyJsonTab()) return;
         const payload = serializeConfig(draft);
-        let parsedConfig: unknown = {};
+        let parsedConfig: unknown;
         try {
-            parsedConfig = payload.trim() ? JSON.parse(payload) : {};
+            parsedConfig = parseRewritePayload(payload);
         } catch {
             setLocalError(t('invalidJson'));
             return;
@@ -224,10 +243,10 @@ export function RewriteEditor({
     const runPreview = () => {
         if (!channelId) return;
         if (tab === 'json' && !applyJsonTab()) return;
-        let draftConfig: unknown = {};
+        let draftConfig: unknown;
         try {
             const raw = serializeConfig(draft);
-            draftConfig = raw.trim() ? JSON.parse(raw) : {};
+            draftConfig = parseRewritePayload(raw);
         } catch {
             setLocalError(t('invalidJson'));
             return;
@@ -287,7 +306,7 @@ export function RewriteEditor({
         }, 50);
     };
 
-    const save = () => {
+    const save = (keepEditing = false) => {
         const invalidLiteral = dialogRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
         if (invalidLiteral) {
             setTab('rules');
@@ -308,7 +327,7 @@ export function RewriteEditor({
         }
         let config: unknown;
         try {
-            config = JSON.parse(serializeConfig(nextDraft));
+            config = parseRewritePayload(serializeConfig(nextDraft));
         } catch {
             setLocalError(t('invalidJson'));
             return;
@@ -318,8 +337,10 @@ export function RewriteEditor({
                 onChange(serializeConfig(nextDraft));
                 setLocalError('');
                 setDirty(false);
-                setOpen(false);
-                setMobileDetail(false);
+                if (!keepEditing) {
+                    setOpen(false);
+                    setMobileDetail(false);
+                }
             },
             onError: (error) => {
                 const message = mutationErrorMessage(error, t('validateFailed'));
@@ -380,7 +401,7 @@ export function RewriteEditor({
             <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose(); else openEditor(); }}>
                 <DialogContent ref={dialogRef} className="flex h-[min(100dvh,52rem)] max-h-[min(100dvh,52rem)] w-full max-w-[calc(100%-1rem)] flex-col overflow-hidden sm:max-w-5xl md:h-[min(90dvh,52rem)]">
                     <DialogHeader className="shrink-0 space-y-1 pr-8 text-left">
-                        <DialogTitle className="text-base">{t('dialogTitle')}</DialogTitle>
+                        <DialogTitle>{t('dialogTitle')}</DialogTitle>
                         <DialogDescription className="text-xs">
                             {scope === 'group' ? t('scopeGroup') : t('scopeChannel')}
                             {' · '}
@@ -391,9 +412,11 @@ export function RewriteEditor({
                     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2">
                         <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5" role="tablist" aria-label={t('dialogTitle')}>
                             {(['rules', 'preview', 'json'] as Tab[]).map((item) => (
-                                <button
+                                <Button
                                     key={item}
                                     type="button"
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => setTab(item)}
                                     onKeyDown={(event) => {
                                         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -413,14 +436,14 @@ export function RewriteEditor({
                                     data-rewrite-tab={item}
                                     tabIndex={tab === item ? 0 : -1}
                                     className={cn(
-                                        'h-8 rounded-md px-3 text-xs font-medium transition-colors motion-reduce:transition-none',
+                                        'h-8 rounded-md px-3 text-xs font-medium transition-colors hover:bg-transparent motion-reduce:transition-none',
                                         tab === item
                                             ? 'bg-background text-foreground shadow-sm'
                                             : 'text-muted-foreground hover:text-foreground',
                                     )}
                                 >
                                     {t(item === 'rules' ? 'tabRules' : item === 'preview' ? 'tabPreview' : 'tabJson')}
-                                </button>
+                                </Button>
                             ))}
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -468,7 +491,7 @@ export function RewriteEditor({
                                 draft.operations.length > 0 && 'md:grid md:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)]',
                             )}>
                                 <div className={cn(
-                                    'min-h-0 overflow-y-auto',
+                                    'min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]',
                                     isMobile && mobileDetail && 'hidden',
                                     !isMobile && 'block',
                                     draft.operations.length === 0 && 'flex flex-1 flex-col',
@@ -489,123 +512,130 @@ export function RewriteEditor({
                                         )}
                                     </div>
                                     {draft.operations.length === 0 ? (
-                                        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/60 px-4 py-8 text-center">
-                                            <p className="text-sm text-muted-foreground">{t('empty')}</p>
-                                            <AddOperationMenu onAdd={(op) => {
-                                                const next = [op];
-                                                emitDraft({ ...draft, operations: next });
-                                                setSelected(0);
-                                                setMobileDetail(true);
-                                                setFocusRequest((current) => current + 1);
-                                            }} />
-                                        </div>
+                                        <ListState
+                                            icon={Settings2}
+                                            title={t('emptyTitle')}
+                                            description={t('emptyDescription')}
+                                            className="mx-auto w-full max-w-md flex-1 justify-center"
+                                            action={(
+                                                <AddOperationMenu onAdd={(op) => {
+                                                    const next = [op];
+                                                    emitDraft({ ...draft, operations: next });
+                                                    setSelected(0);
+                                                    setMobileDetail(true);
+                                                    setFocusRequest((current) => current + 1);
+                                                }} />
+                                            )}
+                                        />
                                     ) : (
-                                        <DragDropContext onDragEnd={onDragEnd}>
-                                            <Droppable droppableId="rewrite-ops">
-                                                {(provided) => (
-                                                    <div ref={provided.innerRef} {...provided.droppableProps} className="divide-y divide-border/40 rounded-lg border border-border/40">
-                                                        {draft.operations.map((op, index) => (
-                                                            <Draggable key={`${op.id}-${index}`} draggableId={`${op.id}-${index}`} index={index}>
-                                                                {(drag, snapshot) => (
-                                                                    <div
-                                                                        ref={drag.innerRef}
-                                                                        {...drag.draggableProps}
-                                                                        className={cn(
-                                                                            'group flex items-center gap-2 px-2 py-1.5 transition-colors',
-                                                                            selected === index
-                                                                                ? 'bg-muted/50'
-                                                                                : 'hover:bg-muted/30',
-                                                                            snapshot.isDragging && 'bg-muted shadow-lg',
-                                                                            op.enabled === false && 'opacity-60',
-                                                                        )}
-                                                                    >
-                                                                        <button
-                                                                            type="button"
-                                                                            className="shrink-0 cursor-grab text-muted-foreground/50 transition-colors hover:text-muted-foreground active:cursor-grabbing"
-                                                                            {...drag.dragHandleProps}
-                                                                            aria-label={t('reorder')}
-                                                                        >
-                                                                            <GripVertical className="size-3.5" />
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            className="min-w-0 flex-1 text-left"
-                                                                            onClick={() => {
-                                                                                setSelected(index);
-                                                                                setMobileDetail(true);
-                                                                            }}
-                                                                        >
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="shrink-0 text-xs text-muted-foreground">{index + 1}.</span>
-                                                                                <span className="truncate text-sm font-medium text-foreground">
-                                                                                    {op.name || op.id}
-                                                                                </span>
-                                                                                {op.when && (
-                                                                                    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">
-                                                                                        {t('hasCondition')}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                                                                                {op.op}
-                                                                                {op.path && ` · ${op.path}`}
-                                                                                {op.header && ` · ${op.header}`}
-                                                                            </div>
-                                                                        </button>
-                                                                        <div className={cn(
-                                                                            'flex shrink-0 items-center gap-0.5 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100',
-                                                                            selected === index ? 'opacity-100' : 'opacity-0',
-                                                                        )}>
-                                                                            <Button
-                                                                                type="button"
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="size-7 rounded-md text-muted-foreground"
-                                                                                onClick={() => moveOp(index, -1)}
-                                                                                disabled={index === 0}
-                                                                                aria-label={t('moveUp')}
-                                                                            >
-                                                                                <ArrowUp className="size-3.5" />
-                                                                            </Button>
-                                                                            <Button
-                                                                                type="button"
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="size-7 rounded-md text-muted-foreground"
-                                                                                onClick={() => moveOp(index, 1)}
-                                                                                disabled={index === draft.operations.length - 1}
-                                                                                aria-label={t('moveDown')}
-                                                                            >
-                                                                                <ArrowDown className="size-3.5" />
-                                                                            </Button>
-                                                                            <Button
-                                                                                type="button"
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="size-7 rounded-md text-muted-foreground"
-                                                                                onClick={() => duplicateOp(index)}
-                                                                                aria-label={t('duplicate')}
-                                                                            >
-                                                                                <Copy className="size-3.5" />
-                                                                            </Button>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </Draggable>
-                                                        ))}
-                                                        {provided.placeholder}
-                                                    </div>
+                                        <div className="space-y-2">
+                                            <div className="flex min-h-8 items-center justify-between gap-2 px-1">
+                                                <span className="text-xs text-muted-foreground">{t('ruleCount', { count: draft.operations.length })}</span>
+                                                {checkedOperations.size > 0 && (
+                                                    <ConfirmAction
+                                                        title={t('removeSelectedTitle', { count: checkedOperations.size })}
+                                                        description={t('removeSelectedConfirm')}
+                                                        onConfirm={removeCheckedOperations}
+                                                    >
+                                                        <Button type="button" variant="ghost" size="sm" className="h-8 rounded-lg text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">
+                                                            <Trash2 className="size-3.5" />
+                                                            {t('removeSelected', { count: checkedOperations.size })}
+                                                        </Button>
+                                                    </ConfirmAction>
                                                 )}
-                                            </Droppable>
-                                        </DragDropContext>
+                                            </div>
+                                            <DragDropContext onDragEnd={onDragEnd}>
+                                                <Droppable droppableId="rewrite-ops">
+                                                    {(provided) => (
+                                                        <div ref={provided.innerRef} {...provided.droppableProps} className="divide-y divide-border/40 rounded-lg border border-border/40">
+                                                            {draft.operations.map((op, index) => {
+                                                                const rowKey = getRowKey(op);
+                                                                return (
+                                                                <Draggable key={rowKey} draggableId={rowKey} index={index}>
+                                                                    {(drag, snapshot) => (
+                                                                        <div
+                                                                            ref={drag.innerRef}
+                                                                            {...drag.draggableProps}
+                                                                            className={cn(
+                                                                                'group grid min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-1 px-1.5 py-1.5 transition-colors',
+                                                                                selected === index ? 'bg-muted/50' : 'hover:bg-muted/30',
+                                                                                snapshot.isDragging && 'bg-muted shadow-lg',
+                                                                                op.enabled === false && 'opacity-60',
+                                                                            )}
+                                                                        >
+                                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={checkedOperations.has(index)}
+                                                                                    onChange={(event) => setCheckedOperations((current) => {
+                                                                                        const next = new Set(current);
+                                                                                        if (event.target.checked) next.add(index); else next.delete(index);
+                                                                                        return next;
+                                                                                    })}
+                                                                                    aria-label={t('selectRule', { index: index + 1 })}
+                                                                                    className="size-4 rounded border-border accent-primary"
+                                                                                />
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="ghost"
+                                                                                    size="icon-sm"
+                                                                                    className="size-10 cursor-grab rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing md:size-8"
+                                                                                    {...drag.dragHandleProps}
+                                                                                    aria-label={t('reorder')}
+                                                                                >
+                                                                                    <GripVertical className="size-4" />
+                                                                                </Button>
+                                                                            </div>
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="h-auto min-w-0 justify-start rounded-md px-1.5 py-1 text-left hover:bg-transparent hover:text-foreground"
+                                                                                onClick={() => {
+                                                                                    setSelected(index);
+                                                                                    setMobileDetail(true);
+                                                                                }}
+                                                                            >
+                                                                                <div className="min-w-0">
+                                                                                    <div className="flex min-w-0 items-center gap-1.5">
+                                                                                        <span className="shrink-0 text-xs text-muted-foreground">{index + 1}.</span>
+                                                                                        <span className="truncate text-sm font-medium text-foreground">{operationLabel(t, String(op.op))}</span>
+                                                                                        {op.when && <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-3xs text-muted-foreground">{t('hasCondition')}</span>}
+                                                                                    </div>
+                                                                                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                                                                                        {op.path || op.header || op.name || t('noTarget')}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </Button>
+                                                                            <div className="flex shrink-0 items-center gap-0.5">
+                                                                                <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground md:size-8" onClick={() => duplicateOp(index)} aria-label={t('duplicate')} title={op.id}>
+                                                                                    <Copy className="size-3.5" />
+                                                                                </Button>
+                                                                                <ConfirmAction title={t('removeConfirmTitle')} description={t('removeConfirm')} onConfirm={() => removeOp(index)}>
+                                                                                    <Button type="button" variant="ghost" size="icon-sm" className="size-10 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive md:size-8" aria-label={t('remove')}>
+                                                                                        <Trash2 className="size-3.5" />
+                                                                                    </Button>
+                                                                                </ConfirmAction>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </Draggable>
+                                                                );
+                                                            })}
+                                                            {provided.placeholder}
+                                                        </div>
+                                                    )}
+                                                </Droppable>
+                                            </DragDropContext>
+                                        </div>
                                     )}
                                 </div>
                                 <div className={cn(
-                                    'min-h-0 overflow-y-auto rounded-lg border border-border/40 bg-background',
+                                    'min-h-0 overflow-y-auto overscroll-contain touch-pan-y rounded-lg border border-border/40 bg-background [-webkit-overflow-scrolling:touch]',
                                     (isMobile && !mobileDetail) || (!isMobile && !current) ? 'hidden' : 'block',
                                 )}>
                                     {isMobile && mobileDetail && (
-                                        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border/40 bg-background px-3 py-2">
+                                        <div className="sticky top-0 z-10 flex min-w-0 items-center gap-2 border-b border-border/40 bg-background px-3 py-2">
                                             <Button
                                                 type="button"
                                                 variant="ghost"
@@ -614,10 +644,10 @@ export function RewriteEditor({
                                                 onClick={() => setMobileDetail(false)}
                                             >
                                                 <ChevronLeft className="size-3.5" />
-                                                {t('back')}
+                                                {t('backToOperations')}
                                             </Button>
-                                            <span className="truncate text-sm font-medium">
-                                                {current?.name || current?.id || t('ruleDetail')}
+                                            <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                                {current ? operationLabel(t, String(current.op)) : t('ruleDetail')}
                                             </span>
                                         </div>
                                     )}
@@ -721,7 +751,7 @@ export function RewriteEditor({
                                     </p>
                                 )}
                                 {preview.data && (
-                                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+                                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
                                         <PreviewStageView data={preview.data} scope={scope} theme={resolvedTheme} t={t} />
                                     </div>
                                 )}
@@ -744,18 +774,21 @@ export function RewriteEditor({
                         )}
                     </div>
 
-                    <DialogFooter className="shrink-0 flex-row items-center justify-between border-t border-border/40 pt-3">
-                        <div className="flex items-center gap-2">
+                    <DialogFooter className="shrink-0 border-t border-border/40 pt-3 max-md:grid max-md:grid-cols-2 max-md:gap-2 md:flex-row md:items-center md:justify-between">
+                        <div className="flex min-h-5 items-center gap-2 max-md:col-span-2">
                             {dirty && (
                                 <span className="text-xs text-muted-foreground">{t('unsaved')}</span>
                             )}
                         </div>
-                        <div className="flex gap-2">
-                            <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={requestClose}>
+                        <div className="grid grid-cols-2 gap-2 max-md:col-span-2 md:flex md:justify-end">
+                            <Button type="button" variant="secondary" className="h-10 rounded-lg md:h-9" onClick={requestClose}>
                                 {t('cancel')}
                             </Button>
-                            <Button type="button" className="h-9 rounded-lg" onClick={save} disabled={validate.isPending}>
-                                {t('save')}
+                            <Button type="button" variant="outline" className="h-10 rounded-lg md:h-9" onClick={() => save(true)} disabled={validate.isPending}>
+                                {t('saveContinue')}
+                            </Button>
+                            <Button type="button" className="col-span-2 h-10 rounded-lg md:col-span-1 md:h-9" onClick={() => save(false)} disabled={validate.isPending}>
+                                {t('saveClose')}
                             </Button>
                         </div>
                     </DialogFooter>
@@ -853,19 +886,21 @@ function PreviewStageView({
                 {(['before', 'group', 'final'] as PreviewStage[]).map((s) => {
                     if (s === 'group' && !hasGroup) return null;
                     return (
-                        <button
+                        <Button
                             key={s}
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setStage(s)}
                             className={cn(
-                                'h-7 rounded-md px-2.5 text-xs font-medium transition-colors',
+                                'h-7 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-transparent',
                                 stage === s
                                     ? 'bg-background text-foreground shadow-sm'
                                     : 'text-muted-foreground hover:text-foreground',
                             )}
                         >
                             {s === 'before' ? t('outboundBeforeRewrite') : s === 'group' ? t('afterGroup') : t('finalRequest')}
-                        </button>
+                        </Button>
                     );
                 })}
             </div>
@@ -902,10 +937,10 @@ function PreviewStageView({
                                 <span className="shrink-0 font-mono text-muted-foreground">
                                     #{entry.index + 1}
                                 </span>
-                                <span className="font-mono text-foreground">{entry.operation_id}</span>
-                                <span className="text-muted-foreground">{entry.operation}</span>
+                                <span className="font-medium text-foreground">{operationLabel(t, entry.operation)}</span>
+                                <span className="max-w-48 truncate font-mono text-3xs text-muted-foreground" title={entry.operation_id}>{entry.operation_id}</span>
                                 <span className={cn(
-                                    'rounded px-1 py-0.5 text-[10px] font-medium',
+                                    'rounded px-1 py-0.5 text-3xs font-medium',
                                     entry.status === 'applied' && 'bg-success/10 text-success',
                                     entry.status === 'skipped' && 'bg-muted text-muted-foreground',
                                     entry.status === 'blocked' && 'bg-warning/10 text-warning',

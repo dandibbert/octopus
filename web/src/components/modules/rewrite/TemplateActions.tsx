@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { FilePlus2, Library, RefreshCw, Trash2 } from 'lucide-react';
+import { ChevronDown, FilePlus2, Library, RefreshCw, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmAction } from '@/components/common/ConfirmAction';
 import { ListSkeleton, ListState } from '@/components/common/ListState';
@@ -68,6 +69,7 @@ export function RewriteTemplateActions({
     const t = useTranslations('rewrite');
     const [browseOpen, setBrowseOpen] = useState(false);
     const [saveOpen, setSaveOpen] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const templates = useRewriteTemplates(scope, browseOpen);
@@ -122,14 +124,55 @@ export function RewriteTemplateActions({
 
     return (
         <div className="flex flex-wrap items-center gap-1.5">
-            <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setBrowseOpen(true)}>
-                <Library className="size-3.5" />
-                {t('templateApply')}
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setSaveOpen(true)} disabled={!templateSafe}>
-                <FilePlus2 className="size-3.5" />
-                {t('templateSave')}
-            </Button>
+            <div className="hidden items-center gap-1.5 md:flex">
+                <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setBrowseOpen(true)}>
+                    <Library className="size-3.5" />
+                    {t('templateApply')}
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setSaveOpen(true)} disabled={!templateSafe}>
+                    <FilePlus2 className="size-3.5" />
+                    {t('templateSave')}
+                </Button>
+            </div>
+
+            <Popover open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs md:hidden">
+                        <Library className="size-3.5" />
+                        {t('templates')}
+                        <ChevronDown className="size-3.5 opacity-60" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" collisionPadding={12} className="w-44 rounded-xl p-1 md:hidden">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-full justify-start rounded-lg px-2 text-xs font-normal"
+                        onClick={() => {
+                            setMobileMenuOpen(false);
+                            setBrowseOpen(true);
+                        }}
+                    >
+                        <Library className="size-3.5" />
+                        {t('templateApply')}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-full justify-start rounded-lg px-2 text-xs font-normal"
+                        onClick={() => {
+                            setMobileMenuOpen(false);
+                            setSaveOpen(true);
+                        }}
+                        disabled={!templateSafe}
+                    >
+                        <FilePlus2 className="size-3.5" />
+                        {t('templateSave')}
+                    </Button>
+                </PopoverContent>
+            </Popover>
 
             <Dialog open={browseOpen} onOpenChange={setBrowseOpen}>
                 <DialogContent className="flex max-h-[min(90dvh,42rem)] max-w-[calc(100%-1rem)] flex-col overflow-hidden sm:max-w-2xl">
