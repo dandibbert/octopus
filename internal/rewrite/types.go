@@ -142,6 +142,7 @@ const (
 	OpIn       Operator = "in"
 	OpNotIn    Operator = "not_in"
 	OpTypeIs   Operator = "type_is"
+	OpNoneEq   Operator = "none_eq"
 )
 
 type RetryDisposition string

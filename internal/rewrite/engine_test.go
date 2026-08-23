@@ -446,6 +446,48 @@ func TestV2LookingConfigRequiresSchema(t *testing.T) {
 	}
 }
 
+func TestConditionNoneEqMatchesOnlyWhenNoWildcardValueEquals(t *testing.T) {
+	raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"add-search","op":"array_append","path":"/tools","value":{"type":"web_search"},"when":{"all":[{"source":"body","path":"/tools/*/type","operator":"none_eq","value":"web_search"},{"source":"body","path":"/tools/*/type","operator":"none_eq","value":"web_search_preview"}]}}]}`
+	plan := mustCompile(t, raw, ScopeChannel)
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "missing tools", body: `{}`, want: `{"tools":[{"type":"web_search"}]}`},
+		{name: "other tool", body: `{"tools":[{"type":"function"}]}`, want: `{"tools":[{"type":"function"},{"type":"web_search"}]}`},
+		{name: "current search already present", body: `{"tools":[{"type":"web_search"}]}`, want: `{"tools":[{"type":"web_search"}]}`},
+		{name: "current search present after another tool", body: `{"tools":[{"type":"function"},{"type":"web_search"}]}`, want: `{"tools":[{"type":"function"},{"type":"web_search"}]}`},
+		{name: "legacy search already present", body: `{"tools":[{"type":"web_search_preview"}]}`, want: `{"tools":[{"type":"web_search_preview"}]}`},
+		{name: "legacy search present after another tool", body: `{"tools":[{"type":"function"},{"type":"web_search_preview"}]}`, want: `{"tools":[{"type":"function"},{"type":"web_search_preview"}]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := Apply(Input{Body: []byte(tc.body), Headers: http.Header{}}, plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(res.Body) != tc.want {
+				t.Fatalf("got %s, want %s", res.Body, tc.want)
+			}
+		})
+	}
+}
+
+func TestConditionNoneEqRequiresBodyWildcardPath(t *testing.T) {
+	conditions := []string{
+		`{"source":"body","path":"/model","operator":"none_eq","value":"x"}`,
+		`{"source":"context","path":"request.normalized_model","operator":"none_eq","value":"x"}`,
+		`{"source":"header","path":"X-Test","operator":"none_eq","value":"x"}`,
+	}
+	for _, condition := range conditions {
+		raw := `{"$schema":"octopus.request-rewrite/v2","operations":[{"id":"x","op":"set","path":"/ok","value":true,"when":` + condition + `}]}`
+		if _, err := ParseAndCompile(&raw, ScopeChannel); err == nil {
+			t.Fatalf("expected none_eq restriction for %s", condition)
+		}
+	}
+}
+
 func TestConditionOperatorRequiresTypedValue(t *testing.T) {
 	cases := []string{
 		`{"source":"body","path":"/x","operator":"eq"}`,

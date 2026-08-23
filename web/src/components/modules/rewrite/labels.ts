@@ -47,6 +47,7 @@ const CONDITION_OPERATOR_KEYS: Record<string, string> = {
     in: 'condOpIn',
     not_in: 'condOpNotIn',
     type_is: 'condOpTypeIs',
+    none_eq: 'condOpNoneEq',
 };
 
 const CONDITION_SOURCE_KEYS: Record<string, string> = {

@@ -45,6 +45,8 @@ export function ConditionBuilder({
 }) {
     const t = useTranslations('rewrite');
     const kind = conditionKind(value);
+    const source = String(value?.source ?? 'body');
+    const operators = CONDITION_OPERATORS.filter((operator) => operator !== 'none_eq' || source === 'body');
 
     const setKind = (next: 'all' | 'any' | 'not' | 'predicate') => {
         if (next === 'all') onChange({ all: [emptyPredicate()] });
@@ -104,7 +106,15 @@ export function ConditionBuilder({
                     <div className="grid min-w-0 grid-cols-1 gap-2 @2xl/predicate:grid-cols-[minmax(7rem,0.75fr)_minmax(10rem,1.25fr)_minmax(8rem,0.8fr)]">
                         <Select
                             value={String(value?.source ?? 'body')}
-                            onValueChange={(next) => onChange({ ...(value ?? emptyPredicate()), source: next, path: next === 'context' ? 'request.original_model' : value?.path })}
+                            onValueChange={(next) => {
+                                const current = value ?? emptyPredicate();
+                                onChange({
+                                    ...current,
+                                    source: next,
+                                    path: next === 'context' ? 'request.original_model' : value?.path,
+                                    operator: current.operator === 'none_eq' && next !== 'body' ? 'eq' : current.operator,
+                                });
+                            }}
                         >
                             <SelectTrigger className="h-8 min-w-0 rounded-md text-xs" aria-label={t('condSource')}>
                                 <SelectValue />
@@ -143,7 +153,7 @@ export function ConditionBuilder({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {CONDITION_OPERATORS.map((op) => (
+                                {operators.map((op) => (
                                     <SelectItem key={op} value={op}>{conditionOperatorLabel(t, op)}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -192,7 +202,7 @@ export function ConditionBuilder({
                                 </SelectContent>
                             </Select>
                         )}
-                        {['eq', 'neq'].includes(String(value?.operator ?? 'eq')) && (
+                        {['eq', 'neq', 'none_eq'].includes(String(value?.operator ?? 'eq')) && (
                             <LiteralEditor
                                 value={value?.value ?? ''}
                                 onChange={(next) => onChange({ ...(value ?? emptyPredicate()), value: next })}

@@ -95,7 +95,7 @@ func compilePredicate(expr *ConditionExpr, out *compiledCondition) error {
 	}
 	switch expr.Operator {
 	case OpExists, OpMissing, OpEq, OpNeq, OpPrefix, OpSuffix, OpContains, OpRegex,
-		OpGT, OpGTE, OpLT, OpLTE, OpIn, OpNotIn, OpTypeIs:
+		OpGT, OpGTE, OpLT, OpLTE, OpIn, OpNotIn, OpTypeIs, OpNoneEq:
 	default:
 		return validationError(fmt.Sprintf("unsupported operator %q", expr.Operator))
 	}
@@ -133,6 +133,9 @@ func compilePredicate(expr *ConditionExpr, out *compiledCondition) error {
 		if _, _, err := (Context{}).Lookup(expr.Path); err != nil && !strings.HasPrefix(expr.Path, "request.metadata.") {
 			return validationError(err.Error())
 		}
+	}
+	if expr.Operator == OpNoneEq && (expr.Source != ValueSourceBody || out.bodyPath == nil || !out.bodyPath.hasWildcard()) {
+		return validationError("none_eq requires a body path containing a wildcard")
 	}
 	_ = needsPath
 	if expr.Operator == OpRegex {
@@ -240,6 +243,9 @@ func (c *compiledCondition) eval(state evalState) (bool, error) {
 }
 
 func (c *compiledCondition) evalPredicate(state evalState) (bool, error) {
+	if c.operator == OpNoneEq {
+		return c.evalNoneEq(state)
+	}
 	val, exists, isNull, err := c.read(state)
 	if err != nil {
 		if c.operator == OpMissing {
@@ -321,6 +327,26 @@ func (c *compiledCondition) evalPredicate(state evalState) (bool, error) {
 	}
 	_ = isNull
 	return false, nil
+}
+
+func (c *compiledCondition) evalNoneEq(state evalState) (bool, error) {
+	if c.source != ValueSourceBody || c.bodyPath == nil {
+		return false, nil
+	}
+	resolved, err := resolvePaths(state.body, c.bodyPath, false)
+	if err != nil {
+		return false, nil
+	}
+	for _, path := range resolved {
+		raw, exists, _, err := getRaw(state.body, path.gjson)
+		if err != nil || !exists {
+			continue
+		}
+		if jsonEqualWithCase(raw, c.value.Raw, c.caseSensitive) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (c *compiledCondition) read(state evalState) (raw []byte, exists bool, isNull bool, err error) {

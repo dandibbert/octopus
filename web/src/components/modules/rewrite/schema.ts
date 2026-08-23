@@ -84,6 +84,7 @@ export const CONDITION_OPERATORS = [
     'in',
     'not_in',
     'type_is',
+    'none_eq',
 ] as const;
 
 export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];

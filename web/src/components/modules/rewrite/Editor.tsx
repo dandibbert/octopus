@@ -31,6 +31,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { usePreviewRewrite, useValidateRewrite, type RewriteScope } from '@/api/endpoints/rewrite';
 import { OperationEditor } from './OperationEditor';
 import { RewriteTemplateActions } from './TemplateActions';
+import { findUneditedBuiltinPlaceholder } from './builtinTemplates';
 import { parseRewritePayload } from './payload';
 import { AddOperationMenu } from './AddOperationMenu';
 import { operationLabel } from './labels';
@@ -324,6 +325,15 @@ export function RewriteEditor({
             nextDraft = next.config;
             setDraft(next.config);
             setJsonDraft(next.kind === 'empty' ? '' : serializeConfig(next.config));
+        }
+        const placeholder = findUneditedBuiltinPlaceholder(nextDraft);
+        if (placeholder) {
+            const index = nextDraft.operations.findIndex((operation) => operation.id === placeholder.operationId);
+            setLocalError(t('templatePlaceholderError', { header: placeholder.header }));
+            setTab('rules');
+            if (index >= 0) setSelected(index);
+            setMobileDetail(true);
+            return;
         }
         let config: unknown;
         try {
