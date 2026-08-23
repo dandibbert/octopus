@@ -8,17 +8,19 @@ export type BuiltinTargetFormat = 'openai_chat' | 'openai_responses' | 'anthropi
 export type BuiltinRewriteTemplate = {
     key: string;
     nameKey:
-        | 'builtinTemplateKimiTemperatureName'
+        | 'builtinTemplateKimiSamplingName'
         | 'builtinTemplateDefaultOutputLimitName'
         | 'builtinTemplateEnsureWebSearchName'
+        | 'builtinTemplateEnsureAnthropicWebSearchName'
         | 'builtinTemplateRemoveStreamOptionsName'
         | 'builtinTemplateRemoveServiceTierName'
         | 'builtinTemplateReasoningCompatibilityName'
         | 'builtinTemplateOpenRouterHeadersName';
     descriptionKey:
-        | 'builtinTemplateKimiTemperatureDescription'
+        | 'builtinTemplateKimiSamplingDescription'
         | 'builtinTemplateDefaultOutputLimitDescription'
         | 'builtinTemplateEnsureWebSearchDescription'
+        | 'builtinTemplateEnsureAnthropicWebSearchDescription'
         | 'builtinTemplateRemoveStreamOptionsDescription'
         | 'builtinTemplateRemoveServiceTierDescription'
         | 'builtinTemplateReasoningCompatibilityDescription'

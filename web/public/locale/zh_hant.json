@@ -2400,9 +2400,11 @@
     "templateReplaceTitle": "取代目前草稿？",
     "templateReplaceHint": "目前所有請求重寫規則將由此範本取代，但尚不會儲存外層表單。",
     "condOpNoneEq": "所有萬用項均不等於",
-    "builtinTemplateKimiTemperatureName": "Kimi 固定 temperature 相容",
-    "builtinTemplateKimiTemperatureDescription": "為 Kimi K3、K2.7 Code、K2.6 和 K2.5 的 Chat 請求刪除顯式 temperature。其合法值會隨模型或思考模式變化，Kimi 官方建議省略該欄位；不會處理 moonshot-v1。",
+    "builtinTemplateKimiSamplingName": "Kimi 固定取樣參數相容",
+    "builtinTemplateKimiSamplingDescription": "為 Kimi K3、K2.7 Code、K2.6 和 K2.5 的 Chat 請求刪除顯式 temperature、top_p、n、presence_penalty 與 frequency_penalty，讓上游使用各模型官方固定值；不會處理 moonshot-v1。",
     "builtinTemplateEnsureWebSearchName": "缺少時補充上游 Web Search",
-    "builtinTemplateEnsureWebSearchDescription": "僅當 OpenAI Responses 的 tools 中既沒有 web_search，也沒有舊版 web_search_preview 時，追加 {type: \"web_search\"}。上游供應商和所選模型必須實際支援伺服器端搜尋。"
+    "builtinTemplateEnsureWebSearchDescription": "僅當 OpenAI Responses 的 tools 中不存在 web_search、web_search_2025_08_26 與舊版 preview 類型時，追加 {type: \"web_search\"}。模型實際呼叫聯網搜尋時可能產生額外費用。",
+    "builtinTemplateEnsureAnthropicWebSearchName": "Anthropic：缺少時補充 Web Search",
+    "builtinTemplateEnsureAnthropicWebSearchDescription": "為 Anthropic Messages 追加 web_search_20250305，並合併所需的 Anthropic-Beta，不覆蓋既有 beta。適用於實際支援此伺服器端工具的 Anthropic-compatible 渠道（包括支援 WebSearch 的 Kimi Anthropic 介面）；實際呼叫可能產生額外費用。"
   }
 }

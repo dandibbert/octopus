@@ -24,6 +24,14 @@ const modelMatches = (value) => ({
 // Completions sampling parameters or use max_completion_tokens instead.
 const OPENAI_REASONING_MODEL_PATTERN = '(^|.*/)(o1|o3|o4|gpt-5)([-_.].*)?$';
 const OPENAI_O_SERIES_MODEL_PATTERN = '(^|.*/)(o1|o3|o4)([-_.].*)?$';
+const KIMI_FIXED_SAMPLING_PATTERN = '(^|.*/)(kimi-k3|kimi-k2\\.7-code(?:-highspeed)?|kimi-k2\\.6|kimi-k2\\.5)$';
+
+const kimiFixedSamplingWhen = () => ({
+    all: [
+        outboundFormatIs('openai_chat'),
+        modelMatches(KIMI_FIXED_SAMPLING_PATTERN),
+    ],
+});
 
 const nonReasoningOpenAIChat = () => ({
     all: [
@@ -34,9 +42,9 @@ const nonReasoningOpenAIChat = () => ({
 
 export const BUILTIN_REWRITE_TEMPLATES = [
     {
-        key: 'kimi-fixed-temperature-compatibility',
-        nameKey: 'builtinTemplateKimiTemperatureName',
-        descriptionKey: 'builtinTemplateKimiTemperatureDescription',
+        key: 'kimi-fixed-sampling-compatibility',
+        nameKey: 'builtinTemplateKimiSamplingName',
+        descriptionKey: 'builtinTemplateKimiSamplingDescription',
         category: 'compatibility',
         risk: 'low',
         scopes: ['channel', 'group'],
@@ -44,15 +52,38 @@ export const BUILTIN_REWRITE_TEMPLATES = [
         providerHint: 'Kimi',
         config: baseConfig([
             {
-                id: 'kimi-remove-fixed-temperature',
+                id: 'kimi-remove-temperature',
                 op: 'delete',
                 path: '/temperature',
-                when: {
-                    all: [
-                        outboundFormatIs('openai_chat'),
-                        modelMatches('(^|.*/)(kimi-k3|kimi-k2\\.7-code(?:-highspeed)?|kimi-k2\\.6|kimi-k2\\.5)$'),
-                    ],
-                },
+                when: kimiFixedSamplingWhen(),
+                policy: { on_missing: 'skip' },
+            },
+            {
+                id: 'kimi-remove-top-p',
+                op: 'delete',
+                path: '/top_p',
+                when: kimiFixedSamplingWhen(),
+                policy: { on_missing: 'skip' },
+            },
+            {
+                id: 'kimi-remove-n',
+                op: 'delete',
+                path: '/n',
+                when: kimiFixedSamplingWhen(),
+                policy: { on_missing: 'skip' },
+            },
+            {
+                id: 'kimi-remove-presence-penalty',
+                op: 'delete',
+                path: '/presence_penalty',
+                when: kimiFixedSamplingWhen(),
+                policy: { on_missing: 'skip' },
+            },
+            {
+                id: 'kimi-remove-frequency-penalty',
+                op: 'delete',
+                path: '/frequency_penalty',
+                when: kimiFixedSamplingWhen(),
                 policy: { on_missing: 'skip' },
             },
         ]),
@@ -87,7 +118,7 @@ export const BUILTIN_REWRITE_TEMPLATES = [
         nameKey: 'builtinTemplateEnsureWebSearchName',
         descriptionKey: 'builtinTemplateEnsureWebSearchDescription',
         category: 'provider',
-        risk: 'medium',
+        risk: 'high',
         scopes: ['channel'],
         targetFormats: ['openai_responses'],
         providerHint: 'OpenAI',
@@ -103,6 +134,62 @@ export const BUILTIN_REWRITE_TEMPLATES = [
                         outboundFormatIs('openai_responses'),
                         { source: 'body', path: '/tools/*/type', operator: 'none_eq', value: 'web_search' },
                         { source: 'body', path: '/tools/*/type', operator: 'none_eq', value: 'web_search_preview' },
+                        { source: 'body', path: '/tools/*/type', operator: 'none_eq', value: 'web_search_2025_08_26' },
+                        { source: 'body', path: '/tools/*/type', operator: 'none_eq', value: 'web_search_preview_2025_03_11' },
+                    ],
+                },
+            },
+        ]),
+    },
+    {
+        key: 'ensure-anthropic-web-search',
+        nameKey: 'builtinTemplateEnsureAnthropicWebSearchName',
+        descriptionKey: 'builtinTemplateEnsureAnthropicWebSearchDescription',
+        category: 'provider',
+        risk: 'high',
+        scopes: ['channel'],
+        targetFormats: ['anthropic_messages'],
+        providerHint: 'Anthropic / Kimi',
+        config: baseConfig([
+            {
+                id: 'ensure-anthropic-web-search-tool',
+                op: 'array_append',
+                path: '/tools',
+                value: { type: 'web_search_20250305', name: 'web_search' },
+                splat: false,
+                when: {
+                    all: [
+                        outboundFormatIs('anthropic_messages'),
+                        { source: 'body', path: '/tools/*/type', operator: 'none_eq', value: 'web_search_20250305' },
+                        { source: 'body', path: '/tools/*/name', operator: 'none_eq', value: 'web_search' },
+                    ],
+                },
+            },
+            {
+                id: 'ensure-anthropic-web-search-beta',
+                op: 'header_set_if_absent',
+                header: 'Anthropic-Beta',
+                value: 'web-search-2025-03-05',
+                when: outboundFormatIs('anthropic_messages'),
+            },
+            {
+                id: 'merge-anthropic-web-search-beta',
+                op: 'header_set',
+                header: 'Anthropic-Beta',
+                value_template: '${header:Anthropic-Beta},web-search-2025-03-05',
+                when: {
+                    all: [
+                        outboundFormatIs('anthropic_messages'),
+                        { source: 'header', path: 'Anthropic-Beta', operator: 'exists' },
+                        {
+                            not: {
+                                source: 'header',
+                                path: 'Anthropic-Beta',
+                                operator: 'contains',
+                                value: 'web-search-2025-03-05',
+                                case_sensitive: false,
+                            },
+                        },
                     ],
                 },
             },

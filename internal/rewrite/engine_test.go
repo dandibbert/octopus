@@ -488,6 +488,94 @@ func TestConditionNoneEqRequiresBodyWildcardPath(t *testing.T) {
 	}
 }
 
+func TestAnthropicWebSearchStyleRulesMergeBetaHeaderWithoutDuplication(t *testing.T) {
+	raw := `{
+		"$schema":"octopus.request-rewrite/v2",
+		"operations":[
+			{
+				"id":"ensure-tool",
+				"op":"array_append",
+				"path":"/tools",
+				"value":{"type":"web_search_20250305","name":"web_search"},
+				"when":{"all":[
+					{"source":"context","path":"route.outbound_format","operator":"eq","value":"anthropic_messages"},
+					{"source":"body","path":"/tools/*/type","operator":"none_eq","value":"web_search_20250305"},
+					{"source":"body","path":"/tools/*/name","operator":"none_eq","value":"web_search"}
+				]}
+			},
+			{
+				"id":"set-beta",
+				"op":"header_set_if_absent",
+				"header":"Anthropic-Beta",
+				"value":"web-search-2025-03-05",
+				"when":{"source":"context","path":"route.outbound_format","operator":"eq","value":"anthropic_messages"}
+			},
+			{
+				"id":"merge-beta",
+				"op":"header_set",
+				"header":"Anthropic-Beta",
+				"value_template":"${header:Anthropic-Beta},web-search-2025-03-05",
+				"when":{"all":[
+					{"source":"context","path":"route.outbound_format","operator":"eq","value":"anthropic_messages"},
+					{"source":"header","path":"Anthropic-Beta","operator":"exists"},
+					{"not":{"source":"header","path":"Anthropic-Beta","operator":"contains","value":"web-search-2025-03-05","case_sensitive":false}}
+				]}
+			}
+		]
+	}`
+	plan := mustCompile(t, raw, ScopeChannel)
+
+	for _, tc := range []struct {
+		name       string
+		body       string
+		beta       string
+		wantBeta   string
+		wantSearch int
+	}{
+		{
+			name:       "merge with existing beta",
+			body:       `{"tools":[{"type":"function","name":"lookup"}]}`,
+			beta:       "prompt-caching-2024-07-31",
+			wantBeta:   "prompt-caching-2024-07-31,web-search-2025-03-05",
+			wantSearch: 1,
+		},
+		{
+			name:       "set beta when absent",
+			body:       `{}`,
+			wantBeta:   "web-search-2025-03-05",
+			wantSearch: 1,
+		},
+		{
+			name:       "do not duplicate existing server tool or beta",
+			body:       `{"tools":[{"type":"web_search_20250305","name":"web_search"}]}`,
+			beta:       "prompt-caching-2024-07-31,web-search-2025-03-05",
+			wantBeta:   "prompt-caching-2024-07-31,web-search-2025-03-05",
+			wantSearch: 1,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := http.Header{}
+			if tc.beta != "" {
+				headers.Set("Anthropic-Beta", tc.beta)
+			}
+			res, err := Apply(Input{
+				Body:    []byte(tc.body),
+				Headers: headers,
+				Context: Context{RouteOutboundFormat: "anthropic_messages"},
+			}, plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := res.Headers.Get("Anthropic-Beta"); got != tc.wantBeta {
+				t.Fatalf("beta=%q want=%q", got, tc.wantBeta)
+			}
+			if got := strings.Count(string(res.Body), `"type":"web_search_20250305"`); got != tc.wantSearch {
+				t.Fatalf("web search count=%d body=%s", got, res.Body)
+			}
+		})
+	}
+}
+
 func TestConditionOperatorRequiresTypedValue(t *testing.T) {
 	cases := []string{
 		`{"source":"body","path":"/x","operator":"eq"}`,

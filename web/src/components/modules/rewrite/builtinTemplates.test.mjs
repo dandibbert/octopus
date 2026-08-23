@@ -80,11 +80,21 @@ test('o-series compatibility covers provider-prefixed model names and stays Open
     ));
 });
 
-test('Kimi fixed sampling compatibility removes temperature only from constrained model families', () => {
-    const template = BUILTIN_REWRITE_TEMPLATES.find((item) => item.key === 'kimi-fixed-temperature-compatibility');
+test('Kimi fixed sampling compatibility removes all fixed sampling knobs from constrained model families', () => {
+    const template = BUILTIN_REWRITE_TEMPLATES.find((item) => item.key === 'kimi-fixed-sampling-compatibility');
     assert.ok(template);
     assert.deepEqual(template.scopes, ['channel', 'group']);
-    assert.deepEqual(template.config.operations.map((operation) => [operation.op, operation.path]), [['delete', '/temperature']]);
+    assert.deepEqual(
+        template.config.operations.map((operation) => [operation.op, operation.path]),
+        [
+            ['delete', '/temperature'],
+            ['delete', '/top_p'],
+            ['delete', '/n'],
+            ['delete', '/presence_penalty'],
+            ['delete', '/frequency_penalty'],
+        ],
+    );
+    assert.ok(template.config.operations.every((operation) => operation.policy?.on_missing === 'skip'));
     const predicate = template.config.operations[0].when.all.find((condition) => condition.operator === 'regex');
     const pattern = new RegExp(predicate.value, 'i');
     for (const model of ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k2.6', 'kimi-k2.5', 'openrouter/moonshotai/kimi-k2.6']) {
@@ -109,7 +119,36 @@ test('web search template covers Responses without duplicating existing server t
         .filter((condition) => condition.operator === 'none_eq')
         .map((condition) => condition.value)
         .sort();
-    assert.deepEqual(noneValues, ['web_search', 'web_search_preview']);
+    assert.deepEqual(noneValues, [
+        'web_search',
+        'web_search_2025_08_26',
+        'web_search_preview',
+        'web_search_preview_2025_03_11',
+    ]);
+    assert.equal(template.risk, 'high');
+});
+
+test('Anthropic web search template adds the server tool and merges the required beta header', () => {
+    const template = BUILTIN_REWRITE_TEMPLATES.find((item) => item.key === 'ensure-anthropic-web-search');
+    assert.ok(template);
+    assert.deepEqual(template.scopes, ['channel']);
+    assert.deepEqual(template.targetFormats, ['anthropic_messages']);
+    assert.equal(template.risk, 'high');
+
+    const [tool, setBeta, mergeBeta] = template.config.operations;
+    assert.equal(tool.op, 'array_append');
+    assert.equal(tool.path, '/tools');
+    assert.deepEqual(tool.value, { type: 'web_search_20250305', name: 'web_search' });
+    assert.ok(tool.when.all.some((condition) => condition.path === '/tools/*/type' && condition.operator === 'none_eq' && condition.value === 'web_search_20250305'));
+    assert.ok(tool.when.all.some((condition) => condition.path === '/tools/*/name' && condition.operator === 'none_eq' && condition.value === 'web_search'));
+
+    assert.equal(setBeta.op, 'header_set_if_absent');
+    assert.equal(setBeta.header, 'Anthropic-Beta');
+    assert.equal(setBeta.value, 'web-search-2025-03-05');
+    assert.equal(mergeBeta.op, 'header_set');
+    assert.equal(mergeBeta.header, 'Anthropic-Beta');
+    assert.equal(mergeBeta.value_template, '${header:Anthropic-Beta},web-search-2025-03-05');
+    assert.ok(mergeBeta.when.all.some((condition) => condition.not?.operator === 'contains' && condition.not?.value === 'web-search-2025-03-05'));
 });
 
 test('OpenRouter attribution uses current headers and blocks untouched placeholders', () => {

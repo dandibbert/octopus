@@ -2400,9 +2400,11 @@
     "templateReplaceTitle": "Replace the current draft?",
     "templateReplaceHint": "All current rewrite rules will be replaced by this template. This does not save the outer form yet.",
     "condOpNoneEq": "No wildcard value equals",
-    "builtinTemplateKimiTemperatureName": "Kimi fixed temperature compatibility",
-    "builtinTemplateKimiTemperatureDescription": "Remove an explicit temperature for Kimi K3, K2.7 Code, K2.6, and K2.5 Chat requests. Their accepted values depend on the model or thinking mode, and Kimi recommends omitting this field. moonshot-v1 is not changed.",
+    "builtinTemplateKimiSamplingName": "Kimi fixed sampling compatibility",
+    "builtinTemplateKimiSamplingDescription": "Remove explicit temperature, top_p, n, presence_penalty, and frequency_penalty from Kimi K3, K2.7 Code, K2.6, and K2.5 Chat requests so the upstream uses each model's fixed official values. moonshot-v1 is not changed.",
     "builtinTemplateEnsureWebSearchName": "Add upstream Web Search when absent",
-    "builtinTemplateEnsureWebSearchDescription": "Add {type: \"web_search\"} to OpenAI Responses tools only when neither web_search nor legacy web_search_preview is already present. The upstream provider and selected model must actually support server-side search."
+    "builtinTemplateEnsureWebSearchDescription": "Add {type: \"web_search\"} to OpenAI Responses only when web_search, web_search_2025_08_26, and legacy preview variants are absent. Actual search calls may incur additional tool charges.",
+    "builtinTemplateEnsureAnthropicWebSearchName": "Anthropic: add Web Search when absent",
+    "builtinTemplateEnsureAnthropicWebSearchDescription": "Add web_search_20250305 to Anthropic Messages and merge the required Anthropic-Beta without overwriting existing beta values. Use only with Anthropic-compatible upstreams that actually support the server tool (including Kimi's Anthropic endpoint where WebSearch is supported); actual calls may incur additional charges."
   }
 }
