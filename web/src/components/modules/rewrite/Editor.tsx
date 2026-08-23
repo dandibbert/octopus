@@ -575,16 +575,16 @@ export function RewriteEditor({
                                                                                     aria-label={t('selectRule', { index: index + 1 })}
                                                                                     className="size-4 rounded border-border accent-primary"
                                                                                 />
-                                                                                <Button
-                                                                                    type="button"
-                                                                                    variant="ghost"
-                                                                                    size="icon-sm"
-                                                                                    className="size-10 cursor-grab rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing md:size-8"
+                                                                                <div
+                                                                                    role="button"
+                                                                                    tabIndex={0}
+                                                                                    className="grid size-10 touch-none select-none cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground data-[dragging=true]:cursor-grabbing md:size-8"
                                                                                     {...drag.dragHandleProps}
                                                                                     aria-label={t('reorder')}
+                                                                                    data-dragging={snapshot.isDragging}
                                                                                 >
                                                                                     <GripVertical className="size-4" />
-                                                                                </Button>
+                                                                                </div>
                                                                             </div>
                                                                             <Button
                                                                                 type="button"

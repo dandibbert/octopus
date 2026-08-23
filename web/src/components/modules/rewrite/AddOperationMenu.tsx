@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,10 @@ function createOperation(op: RewriteOp, id: string): RewriteOperation {
 export function AddOperationMenu({ onAdd }: { onAdd: (op: RewriteOperation) => void }) {
     const t = useTranslations('rewrite');
     const [open, setOpen] = useState(false);
+    const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
+    const setTriggerRef = useCallback((node: HTMLButtonElement | null) => {
+        setPortalContainer(node?.closest<HTMLElement>('[role="dialog"]') ?? null);
+    }, []);
 
     const handleSelect = (op: RewriteOp) => {
         onAdd(createOperation(op, createOperationId()));
@@ -59,13 +63,13 @@ export function AddOperationMenu({ onAdd }: { onAdd: (op: RewriteOperation) => v
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+                <Button ref={setTriggerRef} type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs">
                     <Plus className="size-3.5" />
                     {t('add')}
                     <ChevronDown className="size-3.5 opacity-60" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" collisionPadding={12} className="w-64 overflow-hidden rounded-xl p-0">
+            <PopoverContent portalContainer={portalContainer} align="end" collisionPadding={12} className="w-64 overflow-hidden rounded-xl p-0">
                 <div className="max-h-[min(26rem,var(--radix-popover-content-available-height))] space-y-1 overflow-y-auto overscroll-contain p-1 touch-pan-y [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-2">
                     <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{t('opGroupBody')}</div>
                     {BODY_OPS.map(renderOperation)}
