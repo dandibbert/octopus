@@ -199,7 +199,13 @@ func (m *RelayMetrics) SaveWithChannelStats(ctx context.Context, success bool, e
 			op.StatsAPIKeyUpdate(m.APIKeyID, globalStats)
 		}
 		if updateChannelStats {
-			op.StatsChannelUpdate(channelID, globalStats)
+			// Requests that fail before selecting/attempting a channel have
+			// channelID=0. They belong in global stats only; attributing them to
+			// StatsChannel would let an auto-increment stats PK remap zero onto a
+			// real channel ID in existing databases.
+			if channelID > 0 {
+				op.StatsChannelUpdate(channelID, globalStats)
+			}
 		} else {
 			updateFinalChannelUsageStats(channelID, globalStats)
 		}

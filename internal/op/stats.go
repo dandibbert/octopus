@@ -171,6 +171,13 @@ func persistStatsSnapshots(
 
 	channelRows := make([]model.StatsChannel, 0, len(channelIDs))
 	for _, id := range channelIDs {
+		// ChannelID is a foreign-key identity, not an independent sequence.
+		// Existing databases define stats_channels.channel_id as an integer
+		// auto-increment primary key, so persisting id=0 would let the database
+		// silently allocate a real channel ID and attach unrelated stats to it.
+		if id <= 0 {
+			continue
+		}
 		ch, ok := statsChannelCache.Get(id)
 		if ok {
 			channelRows = append(channelRows, ch)
@@ -203,6 +210,11 @@ func persistStatsSnapshots(
 
 	apiKeyRows := make([]model.StatsAPIKey, 0, len(apiKeyIDs))
 	for _, id := range apiKeyIDs {
+		// Same identity rule as channel stats: APIKeyID=0 means there is no
+		// attributable API key and must never reach an auto-increment PK.
+		if id <= 0 {
+			continue
+		}
 		ak, ok := statsAPIKeyCache.Get(id)
 		if ok {
 			apiKeyRows = append(apiKeyRows, ak)
@@ -321,6 +333,9 @@ func StatsTotalUpdate(metrics model.StatsMetrics) error {
 }
 
 func StatsChannelUpdate(channelID int, metrics model.StatsMetrics) error {
+	if channelID <= 0 {
+		return nil
+	}
 	channelCache, ok := statsChannelCache.Get(channelID)
 	if !ok {
 		channelCache = model.StatsChannel{
@@ -370,6 +385,9 @@ func StatsModelUpdate(stats model.StatsModel) error {
 }
 
 func StatsAPIKeyUpdate(apiKeyID int, metrics model.StatsMetrics) error {
+	if apiKeyID <= 0 {
+		return nil
+	}
 	apiKeyCache, ok := statsAPIKeyCache.Get(apiKeyID)
 	if !ok {
 		apiKeyCache = model.StatsAPIKey{
@@ -385,7 +403,7 @@ func StatsAPIKeyUpdate(apiKeyID int, metrics model.StatsMetrics) error {
 }
 
 func StatsChannelDel(id int) error {
-	if _, ok := statsChannelCache.Get(id); !ok {
+	if id <= 0 {
 		return nil
 	}
 	statsChannelCache.Del(id)
@@ -396,7 +414,7 @@ func StatsChannelDel(id int) error {
 }
 
 func StatsAPIKeyDel(id int) error {
-	if _, ok := statsAPIKeyCache.Get(id); !ok {
+	if id <= 0 {
 		return nil
 	}
 	statsAPIKeyCache.Del(id)
@@ -419,6 +437,9 @@ func StatsTodayGet() model.StatsDaily {
 }
 
 func StatsChannelGet(id int) model.StatsChannel {
+	if id <= 0 {
+		return model.StatsChannel{ChannelID: id}
+	}
 	stats, ok := statsChannelCache.Get(id)
 	if !ok {
 		tmp := model.StatsChannel{
@@ -434,6 +455,9 @@ func StatsChannelGet(id int) model.StatsChannel {
 }
 
 func StatsAPIKeyGet(id int) model.StatsAPIKey {
+	if id <= 0 {
+		return model.StatsAPIKey{APIKeyID: id}
+	}
 	stats, ok := statsAPIKeyCache.Get(id)
 	if !ok {
 		tmp := model.StatsAPIKey{

@@ -340,9 +340,13 @@ func (m *imagesRelayMetrics) SaveWithChannelStats(ctx context.Context, success b
 	op.StatsTotalUpdate(globalStats)
 	op.StatsHourlyUpdate(globalStats)
 	op.StatsDailyUpdate(context.Background(), globalStats)
-	op.StatsAPIKeyUpdate(m.APIKeyID, globalStats)
+	if m.APIKeyID > 0 {
+		op.StatsAPIKeyUpdate(m.APIKeyID, globalStats)
+	}
 	if updateChannelStats {
-		op.StatsChannelUpdate(channelID, globalStats)
+		if channelID > 0 {
+			op.StatsChannelUpdate(channelID, globalStats)
+		}
 	} else {
 		updateFinalChannelUsageStats(channelID, globalStats)
 	}
