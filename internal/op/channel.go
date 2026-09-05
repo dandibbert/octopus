@@ -99,9 +99,24 @@ func ChannelCreate(channel *model.Channel, ctx context.Context) error {
 	if err := rewrite.ValidateRawConfigPtr(channel.ParamOverride, rewrite.ScopeChannel); err != nil {
 		return err
 	}
-	if err := db.GetDB().WithContext(ctx).Create(channel).Error; err != nil {
+	// Older releases could persist unattributed failures under a future channel
+	// ID. Creating a resource must clear both that row and any cached copy before
+	// publishing it; coordinate with flushing so a stale snapshot cannot return.
+	statsChannelLifecycleLock.Lock()
+	defer statsChannelLifecycleLock.Unlock()
+	channel.Stats = nil
+	if err := db.GetDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit("Stats").Create(channel).Error; err != nil {
+			return err
+		}
+		return tx.Where("channel_id = ?", channel.ID).Delete(&model.StatsChannel{}).Error
+	}); err != nil {
 		return err
 	}
+	statsChannelCache.Set(channel.ID, model.StatsChannel{ChannelID: channel.ID})
+	statsChannelCacheNeedUpdateLock.Lock()
+	delete(statsChannelCacheNeedUpdate, channel.ID)
+	statsChannelCacheNeedUpdateLock.Unlock()
 	normalizeChannelProxyFields(channel)
 	channelCache.Set(channel.ID, *channel)
 	for _, k := range channel.Keys {

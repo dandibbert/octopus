@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	dbpkg "github.com/bestruirui/octopus/internal/db"
@@ -110,5 +111,122 @@ func TestStatsAPIKeyZeroIDDoesNotAttachToFreshAPIKey(t *testing.T) {
 	stats := StatsAPIKeyGet(apiKey.ID)
 	if stats.RequestFailed != 0 || stats.RequestSuccess != 0 {
 		t.Fatalf("fresh API key inherited request stats after reload: %+v", stats)
+	}
+}
+
+func TestFreshChannelDoesNotInheritLegacyOrphanStats(t *testing.T) {
+	ctx := setupStatsChannelTestDB(t)
+	legacy := model.StatsChannel{ChannelID: 1, StatsMetrics: model.StatsMetrics{RequestFailed: 163, WaitTime: 5}}
+	// Legacy installations did not enforce this foreign key.
+	if err := dbpkg.GetDB().Exec("PRAGMA foreign_keys = OFF").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := dbpkg.GetDB().Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := dbpkg.GetDB().Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce an upgraded installation: the old version already assigned
+	// unattributed failures to the ID that the next channel will receive.
+	if err := statsRefreshCache(ctx); err != nil {
+		t.Fatal(err)
+	}
+	channel := &model.Channel{Name: "fresh-after-upgrade", Enabled: true}
+	if err := ChannelCreate(channel, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if channel.ID != legacy.ChannelID {
+		t.Fatalf("fixture did not reuse orphan identity: got %d", channel.ID)
+	}
+	if got := StatsChannelGet(channel.ID); got.RequestFailed != 0 || got.WaitTime != 0 {
+		t.Fatalf("new channel inherited historical orphan stats: %+v", got)
+	}
+	if err := statsRefreshCache(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := StatsChannelGet(channel.ID); got.RequestFailed != 0 {
+		t.Fatalf("orphan stats returned after restart: %+v", got)
+	}
+	if err := StatsChannelUpdate(channel.ID, model.StatsMetrics{RequestSuccess: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := StatsSaveDB(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := statsRefreshCache(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := StatsChannelGet(channel.ID); got.RequestSuccess != 2 || got.RequestFailed != 0 {
+		t.Fatalf("real traffic was not preserved: %+v", got)
+	}
+}
+
+func TestFreshChannelClearsAlreadyCachedOrphanAndIgnoresSubmittedStats(t *testing.T) {
+	ctx := setupStatsChannelTestDB(t)
+	statsChannelCache.Set(1, model.StatsChannel{ChannelID: 1, StatsMetrics: model.StatsMetrics{RequestFailed: 163}})
+	statsChannelCacheNeedUpdateLock.Lock()
+	statsChannelCacheNeedUpdate[1] = struct{}{}
+	statsChannelCacheNeedUpdateLock.Unlock()
+	channel := &model.Channel{Name: "fresh-with-cached-orphan", Stats: &model.StatsChannel{StatsMetrics: model.StatsMetrics{RequestFailed: 999}}}
+	if err := ChannelCreate(channel, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := StatsSaveDB(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := StatsChannelGet(channel.ID); got.RequestFailed != 0 {
+		t.Fatalf("cached/submitted stats leaked into new channel: %+v", got)
+	}
+	if err := statsRefreshCache(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := StatsChannelGet(channel.ID); got.RequestFailed != 0 {
+		t.Fatalf("stale stats were persisted again: %+v", got)
+	}
+}
+
+func TestFailedChannelCreationPreservesExistingStats(t *testing.T) {
+	ctx := setupStatsChannelTestDB(t)
+	channel := &model.Channel{Name: "existing"}
+	if err := ChannelCreate(channel, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := StatsChannelUpdate(channel.ID, model.StatsMetrics{RequestSuccess: 7}); err != nil {
+		t.Fatal(err)
+	}
+	if err := StatsSaveDB(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := ChannelCreate(&model.Channel{ID: channel.ID, Name: "duplicate"}, ctx); err == nil {
+		t.Fatal("expected duplicate ID to fail")
+	}
+	if err := statsRefreshCache(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := StatsChannelGet(channel.ID); got.RequestSuccess != 7 {
+		t.Fatalf("failed create reset existing stats: %+v", got)
+	}
+}
+
+func TestConcurrentChannelStatsUpdatesAreNotLost(t *testing.T) {
+	ctx := setupStatsChannelTestDB(t)
+	channel := &model.Channel{Name: "concurrent"}
+	if err := ChannelCreate(channel, ctx); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := StatsChannelUpdate(channel.ID, model.StatsMetrics{RequestSuccess: 1}); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := StatsChannelGet(channel.ID); got.RequestSuccess != 50 {
+		t.Fatalf("concurrent increments lost: %+v", got)
 	}
 }

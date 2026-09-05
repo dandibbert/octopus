@@ -25,6 +25,9 @@ var statsHourlyCache [24]model.StatsHourly
 var statsHourlyCacheLock sync.RWMutex
 
 var statsChannelCache = cache.New[int, model.StatsChannel](16)
+
+// Serializes channel creation/reset with stats updates, reads and persistence.
+var statsChannelLifecycleLock sync.Mutex
 var statsChannelCacheNeedUpdate = make(map[int]struct{})
 var statsChannelCacheNeedUpdateLock sync.Mutex
 
@@ -169,27 +172,8 @@ func persistStatsSnapshots(
 		}
 	}
 
-	channelRows := make([]model.StatsChannel, 0, len(channelIDs))
-	for _, id := range channelIDs {
-		// ChannelID is a foreign-key identity, not an independent sequence.
-		// Existing databases define stats_channels.channel_id as an integer
-		// auto-increment primary key, so persisting id=0 would let the database
-		// silently allocate a real channel ID and attach unrelated stats to it.
-		if id <= 0 {
-			continue
-		}
-		ch, ok := statsChannelCache.Get(id)
-		if ok {
-			channelRows = append(channelRows, ch)
-		}
-	}
-	if len(channelRows) > 0 {
-		if result := dbConn.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "channel_id"}},
-			UpdateAll: true,
-		}).CreateInBatches(&channelRows, 100); result.Error != nil {
-			return result.Error
-		}
+	if err := persistChannelStats(dbConn, channelIDs); err != nil {
+		return err
 	}
 
 	modelRows := make([]model.StatsModel, 0, len(modelIDs))
@@ -336,6 +320,8 @@ func StatsChannelUpdate(channelID int, metrics model.StatsMetrics) error {
 	if channelID <= 0 {
 		return nil
 	}
+	statsChannelLifecycleLock.Lock()
+	defer statsChannelLifecycleLock.Unlock()
 	channelCache, ok := statsChannelCache.Get(channelID)
 	if !ok {
 		channelCache = model.StatsChannel{
@@ -406,6 +392,8 @@ func StatsChannelDel(id int) error {
 	if id <= 0 {
 		return nil
 	}
+	statsChannelLifecycleLock.Lock()
+	defer statsChannelLifecycleLock.Unlock()
 	statsChannelCache.Del(id)
 	statsChannelCacheNeedUpdateLock.Lock()
 	delete(statsChannelCacheNeedUpdate, id)
@@ -440,6 +428,8 @@ func StatsChannelGet(id int) model.StatsChannel {
 	if id <= 0 {
 		return model.StatsChannel{ChannelID: id}
 	}
+	statsChannelLifecycleLock.Lock()
+	defer statsChannelLifecycleLock.Unlock()
 	stats, ok := statsChannelCache.Get(id)
 	if !ok {
 		tmp := model.StatsChannel{
@@ -514,6 +504,8 @@ func StatsGetDaily(ctx context.Context) ([]model.StatsDaily, error) {
 }
 
 func statsRefreshCache(ctx context.Context) error {
+	statsChannelLifecycleLock.Lock()
+	defer statsChannelLifecycleLock.Unlock()
 	dbConn := db.GetDB().WithContext(ctx)
 	today := time.Now().Format("20060102")
 
@@ -538,7 +530,7 @@ func statsRefreshCache(ctx context.Context) error {
 	}
 
 	var loadedChannels []model.StatsChannel
-	result = dbConn.Find(&loadedChannels)
+	result = dbConn.Where("channel_id IN (?)", dbConn.Model(&model.Channel{}).Select("id")).Find(&loadedChannels)
 	if result.Error != nil {
 		return fmt.Errorf("failed to get channels: %v", result.Error)
 	}
@@ -587,6 +579,36 @@ func statsRefreshCache(ctx context.Context) error {
 		}
 	}
 	statsHourlyCacheLock.Unlock()
+
+	return nil
+}
+
+// Read cached values while holding the lifecycle lock, never before it.
+func persistChannelStats(dbConn *gorm.DB, channelIDs []int) error {
+	statsChannelLifecycleLock.Lock()
+	defer statsChannelLifecycleLock.Unlock()
+	channelRows := make([]model.StatsChannel, 0, len(channelIDs))
+	for _, id := range channelIDs {
+		// ChannelID is a foreign-key identity, not an independent sequence.
+		// Existing databases define stats_channels.channel_id as an integer
+		// auto-increment primary key, so persisting id=0 would let the database
+		// silently allocate a real channel ID and attach unrelated stats to it.
+		if id <= 0 {
+			continue
+		}
+		ch, ok := statsChannelCache.Get(id)
+		if ok {
+			channelRows = append(channelRows, ch)
+		}
+	}
+	if len(channelRows) > 0 {
+		if result := dbConn.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "channel_id"}},
+			UpdateAll: true,
+		}).CreateInBatches(&channelRows, 100); result.Error != nil {
+			return result.Error
+		}
+	}
 
 	return nil
 }
