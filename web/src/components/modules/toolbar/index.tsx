@@ -1,50 +1,31 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
     ArrowDownWideNarrow,
     ArrowDownZA,
     ArrowUpAZ,
     ArrowUpNarrowWide,
     Clock3,
-    KeyRound,
     LayoutGrid,
     List,
     Network,
     Plus,
-    RefreshCw,
     Search,
     SlidersHorizontal,
-    Waypoints,
-    WandSparkles,
     X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-    MorphingDialog,
-    MorphingDialogTrigger,
-    MorphingDialogContainer,
-    MorphingDialogContent,
-} from '@/components/ui/morphing-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useNavStore, type NavItem } from '@/components/modules/navbar';
-import { CreateDialogContent as ChannelCreateContent } from '@/components/modules/channel/Create';
-import { CreateDialogContent as GroupCreateContent } from '@/components/modules/group/Create';
-import { GroupAutoGroupDialogContent } from '@/components/modules/group/AutoGroupDialog';
-import { CreateDialogContent as ModelCreateContent } from '@/components/modules/model/Create';
-import { AliasDialogContent } from '@/components/modules/model/AliasManager';
 import { useSiteUIStore } from '@/components/modules/site/ui-store';
-import { useLogUIStore } from '@/components/modules/log/ui-store';
 import { LogFilterPopover } from '@/components/modules/log/FilterPopover';
 import { useProxyPoolDialogStore } from '@/components/modules/proxy-pool/dialog-store';
-import { useCompletionStore } from '@/components/modules/site-channel/completion-store';
-import { useEffectiveChannelTab } from '@/components/modules/channel/tab-store';
-import { useSiteEnabled } from '@/api/endpoints/setting';
 import { useTranslations } from 'next-intl';
 import { useSearchStore } from './search-store';
-import { ToolbarMenu, type ToolbarAction } from './ToolbarMenu';
+import { ToolbarMenu } from './ToolbarMenu';
 import {
     useToolbarViewOptionsStore,
     TOOLBAR_PAGES,
@@ -52,6 +33,18 @@ import {
     type ToolbarSortField,
     type ToolbarSortOrder,
 } from './view-options-store';
+
+import { ChannelToolbarActions } from '../channel/ToolbarActions';
+import { GroupToolbarActions } from '../group/ToolbarActions';
+import { ModelToolbarActions } from '../model/ToolbarActions';
+import { LogToolbarActions } from '../log/ToolbarActions';
+
+const PAGE_ACTIONS = {
+    channel: ChannelToolbarActions,
+    group: GroupToolbarActions,
+    model: ModelToolbarActions,
+    log: LogToolbarActions,
+};
 
 type CombinedSortOption = {
     value: `${ToolbarSortField}-${ToolbarSortOrder}`;
@@ -78,26 +71,9 @@ function isToolbarPage(item: NavItem): item is ToolbarPage {
     return (TOOLBAR_PAGES as readonly NavItem[]).includes(item);
 }
 
-function CreateDialogContent({ activeItem }: { activeItem: ToolbarPage }) {
-    switch (activeItem) {
-        case 'site':
-            return null;
-        case 'channel':
-            return <ChannelCreateContent />;
-        case 'group':
-            return <GroupCreateContent />;
-        case 'model':
-            return <ModelCreateContent />;
-        case 'log':
-            return null;
-    }
-}
-
 export function Toolbar() {
     const t = useTranslations('toolbar');
     const tProxyPool = useTranslations('proxyPool');
-    const tModelCreate = useTranslations('model.create');
-    const tModelAlias = useTranslations('model.alias');
     const { activeItem } = useNavStore();
     const toolbarItem = isToolbarPage(activeItem) ? activeItem : null;
     const searchTerm = useSearchStore((s) => (toolbarItem ? s.searchTerms[toolbarItem] || '' : ''));
@@ -118,24 +94,10 @@ export function Toolbar() {
     const requestSyncAll = useSiteUIStore((s) => s.requestSyncAll);
     const requestCheckinAll = useSiteUIStore((s) => s.requestCheckinAll);
 
-    // Log actions
-    const requestLogRefresh = useLogUIStore((s) => s.requestRefresh);
-    const isLogRefreshing = useLogUIStore((s) => s.isRefreshing);
-
-    // Proxy pool
     const openProxyPool = useProxyPoolDialogStore((s) => s.open);
-
-    // Completion (for channel site tab)
-    const { enabled: siteEnabled } = useSiteEnabled();
-    const activeChannelTab = useEffectiveChannelTab();
-    const completionPendingCount = useCompletionStore((s) => s.pendingCount);
-    const openCompletionDialog = useCompletionStore((s) => s.openDialog);
 
     const [expandedSearchItem, setExpandedSearchItem] = useState<ToolbarPage | null>(null);
     const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
-    const [createDialogOpen, setCreateDialogOpen] = useState(false);
-    const [autoGroupDialogOpen, setAutoGroupDialogOpen] = useState(false);
-    const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
 
     const searchExpanded = expandedSearchItem === toolbarItem;
 
@@ -145,124 +107,7 @@ export function Toolbar() {
     const showCombinedSortOptions = toolbarItem === 'channel' || toolbarItem === 'group';
     const showSortOptions = !isLogToolbar;
 
-    // 构建工具栏按钮配置
-    const actions = useMemo((): ToolbarAction[] => {
-        const result: ToolbarAction[] = [];
-
-        // 代理池入口平时挂在站点页。站点功能关闭后站点页不存在，而手动渠道
-        // 仍可能使用池模式，于是入口落到渠道页，避免池配置无处管理。
-        if (toolbarItem === (siteEnabled ? 'site' : 'channel')) {
-            result.push({
-                id: 'proxy-pool',
-                icon: <Network className="size-4" />,
-                label: tProxyPool('name'),
-                onClick: () => openProxyPool(),
-                priority: 'large', // 单个 large 项 md 以上即平铺，多个才推迟到 xl
-            });
-        }
-
-        // 站点页面按钮
-        if (toolbarItem === 'site') {
-            result.push({
-                id: 'create-site',
-                icon: <Plus className="size-4" />,
-                label: t('actions.createSite'),
-                onClick: requestOpenCreateSite,
-                priority: 'desktop', // md 以上平铺，<md 仅在"更多"菜单确实显示时折叠
-            });
-        }
-
-        // 渠道页面按钮
-        if (toolbarItem === 'channel') {
-            // 站点渠道 tab 显示统一补全按钮
-            if (activeChannelTab === 'site' && completionPendingCount > 0) {
-                result.push({
-                    id: 'completion',
-                    icon: <KeyRound className="size-4" />,
-                    label: t('actions.completionKey'),
-                    onClick: openCompletionDialog,
-                    badge: completionPendingCount,
-                    priority: 'large', // 单个 large 项 md 以上即平铺，多个才推迟到 xl
-                });
-            }
-
-            result.push({
-                id: 'create-channel',
-                icon: <Plus className="size-4" />,
-                label: t('actions.createChannel'),
-                onClick: () => setCreateDialogOpen(true),
-                priority: 'desktop',
-            });
-        }
-
-        // 分组页面按钮
-        if (toolbarItem === 'group') {
-            result.push(
-                {
-                    id: 'auto-group',
-                    icon: <WandSparkles className="size-4" />,
-                    label: t('actions.autoGroup'),
-                    onClick: () => setAutoGroupDialogOpen(true),
-                    priority: 'large',
-                },
-                {
-                    id: 'create-group',
-                    icon: <Plus className="size-4" />,
-                    label: t('actions.createGroup'),
-                    onClick: () => setCreateDialogOpen(true),
-                    priority: 'desktop',
-                }
-            );
-        }
-
-        // 模型页面按钮
-        if (toolbarItem === 'model') {
-            result.push(
-                {
-                    id: 'model-aliases',
-                    icon: <Waypoints className="size-4" />,
-                    label: tModelAlias('toolbarButton'),
-                    onClick: () => setAliasDialogOpen(true),
-                    priority: 'large',
-                },
-                {
-                    id: 'create-model',
-                    icon: <Plus className="size-4" />,
-                    label: tModelCreate('toolbarButton'),
-                    onClick: () => setCreateDialogOpen(true),
-                    priority: 'desktop',
-                }
-            );
-        }
-
-        // 日志页面按钮
-        if (toolbarItem === 'log') {
-            result.push({
-                id: 'refresh',
-                icon: <RefreshCw className={cn('size-4', isLogRefreshing && 'animate-spin')} />,
-                label: t('actions.refresh'),
-                onClick: requestLogRefresh,
-                disabled: isLogRefreshing,
-                priority: 'desktop',
-            });
-        }
-
-        return result;
-    }, [
-        toolbarItem,
-        siteEnabled,
-        activeChannelTab,
-        completionPendingCount,
-        isLogRefreshing,
-        openProxyPool,
-        requestOpenCreateSite,
-        openCompletionDialog,
-        requestLogRefresh,
-        t,
-        tModelAlias,
-        tModelCreate,
-        tProxyPool,
-    ]);
+    const PageActions = toolbarItem && toolbarItem !== 'site' ? PAGE_ACTIONS[toolbarItem] : null;
 
     if (!toolbarItem) return null;
 
@@ -563,61 +408,13 @@ export function Toolbar() {
                 )}
 
                 {/* 统一的工具按钮菜单（新增 + 按钮位于最右侧） */}
-                {!searchExpanded && <ToolbarMenu actions={actions} />}
+                {!searchExpanded && (PageActions ? <PageActions /> : <ToolbarMenu actions={[
+                    { id: 'proxy-pool', icon: <Network className="size-4" />, label: tProxyPool('name'), onClick: openProxyPool, priority: 'large' },
+                    { id: 'create-site', icon: <Plus className="size-4" />, label: t('actions.createSite'), onClick: requestOpenCreateSite, priority: 'desktop' },
+                ]} />)}
             </motion.div>
         </AnimatePresence>
 
-            {/* 对话框通过 portal 渲染，统一包在隐藏容器中（display:none 不参与 flex 布局），
-                避免其触发器外层 div 作为 flex 子项在工具栏右侧产生逐页不同的间隔 */}
-            <div className="hidden">
-                {/* 创建对话框 (channel/group/model) */}
-                {toolbarItem !== 'site' && toolbarItem !== 'log' && (
-                    <MorphingDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-                        <MorphingDialogTrigger>
-                            <button type="button" className="hidden">
-                                Hidden trigger
-                            </button>
-                        </MorphingDialogTrigger>
-                        <MorphingDialogContainer>
-                            <MorphingDialogContent className="w-fit max-w-full bg-card text-card-foreground px-4 py-3 rounded-3xl custom-shadow max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden sm:px-6 sm:py-4">
-                                <CreateDialogContent activeItem={toolbarItem} />
-                            </MorphingDialogContent>
-                        </MorphingDialogContainer>
-                    </MorphingDialog>
-                )}
-
-                {/* 自动分组对话框 */}
-                {toolbarItem === 'group' && (
-                    <MorphingDialog open={autoGroupDialogOpen} onOpenChange={setAutoGroupDialogOpen}>
-                        <MorphingDialogTrigger>
-                            <button type="button" className="hidden">
-                                Hidden trigger
-                            </button>
-                        </MorphingDialogTrigger>
-                        <MorphingDialogContainer>
-                            <MorphingDialogContent className="w-fit max-w-full bg-card text-card-foreground px-4 py-3 rounded-3xl custom-shadow max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden sm:px-6 sm:py-4">
-                                <GroupAutoGroupDialogContent />
-                            </MorphingDialogContent>
-                        </MorphingDialogContainer>
-                    </MorphingDialog>
-                )}
-
-                {/* 模型名称映射对话框 */}
-                {toolbarItem === 'model' && (
-                    <MorphingDialog open={aliasDialogOpen} onOpenChange={setAliasDialogOpen}>
-                        <MorphingDialogTrigger>
-                            <button type="button" className="hidden">
-                                Hidden trigger
-                            </button>
-                        </MorphingDialogTrigger>
-                        <MorphingDialogContainer>
-                            <MorphingDialogContent className="w-fit max-w-full rounded-3xl bg-card px-4 py-3 text-card-foreground custom-shadow max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden sm:px-6 sm:py-4">
-                                <AliasDialogContent />
-                            </MorphingDialogContent>
-                        </MorphingDialogContainer>
-                    </MorphingDialog>
-                )}
-            </div>
         </>
     );
 }

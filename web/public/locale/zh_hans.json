@@ -1,4 +1,13 @@
 {
+  "formValidation": {
+    "required": "请填写此项。",
+    "url": "请输入有效的 HTTP 或 HTTPS 网址。",
+    "email": "请输入有效的电子邮箱地址。",
+    "min": "请输入不小于 {min} 的值。",
+    "max": "请输入不大于 {max} 的值。",
+    "number": "请输入符合步长要求的有效数字。",
+    "invalid": "请检查此项的格式。"
+  },
   "login": {
     "username": "用户名",
     "usernamePlaceholder": "请输入用户名",
@@ -734,7 +743,7 @@
       "submitting": "创建中..."
     },
     "card": {
-      "empty": "暂无规则"
+  "empty": "暂无规则"
     },
     "detail": {
       "actions": {
@@ -922,7 +931,9 @@
       "cacheWrite": "缓存写入",
       "explicitFree": "明确标记为免费",
       "submit": "创建自定义价格",
-      "submitting": "创建中..."
+      "submitting": "创建中...",
+      "created": "自定义价格已创建",
+      "createFailed": "创建自定义价格失败"
     },
     "mode": {
       "unknown": "价格未知",
@@ -1242,13 +1253,17 @@
         "saving": "保存中...",
         "delete": "删除",
         "confirmDelete": "确认删除",
-        "deleting": "删除中..."
+        "deleting": "删除中...",
+        "deleted": "渠道已删除",
+        "deleteFailed": "删除渠道失败"
       }
     },
     "create": {
       "dialogTitle": "创建新渠道",
       "submit": "创建渠道",
-      "submitting": "创建中..."
+      "submitting": "创建中...",
+      "created": "渠道已创建",
+      "createFailed": "创建渠道失败"
     },
     "form": {
       "add": "添加",

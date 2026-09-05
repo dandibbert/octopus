@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Check, ChevronDownIcon, Plus, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -416,7 +418,7 @@ export function GroupEditor({
 
 
     return (
-        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+        <ValidatedForm onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pr-2 md:overflow-hidden md:pr-1">
                 <FieldGroup className="flex min-h-0 flex-col gap-4 md:h-full">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -709,6 +711,6 @@ export function GroupEditor({
                     </Button>
                 </div>
             </div>
-        </form>
+        </ValidatedForm>
     );
 }

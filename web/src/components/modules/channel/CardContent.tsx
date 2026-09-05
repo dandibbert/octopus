@@ -189,10 +189,13 @@ export function CardContent({ channel, stats }: { channel: Channel; stats: Stats
             return;
         }
 
-        setIsOpen(false);
-        setTimeout(() => {
-            deleteChannel.mutate(channel.id);
-        }, 300);
+        deleteChannel.mutate(channel.id, {
+            onSuccess: () => {
+                toast.success(t('actions.deleted'));
+                setIsOpen(false);
+            },
+            onError: (error) => toast.error(t('actions.deleteFailed'), { description: error.message }),
+        });
     };
 
     const handleManagedSourceJump = (target: 'site' | 'site-channel') => {

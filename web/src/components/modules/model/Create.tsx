@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import { useState } from 'react';
 import { useCreateModel } from '@/api/endpoints/model';
 import { Input } from '@/components/ui/input';
@@ -13,6 +15,7 @@ import {
     useMorphingDialog,
 } from '@/components/ui/morphing-dialog';
 import { useTranslations } from 'next-intl';
+import { toast } from '@/components/common/Toast';
 
 export function CreateDialogContent() {
     const { setIsOpen } = useMorphingDialog();
@@ -50,9 +53,11 @@ export function CreateDialogContent() {
             price_mode: formData.free ? 'free' : allZero ? 'unknown' : 'explicit',
         }, {
             onSuccess: () => {
+                toast.success(t('created'));
                 setFormData({ name: '', input: '', output: '', cache_read: '', cache_write: '', canonical_model_id: '', billing_class_id: '', free: false });
                 setIsOpen(false);
-            }
+            },
+            onError: (error) => toast.error(t('createFailed'), { description: error.message }),
         });
     };
 
@@ -75,7 +80,7 @@ export function CreateDialogContent() {
                 </header>
             </MorphingDialogTitle>
             <MorphingDialogDescription>
-                <form onSubmit={handleSubmit}>
+                <ValidatedForm onSubmit={handleSubmit}>
                     <FieldGroup className="gap-4">
                         <Field>
                             <FieldLabel htmlFor="model-name">{t('name')}</FieldLabel>
@@ -187,7 +192,7 @@ export function CreateDialogContent() {
                             {createModel.isPending ? t('submitting') : t('submit')}
                         </Button>
                     </FieldGroup>
-                </form>
+                </ValidatedForm>
             </MorphingDialogDescription>
         </div>
     );

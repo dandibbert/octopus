@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import { useCallback, useId, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { KeyRound, Plus, Loader, Trash2, Check, X, Info, CalendarDays, Pencil, Maximize2, Share2 } from 'lucide-react';
@@ -192,7 +194,7 @@ function APIKeyForm({ apiKey, isPending, submitLabel, onSubmit, onClose }: APIKe
     }, [form, onSubmit]);
 
     return (
-        <form onSubmit={handleSubmit} className="grid gap-2">
+        <ValidatedForm onSubmit={handleSubmit} className="grid gap-2">
             <label className="grid gap-1 text-xs text-muted-foreground">
                 {t('apiKey.form.name')}
                 <Input
@@ -395,7 +397,7 @@ function APIKeyForm({ apiKey, isPending, submitLabel, onSubmit, onClose }: APIKe
                     {submitLabel}
                 </button>
             </div>
-        </form>
+        </ValidatedForm>
     );
 }
 

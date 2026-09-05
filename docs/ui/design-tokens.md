@@ -70,3 +70,7 @@ light/dark 各自保持预期深度）。**不要写 `shadow-[0_20px_60px_-42px_
 新写浮层时**不要再手写 `bg-black/50` 或 `bg-white/40 backdrop-blur-xs dark:bg-black/40`**——
 历史上这两套并存，同一个产品里点开不同浮层背景表现不一样。
 浅色/深色的蒙层颜色由 CSS 变量分别定义，所以**组件里不要写 `dark:` 变体**。
+
+模态内容统一用 `.modal-surface` 的边框与阴影（`--modal-border` / `--modal-shadow`），
+使展开卡片与背景有清晰边界。`ui/dialog` 和 `ui/morphing-dialog` 已内置，
+不需要各页面重新配色或增加模糊；变形动画继续保留。

@@ -53,7 +53,10 @@ export function CreateDialogContent() {
                         createGroup.mutate(
                             { name, mode, match_regex: match_regex ?? '', first_token_time_out: first_token_time_out ?? 0, session_keep_time: session_keep_time ?? 0, retry_enabled, max_retries, custom_header, param_override, items },
                             {
-                                onSuccess: () => setIsOpen(false),
+                                onSuccess: () => {
+                                    toast.success(t('toast.created'));
+                                    setIsOpen(false);
+                                },
                                 onError: (error) => toast.error(t('toast.createFailed'), { description: error.message }),
                             }
                         );

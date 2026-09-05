@@ -1,4 +1,13 @@
 {
+  "formValidation": {
+    "required": "請填寫此項。",
+    "url": "請輸入有效的 HTTP 或 HTTPS 網址。",
+    "email": "請輸入有效的電子郵件地址。",
+    "min": "請輸入不小於 {min} 的值。",
+    "max": "請輸入不大於 {max} 的值。",
+    "number": "請輸入符合步長要求的有效數字。",
+    "invalid": "請檢查此項的格式。"
+  },
   "login": {
     "username": "使用者名稱",
     "usernamePlaceholder": "請輸入使用者名稱",
@@ -734,7 +743,7 @@
       "submitting": "建立中..."
     },
     "card": {
-      "empty": "暫無規則"
+  "empty": "暫無規則"
     },
     "detail": {
       "actions": {
@@ -922,7 +931,9 @@
       "cacheWrite": "快取寫入",
       "explicitFree": "明確標記為免費",
       "submit": "建立自訂價格",
-      "submitting": "建立中..."
+      "submitting": "建立中...",
+      "created": "自訂價格已建立",
+      "createFailed": "建立自訂價格失敗"
     },
     "mode": {
       "unknown": "價格未知",
@@ -1242,13 +1253,17 @@
         "saving": "儲存中...",
         "delete": "刪除",
         "confirmDelete": "確認刪除",
-        "deleting": "刪除中..."
+        "deleting": "刪除中...",
+        "deleted": "渠道已刪除",
+        "deleteFailed": "刪除渠道失敗"
       }
     },
     "create": {
       "dialogTitle": "建立新供應源",
       "submit": "建立供應源",
-      "submitting": "建立中..."
+      "submitting": "建立中...",
+      "created": "渠道已建立",
+      "createFailed": "建立渠道失敗"
     },
     "form": {
       "add": "新增",

@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import { useMemo, useState, type FormEvent } from 'react';
 import { GitMerge, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -199,7 +201,7 @@ export function AliasManager({
             </div>
 
             {showForm && (
-                <form onSubmit={submit} className="mt-4 grid gap-3 rounded-2xl border bg-muted/20 p-4 md:grid-cols-2">
+                <ValidatedForm onSubmit={submit} className="mt-4 grid gap-3 rounded-2xl border bg-muted/20 p-4 md:grid-cols-2">
                     <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">
                         {t('alias')}
                         <FreeformModelCombobox
@@ -299,7 +301,7 @@ export function AliasManager({
                         </Button>
                         {form.id && <Button type="button" variant="outline" className="rounded-xl" onClick={reset}>{t('cancel')}</Button>}
                     </div>
-                </form>
+                </ValidatedForm>
             )}
 
             {visibleAliases.length > 0 ? (

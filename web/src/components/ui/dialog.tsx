@@ -65,7 +65,8 @@ function DialogContent({
           // `position: fixed` descendants — which re-anchors @hello-pangea/dnd's drag
           // clone and produces visible drag-misalignment inside dialogs.
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed inset-0 m-auto z-50 grid h-fit max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-[calc(100%-1rem)] gap-4 overflow-y-auto overscroll-contain rounded-2xl border p-4 shadow-lg duration-200 sm:max-h-[calc(100dvh-2rem)] sm:w-full sm:max-w-lg sm:p-6",
-          className
+          className,
+          'modal-surface'
         )}
         {...props}
       >

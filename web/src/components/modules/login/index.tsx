@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import { useState } from "react"
 import { motion } from "motion/react"
 import { useTranslations } from 'next-intl'
@@ -108,7 +110,7 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
             </TabsHighlight>
           </TabsList>
 
-          <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+          <ValidatedForm onSubmit={handleSubmit} className="space-y-6 pt-2">
             <TabsContents className="p-3 -mx-3 py-6">
               <TabsContent value="user" className="space-y-6">
                 <Field>
@@ -175,7 +177,7 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
             <Button type="submit" disabled={isPending} className="w-full">
               {isPending ? t('button.loading') : t('button.submit')}
             </Button>
-          </form>
+          </ValidatedForm>
         </Tabs>
       </div>
     </motion.div>

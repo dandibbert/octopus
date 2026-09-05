@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import {
     useCallback,
     useLayoutEffect,
@@ -451,7 +453,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                     </button>
                 </header>
 
-                <form className="flex flex-1 min-h-0 flex-col" onSubmit={handleSubmit}>
+                <ValidatedForm className="flex flex-1 min-h-0 flex-col" onSubmit={handleSubmit}>
                     <div className="flex-1 min-h-0 space-y-5 overflow-y-auto px-1">
                         <div className="grid gap-4 md:grid-cols-2">
                             <label className="grid gap-2 text-sm">
@@ -863,7 +865,7 @@ export function AccountEditDialog({ open, onOpenChange, site, account }: Account
                                   : tSite('dialog.account.create')}
                         </Button>
                     </footer>
-                </form>
+                </ValidatedForm>
             </DialogContent>
         </Dialog>
     );

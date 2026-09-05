@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { Plus, X, XIcon } from 'lucide-react';
@@ -179,7 +181,7 @@ export function BatchEditDialog({
                     </button>
                 </header>
 
-                <form className="flex flex-1 min-h-0 flex-col" onSubmit={handleSubmit}>
+                <ValidatedForm className="flex flex-1 min-h-0 flex-col" onSubmit={handleSubmit}>
                     <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-1">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-card-foreground">
@@ -323,7 +325,7 @@ export function BatchEditDialog({
                                 : t('batch.submit')}
                         </Button>
                     </footer>
-                </form>
+                </ValidatedForm>
             </DialogContent>
         </Dialog>
     );

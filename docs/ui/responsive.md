@@ -47,6 +47,10 @@ const CARD_COLUMNS = columnsByMinWidth(320, 3); // 模块作用域，保持引�
 
 ## 横向溢出
 
+桌面端最大宽度外的两侧留白仍可滚动当前页面，由应用外壳的
+`usePageGutterScroll` 统一处理。多滚动区域页面可用 `data-page-scroll` 标记主区域；
+虚拟列表已内置标记，弹窗和内部列表保留各自的滚动行为。
+
 `globals.css` 里 `body { overflow-x: hidden }`，**页面级横向滚动会被静默裁掉而不是出现滚动条**。
 宽内容必须自己套 `overflow-x-auto` 容器。
 

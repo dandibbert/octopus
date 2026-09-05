@@ -1,3 +1,5 @@
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import {
     ChannelType,
     type AutoGroupType,
@@ -244,7 +246,7 @@ export function ChannelForm({
     };
 
     return (
-        <form onSubmit={onSubmit} className="space-y-4 px-1">
+        <ValidatedForm onSubmit={onSubmit} className="space-y-4 px-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <label htmlFor={`${idPrefix}-name`} className="text-sm font-medium text-card-foreground">
@@ -305,6 +307,7 @@ export function ChannelForm({
                             <Input
                                 id={`${idPrefix}-base-${idx}`}
                                 type="url"
+                                pattern="https?://.+"
                                 value={u.url}
                                 onChange={(e) => handleUpdateBaseUrl(idx, { url: e.target.value })}
                                 placeholder={t('baseUrlUrl')}
@@ -753,6 +756,6 @@ export function ChannelForm({
                     {isPending ? pendingText : submitText}
                 </Button>
             </div>
-        </form>
+        </ValidatedForm>
     );
 }

@@ -233,7 +233,7 @@ export function RewriteTemplateActions({
                         <section>
                             <div className="mb-2 flex items-center gap-2">
                                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('templateBuiltinSection')}</h3>
-                                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{builtinTemplates.length}</span>
+                                <span className="rounded-full bg-muted px-1.5 py-0.5 text-3xs text-muted-foreground">{builtinTemplates.length}</span>
                             </div>
                             <div className="space-y-2">
                                 {builtinTemplates.map((template) => (
@@ -243,11 +243,11 @@ export function RewriteTemplateActions({
                                                 <div className="text-sm font-medium">{t(template.nameKey)}</div>
                                                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t(template.descriptionKey)}</p>
                                                 <div className="mt-2 flex flex-wrap gap-1.5">
-                                                    <span className="hidden rounded-full border border-border/60 bg-background px-2 py-0.5 text-[10px] text-muted-foreground sm:inline-flex">
+                                                    <span className="hidden rounded-full border border-border/60 bg-background px-2 py-0.5 text-3xs text-muted-foreground sm:inline-flex">
                                                         {t(categoryLabelKey(template.category))}
                                                     </span>
                                                     <span className={cn(
-                                                        'rounded-full border px-2 py-0.5 text-[10px]',
+                                                        'rounded-full border px-2 py-0.5 text-3xs',
                                                         template.risk === 'high'
                                                             ? 'border-destructive/30 bg-destructive/10 text-destructive'
                                                             : template.risk === 'medium'
@@ -257,20 +257,20 @@ export function RewriteTemplateActions({
                                                         {t(riskLabelKey(template.risk))}
                                                     </span>
                                                     {template.providerHint && (
-                                                        <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+                                                        <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-3xs text-muted-foreground">
                                                             {template.providerHint}
                                                         </span>
                                                     )}
-                                                    <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-[10px] text-muted-foreground sm:hidden">
+                                                    <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-3xs text-muted-foreground sm:hidden">
                                                         {targetFormatSummary(template.targetFormats)}
                                                     </span>
                                                     {template.targetFormats.map((format) => (
-                                                        <span key={format} className="hidden rounded-full border border-border/60 bg-background px-2 py-0.5 text-[10px] text-muted-foreground sm:inline-flex">
+                                                        <span key={format} className="hidden rounded-full border border-border/60 bg-background px-2 py-0.5 text-3xs text-muted-foreground sm:inline-flex">
                                                             {TARGET_FORMAT_LABELS[format]}
                                                         </span>
                                                     ))}
                                                     {template.requiresEdit && (
-                                                        <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] text-warning">
+                                                        <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-3xs text-warning">
                                                             {t('templateRequiresEditBadge')}
                                                         </span>
                                                     )}
@@ -305,7 +305,7 @@ export function RewriteTemplateActions({
                         <section className="border-t border-border/60 pt-4">
                             <div className="mb-2 flex items-center gap-2">
                                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('templateSavedSection')}</h3>
-                                {!templates.isPending && !templates.isError && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{templates.data?.length ?? 0}</span>}
+                                {!templates.isPending && !templates.isError && <span className="rounded-full bg-muted px-1.5 py-0.5 text-3xs text-muted-foreground">{templates.data?.length ?? 0}</span>}
                             </div>
                             {templates.isPending ? (
                                 <ListSkeleton count={2} layout="list" itemHeight={96} />

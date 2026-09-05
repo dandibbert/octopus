@@ -9,6 +9,7 @@ import {
     useState,
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { motion } from 'motion/react';
 
 export const GRID_GAP = 16;
 
@@ -164,7 +165,9 @@ export function VirtualizedGrid<T>({
 
     return (
         <div className="relative h-full min-h-0 w-full">
-            <div
+            <motion.div
+                layoutScroll
+                data-virtualized-scroll
                 ref={containerRef}
                 onScroll={onScroll ? (event) => {
                     const target = event.currentTarget;
@@ -261,7 +264,7 @@ export function VirtualizedGrid<T>({
                         })}
                     </div>
                 )}
-            </div>
+            </motion.div>
         </div>
     );
 }

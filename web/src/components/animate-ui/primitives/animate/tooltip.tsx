@@ -10,7 +10,6 @@ import {
 } from 'motion/react';
 import {
   useFloating,
-  autoUpdate,
   offset as floatingOffset,
   flip,
   shift,
@@ -30,6 +29,8 @@ type TooltipData = {
   contentProps: HTMLMotionProps<'div'>;
   contentAsChild: boolean;
   rect: DOMRect;
+  element: HTMLElement;
+  openDelay?: number;
   side: Side;
   sideOffset: number;
   align: Align;
@@ -40,12 +41,10 @@ type TooltipData = {
 type GlobalTooltipContextType = {
   showTooltip: (data: TooltipData) => void;
   hideTooltip: () => void;
-  hideImmediate: () => void;
+  hideImmediate: (id?: string) => void;
   currentTooltip: TooltipData | null;
   transition: Transition;
   globalId: string;
-  setReferenceEl: (el: HTMLElement | null) => void;
-  referenceElRef: React.RefObject<HTMLElement | null>;
 };
 
 const [GlobalTooltipProvider, useGlobalTooltip] =
@@ -60,6 +59,7 @@ type TooltipContextType = {
   sideOffset: number;
   align: Align;
   alignOffset: number;
+  openDelay?: number;
   id: string;
 };
 
@@ -83,6 +83,7 @@ function initialFromSide(side: Side): Partial<Record<'x' | 'y', number>> {
   return { x: -15 };
 }
 
+
 type TooltipProviderProps = {
   children: React.ReactNode;
   id?: string;
@@ -102,54 +103,38 @@ function TooltipProvider({
   const [currentTooltip, setCurrentTooltip] =
     React.useState<TooltipData | null>(null);
   const timeoutRef = React.useRef<number | null>(null);
-  const lastCloseTimeRef = React.useRef<number>(0);
-  const referenceElRef = React.useRef<HTMLElement | null>(null);
+  const activeIdRef = React.useRef<string | null>(null);
 
   const showTooltip = React.useCallback(
     (data: TooltipData) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      if (currentTooltip !== null) {
-        if (currentTooltip.id === data.id) {
-          setCurrentTooltip(data);
-          return;
-        }
-        // Do not let a visible tooltip instantly jump from one adjacent control
-        // to another. Close the old one first and require a deliberate hover on
-        // the next trigger; this also avoids a floating label chasing the pointer
-        // across dense toolbars/navigation.
-        setCurrentTooltip(null);
-        timeoutRef.current = window.setTimeout(
-          () => setCurrentTooltip(data),
-          openDelay,
-        );
-        return;
-      }
-      const now = Date.now();
-      const delay = now - lastCloseTimeRef.current < closeDelay ? 0 : openDelay;
+      activeIdRef.current = data.id;
+      setCurrentTooltip(null);
+      // Every trigger requires an intentional hover, including after scrolling.
       timeoutRef.current = window.setTimeout(
-        () => setCurrentTooltip(data),
-        delay,
+        () => {
+          if (data.element.isConnected) setCurrentTooltip({ ...data, rect: data.element.getBoundingClientRect() });
+        },
+        data.openDelay ?? openDelay,
       );
     },
-    [openDelay, closeDelay, currentTooltip],
+    [openDelay],
   );
 
   const hideTooltip = React.useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = window.setTimeout(() => {
       setCurrentTooltip(null);
-      lastCloseTimeRef.current = Date.now();
+      activeIdRef.current = null;
     }, closeDelay);
   }, [closeDelay]);
 
-  const hideImmediate = React.useCallback(() => {
+  const hideImmediate = React.useCallback((id?: string) => {
+    if (id && activeIdRef.current !== id) return;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    activeIdRef.current = null;
     setCurrentTooltip(null);
-    lastCloseTimeRef.current = Date.now();
-  }, []);
-
-  const setReferenceEl = React.useCallback((el: HTMLElement | null) => {
-    referenceElRef.current = el;
   }, []);
 
   React.useEffect(() => {
@@ -157,12 +142,18 @@ function TooltipProvider({
       if (e.key === 'Escape') hideImmediate();
     };
     window.addEventListener('keydown', onKeyDown, true);
-    window.addEventListener('scroll', hideImmediate, true);
-    window.addEventListener('resize', hideImmediate, true);
+    const dismiss = () => hideImmediate();
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('wheel', dismiss, { capture: true, passive: true });
+    window.addEventListener('pointerdown', dismiss, true);
+    window.addEventListener('resize', dismiss, true);
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('scroll', hideImmediate, true);
-      window.removeEventListener('resize', hideImmediate, true);
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('wheel', dismiss, true);
+      window.removeEventListener('pointerdown', dismiss, true);
+      window.removeEventListener('resize', dismiss, true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [hideImmediate]);
 
@@ -175,8 +166,6 @@ function TooltipProvider({
         currentTooltip,
         transition,
         globalId: id ?? globalId,
-        setReferenceEl,
-        referenceElRef,
       }}
     >
       <LayoutGroup>{children}</LayoutGroup>
@@ -246,117 +235,66 @@ function TooltipPortal(props: TooltipPortalProps) {
 }
 
 function TooltipOverlay() {
-  const { currentTooltip, transition, globalId, referenceElRef } =
-    useGlobalTooltip();
-
-  const [rendered, setRendered] = React.useState<{
-    data: TooltipData | null;
-    open: boolean;
-  }>({ data: null, open: false });
-
+  const { currentTooltip, transition, globalId } = useGlobalTooltip();
   const arrowRef = React.useRef<SVGSVGElement | null>(null);
-
-  const side = rendered.data?.side ?? 'top';
-  const align = rendered.data?.align ?? 'center';
-
-  const { refs, x, y, strategy, context, update } = useFloating({
+  const side = currentTooltip?.side ?? 'top';
+  const align = currentTooltip?.align ?? 'center';
+  const { refs, floatingStyles, context, isPositioned } = useFloating({
+    open: currentTooltip !== null,
+    strategy: 'fixed',
     placement: align === 'center' ? side : `${side}-${align}`,
-    whileElementsMounted: autoUpdate,
     middleware: [
       floatingOffset({
-        mainAxis: rendered.data?.sideOffset ?? 0,
-        crossAxis: rendered.data?.alignOffset ?? 0,
+        mainAxis: currentTooltip?.sideOffset ?? 0,
+        crossAxis: currentTooltip?.alignOffset ?? 0,
       }),
       flip(),
       shift({ padding: 8 }),
-      // `arrowRef` is a ref object; Floating UI accepts refs and reads `.current` internally.
-      // The hook lint rule (`react-hooks/refs`) flags passing refs during render, but this is safe here.
+      // Floating UI reads the ref after mount.
       // eslint-disable-next-line react-hooks/refs
       floatingArrow({ element: arrowRef }),
     ],
   });
 
-  React.useEffect(() => {
-    if (currentTooltip) {
-      setRendered({ data: currentTooltip, open: true });
-    } else {
-      setRendered((p) => (p.data ? { ...p, open: false } : p));
-    }
-  }, [currentTooltip]);
-
   React.useLayoutEffect(() => {
-    if (referenceElRef.current) {
-      refs.setReference(referenceElRef.current);
-      update();
-    }
-  }, [referenceElRef, refs, update, rendered.data]);
+    if (!currentTooltip) return;
+    // Freeze the anchor for this short-lived label. A deleted/unmounted trigger
+    // must never send its exiting tooltip towards the viewport origin.
+    const rect = currentTooltip.rect;
+    refs.setReference({ getBoundingClientRect: () => rect });
+  }, [currentTooltip, refs]);
 
-  const ready = x != null && y != null;
-  const Component = rendered.data?.contentAsChild ? Slot : motion.div;
   const resolvedSide = getResolvedSide(context.placement);
+  const Component = currentTooltip?.contentAsChild ? Slot : motion.div;
 
   return (
-    <AnimatePresence mode="wait">
-      {rendered.data && ready && (
-        <TooltipPortal>
+    <AnimatePresence>
+      {currentTooltip && (
+        <TooltipPortal key={currentTooltip.id}>
           <div
             ref={refs.setFloating}
             data-slot="tooltip-overlay"
-            data-side={resolvedSide}
-            data-align={rendered.data.align}
-            data-state={rendered.open ? 'open' : 'closed'}
             style={{
-              position: strategy,
-              top: 0,
-              left: 0,
+              ...floatingStyles,
+              visibility: isPositioned ? 'visible' : 'hidden',
               zIndex: 50,
               pointerEvents: 'none',
-              transform: `translate3d(${x!}px, ${y!}px, 0)`,
             }}
           >
             <FloatingProvider value={{ context, arrowRef }}>
-              <RenderedTooltipProvider
-                value={{
-                  side: resolvedSide,
-                  align: rendered.data.align,
-                  open: rendered.open,
-                }}
-              >
+              <RenderedTooltipProvider value={{ side: resolvedSide, align, open: true }}>
                 <Component
+                  {...currentTooltip.contentProps}
+                  id={currentTooltip.id}
+                  role="tooltip"
                   data-slot="tooltip-content"
                   data-side={resolvedSide}
-                  data-align={rendered.data.align}
-                  data-state={rendered.open ? 'open' : 'closed'}
+                  data-align={align}
                   layoutId={`tooltip-content-${globalId}`}
-                  initial={{
-                    opacity: 0,
-                    scale: 0,
-                    ...initialFromSide(rendered.data.side),
-                  }}
-                  animate={
-                    rendered.open
-                      ? { opacity: 1, scale: 1, x: 0, y: 0 }
-                      : {
-                        opacity: 0,
-                        scale: 0,
-                        ...initialFromSide(rendered.data.side),
-                      }
-                  }
-                  exit={{
-                    opacity: 0,
-                    scale: 0,
-                    ...initialFromSide(rendered.data.side),
-                  }}
-                  onAnimationComplete={() => {
-                    if (!rendered.open)
-                      setRendered({ data: null, open: false });
-                  }}
+                  initial={{ opacity: 0, scale: 0, ...initialFromSide(resolvedSide) }}
+                  animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                  exit={{ opacity: 0, scale: 0, ...initialFromSide(resolvedSide) }}
                   transition={transition}
-                  {...rendered.data.contentProps}
-                  style={{
-                    position: 'relative',
-                    ...(rendered.data.contentProps?.style || {}),
-                  }}
                 />
               </RenderedTooltipProvider>
             </FloatingProvider>
@@ -373,6 +311,7 @@ type TooltipProps = {
   sideOffset?: number;
   align?: Align;
   alignOffset?: number;
+  openDelay?: number;
 };
 
 function Tooltip({
@@ -381,6 +320,7 @@ function Tooltip({
   sideOffset = 0,
   align = 'center',
   alignOffset = 0,
+  openDelay,
 }: TooltipProps) {
   const id = React.useId();
   const [props, setProps] = React.useState<HTMLMotionProps<'div'>>({});
@@ -397,6 +337,7 @@ function Tooltip({
         sideOffset,
         align,
         alignOffset,
+        openDelay,
         id,
       }}
     >
@@ -462,6 +403,7 @@ function TooltipTrigger({
     sideOffset,
     align,
     alignOffset,
+    openDelay,
     id,
   } = useTooltip();
   const {
@@ -469,22 +411,22 @@ function TooltipTrigger({
     hideTooltip,
     hideImmediate,
     currentTooltip,
-    setReferenceEl,
   } = useGlobalTooltip();
 
   const triggerRef = React.useRef<HTMLDivElement>(null);
   React.useImperativeHandle(ref, () => triggerRef.current as HTMLDivElement);
 
-  const suppressNextFocusRef = React.useRef(false);
+  React.useEffect(() => () => hideImmediate(id), [hideImmediate, id]);
 
   const handleOpen = React.useCallback(() => {
     if (!triggerRef.current) return;
-    setReferenceEl(triggerRef.current);
     const rect = triggerRef.current.getBoundingClientRect();
     showTooltip({
       contentProps,
       contentAsChild,
       rect,
+      element: triggerRef.current,
+      openDelay,
       side,
       sideOffset,
       align,
@@ -493,8 +435,8 @@ function TooltipTrigger({
     });
   }, [
     showTooltip,
-    setReferenceEl,
     contentProps,
+    openDelay,
     contentAsChild,
     side,
     sideOffset,
@@ -506,21 +448,15 @@ function TooltipTrigger({
   const handlePointerDown = React.useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       onPointerDown?.(e);
-      if (currentTooltip?.id === id) {
-        suppressNextFocusRef.current = true;
-        hideImmediate();
-        Promise.resolve().then(() => {
-          suppressNextFocusRef.current = false;
-        });
-      }
+      hideImmediate(id);
     },
-    [onPointerDown, currentTooltip?.id, id, hideImmediate],
+    [onPointerDown, id, hideImmediate],
   );
 
   const handleMouseEnter = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       onMouseEnter?.(e);
-      handleOpen();
+      if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) handleOpen();
     },
     [handleOpen, onMouseEnter],
   );
@@ -536,7 +472,7 @@ function TooltipTrigger({
   const handleFocus = React.useCallback(
     (e: React.FocusEvent<HTMLDivElement>) => {
       onFocus?.(e);
-      if (suppressNextFocusRef.current) return;
+      if (!e.currentTarget.matches(':focus-visible')) return;
       handleOpen();
     },
     [handleOpen, onFocus],
@@ -560,6 +496,7 @@ function TooltipTrigger({
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
+      aria-describedby={currentTooltip?.id === id ? id : undefined}
       data-slot="tooltip-trigger"
       data-side={side}
       data-align={align}

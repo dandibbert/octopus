@@ -1,5 +1,7 @@
 'use client';
 
+import { ValidatedForm } from '@/components/common/ValidatedForm';
+
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ChevronDown, ExternalLink, FlaskConical, Network, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -448,7 +450,7 @@ export function ProxyPoolDialog() {
                             </Button>
                         </div>
 
-                        <form onSubmit={submitForm} className="space-y-4">
+                        <ValidatedForm onSubmit={submitForm} className="space-y-4">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">{t('name')}</label>
                                 <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="rounded-xl" required />
@@ -478,7 +480,7 @@ export function ProxyPoolDialog() {
                             <Button type="submit" className="w-full rounded-2xl h-11" disabled={createProxy.isPending || updateProxy.isPending}>
                                 {editing ? t('submitEdit') : t('submitCreate')}
                             </Button>
-                        </form>
+                        </ValidatedForm>
                     </section>
                 </div>
             </DialogContent>

@@ -19,11 +19,15 @@ import { CONTENT_MAP, useActiveRouteGuard } from '@/route';
 import { useSiteEnabled } from '@/api/endpoints/setting';
 import { apiClient } from '@/api/client';
 import { logger } from '@/lib/logger';
+import { usePageGutterScroll } from '@/hooks/use-page-gutter-scroll';
 
 const RETURNING_USER_KEY = 'octopus_visited';
 const RETURNING_LOGO_MS = 300;
 
 export function AppContainer() {
+    const shellRef = useRef<HTMLDivElement>(null);
+    const pageRef = useRef<HTMLDivElement>(null);
+    usePageGutterScroll(shellRef, pageRef);
     const { isAuthenticated, isAPIKeyAuth, isLoading: authLoading } = useAuth();
     const { activeItem, direction } = useNavStore();
     const t = useTranslations('navbar');
@@ -209,6 +213,7 @@ export function AppContainer() {
         <MotionConfig reducedMotion="user">
             <motion.div
                 key="main-app"
+                ref={shellRef}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
@@ -246,7 +251,7 @@ export function AppContainer() {
                                 <span className="mt-1 min-w-0 truncate text-3xl font-bold">{t(activeItem)}</span>
                                 {activeItem === 'channel' && (
                                     <ChannelTabSwitcher
-                                        className="hidden w-fit max-w-full sm:flex"
+                                        className="hidden w-fit max-w-full md:flex"
                                         underlineLayoutId="channel-tab-underline-desktop"
                                     />
                                 )}
@@ -258,7 +263,7 @@ export function AppContainer() {
                     </div>
                     {activeItem === 'channel' && (
                         <ChannelTabSwitcher
-                            className="col-start-2 col-end-4 row-start-2 w-fit max-w-full sm:hidden"
+                            className="col-start-2 col-end-4 row-start-2 w-fit max-w-full md:hidden"
                             underlineLayoutId="channel-tab-underline-mobile"
                         />
                     )}
@@ -267,6 +272,7 @@ export function AppContainer() {
                 <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                         key={activeItem}
+                        ref={pageRef}
                         variants={ENTRANCE_VARIANTS.content}
                         initial="initial"
                         animate="animate"

@@ -311,7 +311,7 @@ function MorphingDialogContent({
       ref={containerRef}
       id={`motion-ui-morphing-dialog-content-${uniqueId}`}
       layoutId={disableLayoutAnimation ? undefined : `dialog-${uniqueId}`}
-      className={cn('overflow-hidden', className)}
+      className={cn('overflow-hidden modal-surface', className)}
       style={style}
       role='dialog'
       aria-modal='true'

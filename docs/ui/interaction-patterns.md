@@ -27,11 +27,15 @@
 
 ## 表单容器
 
-- **新建**：`MorphingDialog`，入口挂在 `Toolbar`（见 `toolbar/index.tsx` 的 `CreateDialogContent`）
+- **新建**：`MorphingDialog`，入口挂在 `Toolbar`（业务动作在各模块的 `ToolbarActions.tsx`，通用弹窗容器在 `toolbar/ToolbarActions.tsx`）
 - **编辑**：与新建同构，从卡片触发
 - **多步 / 主从结构**：`Dialog`
 
 不要为了省事新引一套浮层实现。需要在卡片上就地编辑时，复用 `setting/OverlayPortal` 的现成做法。
+
+表单使用 `common/ValidatedForm`。保留 `required`、输入类型、范围和步长等 HTML 约束，
+由组件统一阻止无效提交、使用项目 Toast 提示并聚焦错误字段，避免浏览器默认校验气泡。
+业务层校验继续保留，不能只加 `noValidate` 就把校验关掉。
 
 ## 空态 / 加载态 / 错误态
 
@@ -54,8 +58,7 @@
 
 统一从 `@/components/common/Toast` 导入 `toast`，**不要直接 import sonner**。
 
-CRUD 的成功与失败都要给反馈——目前 channel / group / model 的创建成功是静默的，
-那是历史遗留，新代码不要跟。
+CRUD 的成功与失败都要给反馈。失败时保留输入和当前操作上下文，便于修正后重试。
 
 ## 组件复用
 

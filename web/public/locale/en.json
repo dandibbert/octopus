@@ -1,4 +1,13 @@
 {
+  "formValidation": {
+    "required": "Please fill in this field.",
+    "url": "Enter a valid HTTP or HTTPS URL.",
+    "email": "Enter a valid email address.",
+    "min": "Enter a value of at least {min}.",
+    "max": "Enter a value no greater than {max}.",
+    "number": "Enter a valid number using the allowed increment.",
+    "invalid": "Please check this field's format."
+  },
   "login": {
     "username": "Username",
     "usernamePlaceholder": "Enter your username",
@@ -734,7 +743,7 @@
       "submitting": "Creating..."
     },
     "card": {
-      "empty": "No rules"
+  "empty": "No rules"
     },
     "detail": {
       "actions": {
@@ -922,7 +931,9 @@
       "cacheWrite": "Cache Write",
       "explicitFree": "Explicitly free",
       "submit": "Create custom price",
-      "submitting": "Creating..."
+      "submitting": "Creating...",
+      "created": "Custom price created",
+      "createFailed": "Failed to create custom price"
     },
     "mode": {
       "unknown": "Unknown price",
@@ -1242,13 +1253,17 @@
         "saving": "Saving...",
         "delete": "Delete",
         "confirmDelete": "Confirm Delete",
-        "deleting": "Deleting..."
+        "deleting": "Deleting...",
+        "deleted": "Channel deleted",
+        "deleteFailed": "Failed to delete channel"
       }
     },
     "create": {
       "dialogTitle": "Create New Channel",
       "submit": "Create Channel",
-      "submitting": "Creating..."
+      "submitting": "Creating...",
+      "created": "Channel created",
+      "createFailed": "Failed to create channel"
     },
     "form": {
       "add": "Add",

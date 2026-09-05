@@ -57,8 +57,10 @@
   --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
   --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-  --overlay-scrim-color: rgb(255 255 255 / 0.4);
-  --overlay-scrim-blur: 4px;
+  --overlay-scrim-color: oklch(0.25 0.01 85 / 0.28);
+  --overlay-scrim-blur: 2px;
+  --modal-border: oklch(0.74 0.014 88 / 0.65);
+  --modal-shadow: 0 20px 64px -16px oklch(0.2 0.01 85 / 0.28), 0 2px 8px oklch(0.2 0.01 85 / 0.12);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 }
@@ -119,7 +121,9 @@ html.dark,
   --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
   --overlay-scrim-color: rgb(0 0 0 / 0.4);
-  --overlay-scrim-blur: 4px;
+  --overlay-scrim-blur: 2px;
+  --modal-border: oklch(0.60 0.01 85 / 0.65);
+  --modal-shadow: 0 20px 64px -16px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.3);
 }
 
 @theme inline {
@@ -269,4 +273,10 @@ html.dark,
   background-color: var(--overlay-scrim-color);
   -webkit-backdrop-filter: blur(var(--overlay-scrim-blur));
   backdrop-filter: blur(var(--overlay-scrim-blur));
+}
+
+/* Dialog elevation is stronger than list-card elevation, with a crisp edge. */
+.modal-surface {
+  border: 1px solid var(--modal-border);
+  box-shadow: var(--modal-shadow);
 }

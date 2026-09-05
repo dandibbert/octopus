@@ -83,6 +83,7 @@ export function CreateDialogContent() {
             },
             {
                 onSuccess: () => {
+                    toast.success(t('created'));
                     setFormData({
                         name: '',
                         type: ChannelType.OpenAIChat,
@@ -107,7 +108,8 @@ export function CreateDialogContent() {
                         provider_unknown_policy: 'use_routed',
                     });
                     setIsOpen(false);
-                }
+                },
+                onError: (error) => toast.error(t('createFailed'), { description: error.message }),
             });
     };
 

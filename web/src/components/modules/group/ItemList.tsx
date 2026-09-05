@@ -369,6 +369,31 @@ export function MemberList({
     const t = useTranslations('group');
 
     useEffect(() => {
+        const list = scrollContainerRef.current;
+        const page = list?.closest<HTMLElement>('[data-virtualized-scroll]');
+        if (!contained || !list || !page) return;
+
+        // Keep the original nested list. At its boundary, pass the remaining
+        // wheel distance to the page in the same gesture, rather than dropping it.
+        const handleWheel = (event: WheelEvent) => {
+            if (event.ctrlKey || event.shiftKey || !event.cancelable || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+            const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
+                : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? list.clientHeight : 1;
+            const delta = event.deltaY * unit;
+            const available = delta > 0 ? Math.max(0, list.scrollHeight - list.clientHeight - list.scrollTop) : Math.max(0, list.scrollTop);
+            if (Math.abs(delta) <= available) return;
+            const parentAvailable = delta > 0 ? page.scrollHeight - page.clientHeight - page.scrollTop : page.scrollTop;
+            if (parentAvailable <= 0) return;
+            event.preventDefault();
+            const consumed = Math.sign(delta) * available;
+            list.scrollTop += consumed;
+            page.scrollTop += delta - consumed;
+        };
+        list.addEventListener('wheel', handleWheel, { passive: false });
+        return () => list.removeEventListener('wheel', handleWheel);
+    }, [contained]);
+
+    useEffect(() => {
         // Skip the initial mount so we don't auto-scroll on first render / initial data load.
         if (!hasMountedRef.current) {
             hasMountedRef.current = true;

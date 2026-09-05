@@ -9,8 +9,10 @@ import { usePreload } from "@/route/use-preload"
 import { ENTRANCE_VARIANTS } from "@/lib/animations/fluid-transitions"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/animate-ui/components/animate/tooltip"
 import { useTranslations } from "next-intl"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 export function NavBar() {
+    const isMobile = useIsMobile()
     const { activeItem, setActiveItem } = useNavStore()
     const visibleRoutes = useVisibleRoutes()
     const { preload } = usePreload()
@@ -21,11 +23,11 @@ export function NavBar() {
     useEffect(() => {
         const nav = navRef.current
         const activeButton = itemRefs.current[activeItem]
-        if (!nav || !activeButton || window.matchMedia('(min-width: 768px)').matches) return
+        if (!nav || !activeButton || !isMobile) return
 
         const targetLeft = activeButton.offsetLeft - (nav.clientWidth - activeButton.offsetWidth) / 2
         nav.scrollTo({ left: targetLeft, behavior: 'smooth' })
-    }, [activeItem])
+    }, [activeItem, isMobile])
 
     return (
         <div className="relative z-40 md:min-h-screen">
@@ -47,7 +49,7 @@ export function NavBar() {
                     const isActive = activeItem === route.id
                     const label = t(route.id)
                     return (
-                        <Tooltip key={route.id} side="top" sideOffset={10} align="center">
+                        <Tooltip key={route.id} side={isMobile ? 'top' : 'right'} sideOffset={10} align="center" openDelay={850}>
                             <TooltipTrigger asChild>
                                 <motion.button
                                     ref={(node) => { itemRefs.current[route.id] = node }}
