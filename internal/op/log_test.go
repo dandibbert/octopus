@@ -250,6 +250,40 @@ func TestRelayLogListCursorReturnsNextCursorWithoutTotal(t *testing.T) {
 	}
 }
 
+func TestRelayLogListIncludesProtocolFormats(t *testing.T) {
+	ctx := setupSiteOpTestDB(t)
+	if err := settingRefreshCache(ctx); err != nil {
+		t.Fatalf("settingRefreshCache failed: %v", err)
+	}
+	resetRelayLogStateForTest()
+
+	row := model.RelayLog{
+		ID:               401,
+		Time:             401,
+		RequestModelName: "gpt",
+		InboundFormat:    "openai/responses",
+		OutboundFormat:   "openai_chat",
+		Success:          true,
+	}
+	if err := dbpkg.GetDB().WithContext(ctx).Create(&row).Error; err != nil {
+		t.Fatalf("create relay log failed: %v", err)
+	}
+
+	result, err := RelayLogListWithFilter(ctx, RelayLogListFilter{Page: 1, PageSize: 10, WithTotal: true})
+	if err != nil {
+		t.Fatalf("RelayLogListWithFilter failed: %v", err)
+	}
+	if result.Total != 1 || len(result.Logs) != 1 {
+		t.Fatalf("unexpected list result: %+v", result)
+	}
+	if result.Logs[0].InboundFormat != "openai/responses" {
+		t.Fatalf("list omitted inbound_format: %+v", result.Logs[0])
+	}
+	if result.Logs[0].OutboundFormat != "openai_chat" {
+		t.Fatalf("list omitted outbound_format: %+v", result.Logs[0])
+	}
+}
+
 func TestRelayLogGetReturnsFullContent(t *testing.T) {
 	ctx := setupSiteOpTestDB(t)
 	if err := settingRefreshCache(ctx); err != nil {

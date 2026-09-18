@@ -98,6 +98,8 @@ export interface RelayLog {
     usage_estimated?: boolean;
     price_estimated?: boolean;
     model_mismatch?: boolean;
+    inbound_format?: string;
+    outbound_format?: string;
     request_content: string;     // 请求内容
     response_content: string;    // 响应内容
     error: string;               // 错误信息

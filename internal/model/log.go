@@ -109,16 +109,18 @@ type RelayLog struct {
 	UsageEstimated           bool                `json:"usage_estimated" gorm:"default:false"`
 	PriceEstimated           bool                `json:"price_estimated" gorm:"default:false"`
 	ModelMismatch            bool                `json:"model_mismatch" gorm:"default:false;index"`
-	RequestContent           string              `json:"request_content"`                       // 请求内容
-	ResponseContent          string              `json:"response_content"`                      // 响应内容
-	Error                    string              `json:"error"`                                 // 错误信息
-	Success                  bool                `json:"success" gorm:"not null;default:false"` // 是否成功，便于状态筛选索引
-	Attempts                 []ChannelAttempt    `json:"attempts" gorm:"serializer:json"`       // 所有尝试记录
-	TotalAttempts            int                 `json:"total_attempts"`                        // 总尝试次数
-	UsedWS                   bool                `json:"used_ws" gorm:"default:false"`          // 是否使用了上游WebSocket
-	WSMode                   *RelayLogWSMode     `json:"ws_mode,omitempty"`                     // 上游 WebSocket 会话模式
-	WSExecMode               *RelayLogWSExecMode `json:"ws_exec_mode,omitempty"`                // 上游 WebSocket 事件处理方式
-	WSRecovery               *RelayLogWSRecovery `json:"ws_recovery,omitempty"`                 // 本次请求触发的恢复动作
+	InboundFormat            string              `json:"inbound_format,omitempty" gorm:"size:64"`  // 客户端入站协议
+	OutboundFormat           string              `json:"outbound_format,omitempty" gorm:"size:64"` // 渠道出站协议
+	RequestContent           string              `json:"request_content"`                          // 请求内容
+	ResponseContent          string              `json:"response_content"`                         // 响应内容
+	Error                    string              `json:"error"`                                    // 错误信息
+	Success                  bool                `json:"success" gorm:"not null;default:false"`    // 是否成功，便于状态筛选索引
+	Attempts                 []ChannelAttempt    `json:"attempts" gorm:"serializer:json"`          // 所有尝试记录
+	TotalAttempts            int                 `json:"total_attempts"`                           // 总尝试次数
+	UsedWS                   bool                `json:"used_ws" gorm:"default:false"`             // 是否使用了上游WebSocket
+	WSMode                   *RelayLogWSMode     `json:"ws_mode,omitempty"`                        // 上游 WebSocket 会话模式
+	WSExecMode               *RelayLogWSExecMode `json:"ws_exec_mode,omitempty"`                   // 上游 WebSocket 事件处理方式
+	WSRecovery               *RelayLogWSRecovery `json:"ws_recovery,omitempty"`                    // 本次请求触发的恢复动作
 }
 
 // AfterFind treats legacy NULL/empty request_source values as ordinary API

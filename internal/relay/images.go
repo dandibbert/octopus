@@ -25,6 +25,7 @@ import (
 	"github.com/bestruirui/octopus/internal/relay/balancer"
 	"github.com/bestruirui/octopus/internal/relay/bodycache"
 	"github.com/bestruirui/octopus/internal/server/resp"
+	transformerModel "github.com/bestruirui/octopus/internal/transformer/model"
 	"github.com/bestruirui/octopus/internal/transformer/outbound"
 	"github.com/bestruirui/octopus/internal/utils/log"
 	"github.com/gin-gonic/gin"
@@ -268,13 +269,16 @@ type imagesRelayMetrics struct {
 
 	RequestContent  string
 	ResponseContent string
+	InboundFormat   string
+	OutboundFormat  string
 }
 
 func newImagesRelayMetrics(apiKeyID int, requestModel string) *imagesRelayMetrics {
 	return &imagesRelayMetrics{
-		APIKeyID:     apiKeyID,
-		RequestModel: requestModel,
-		StartTime:    time.Now(),
+		APIKeyID:      apiKeyID,
+		RequestModel:  requestModel,
+		StartTime:     time.Now(),
+		InboundFormat: string(transformerModel.APIFormatOpenAIImageGeneration),
 	}
 }
 
@@ -287,6 +291,7 @@ func (m *imagesRelayMetrics) SetFirstTokenTime(t time.Time) {
 func (m *imagesRelayMetrics) SetBillingRoute(channel model.Channel, item model.GroupItem, requireKnown bool) error {
 	plan, err := price.BuildBillingPlan(m.RequestModel, channel, item, requireKnown)
 	m.BillingPlan = &plan
+	m.OutboundFormat = outboundFormatName(channel.Type)
 	return err
 }
 
@@ -398,6 +403,8 @@ func (m *imagesRelayMetrics) saveLog(ctx context.Context, success bool, err erro
 		TotalAttempts:     len(attempts),
 		RequestContent:    m.RequestContent,
 		ResponseContent:   m.ResponseContent,
+		InboundFormat:     m.InboundFormat,
+		OutboundFormat:    m.OutboundFormat,
 	}
 	if m.BillingPlan != nil {
 		relayLog.RoutedModelName = m.BillingPlan.RoutedModel

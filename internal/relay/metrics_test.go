@@ -6,9 +6,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	dbmodel "github.com/bestruirui/octopus/internal/model"
+	"github.com/bestruirui/octopus/internal/op"
 	transformerModel "github.com/bestruirui/octopus/internal/transformer/model"
+	"github.com/bestruirui/octopus/internal/transformer/outbound"
 	"github.com/gin-gonic/gin"
 )
 
@@ -135,6 +138,42 @@ func TestAdminExecutionMetadataIncludesRouteAndKnownCost(t *testing.T) {
 	}
 	if _, ok := payload["estimated_cost"]; !ok {
 		t.Fatalf("known price metadata should include estimated_cost: %#v", payload)
+	}
+}
+
+func TestRelayMetricsSaveLogRecordsInboundAndOutboundFormat(t *testing.T) {
+	ctx := setupRelayTestDB(t)
+
+	req := &transformerModel.InternalLLMRequest{
+		Model:        "gpt-4o",
+		RawAPIFormat: transformerModel.APIFormatOpenAIResponse,
+	}
+	metrics := NewRelayMetrics(0, "gpt-4o", []byte(`{"input":"hello"}`), req)
+	channel := dbmodel.Channel{Type: outbound.OutboundTypeOpenAIChat, Name: "commandcode"}
+	if err := metrics.SetBillingRoute(channel, dbmodel.GroupItem{ModelName: "gpt-4o"}, false); err != nil {
+		t.Fatalf("SetBillingRoute failed: %v", err)
+	}
+
+	metrics.saveLog(ctx, true, nil, time.Millisecond, []dbmodel.ChannelAttempt{{
+		ChannelID:   1,
+		ChannelName: "commandcode",
+		ModelName:   "gpt-4o",
+		AttemptNum:  1,
+		Status:      dbmodel.AttemptSuccess,
+	}}, 1, "commandcode")
+
+	logs, err := op.RelayLogList(ctx, nil, nil, nil, 1, 10)
+	if err != nil {
+		t.Fatalf("RelayLogList failed: %v", err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 relay log, got %#v", logs)
+	}
+	if logs[0].InboundFormat != string(transformerModel.APIFormatOpenAIResponse) {
+		t.Fatalf("inbound format: got %q want %q", logs[0].InboundFormat, transformerModel.APIFormatOpenAIResponse)
+	}
+	if logs[0].OutboundFormat != "openai_chat" {
+		t.Fatalf("outbound format: got %q want openai_chat", logs[0].OutboundFormat)
 	}
 }
 

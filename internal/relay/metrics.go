@@ -52,16 +52,22 @@ type RelayMetrics struct {
 	PriceEstimated   bool
 	ModelMismatch    bool
 	RewriteSummary   rewrite.Summary
+	InboundFormat    string
+	OutboundFormat   string
 }
 
 func NewRelayMetrics(apiKeyID int, requestModel string, rawBody []byte, req *transformerModel.InternalLLMRequest) *RelayMetrics {
-	return &RelayMetrics{
+	metrics := &RelayMetrics{
 		APIKeyID:        apiKeyID,
 		RequestModel:    requestModel,
 		StartTime:       time.Now(),
 		RawRequest:      rawBody,
 		InternalRequest: req,
 	}
+	if req != nil {
+		metrics.InboundFormat = string(req.RawAPIFormat)
+	}
+	return metrics
 }
 
 func (m *RelayMetrics) SetFirstTokenTime(t time.Time) {
@@ -100,6 +106,7 @@ func (m *RelayMetrics) SetWSRecovery(recovery model.RelayLogWSRecovery) {
 func (m *RelayMetrics) SetBillingRoute(channel model.Channel, item model.GroupItem, requireKnown bool) error {
 	plan, err := price.BuildBillingPlan(m.RequestModel, channel, item, requireKnown)
 	m.BillingPlan = &plan
+	m.OutboundFormat = outboundFormatName(channel.Type)
 	return err
 }
 
@@ -262,6 +269,16 @@ func (m *RelayMetrics) SaveWithChannelStats(ctx context.Context, success bool, e
 	m.saveLog(ctx, success, err, duration, attempts, channelID, channelName)
 }
 
+func (m *RelayMetrics) resolvedInboundFormat() string {
+	if m.InboundFormat != "" {
+		return m.InboundFormat
+	}
+	if m.InternalRequest != nil {
+		return string(m.InternalRequest.RawAPIFormat)
+	}
+	return ""
+}
+
 func (m *RelayMetrics) shouldAggregateStats() bool {
 	return m.RequestSource == "" || m.RequestSource == model.RelayLogRequestSourceAPI
 }
@@ -301,6 +318,8 @@ func (m *RelayMetrics) saveLog(ctx context.Context, success bool, err error, dur
 		Attempts:          attempts,
 		TotalAttempts:     len(attempts),
 		UsedWS:            m.UsedWS,
+		InboundFormat:     m.resolvedInboundFormat(),
+		OutboundFormat:    m.OutboundFormat,
 	}
 	if m.BillingPlan != nil {
 		relayLog.RoutedModelName = m.BillingPlan.RoutedModel

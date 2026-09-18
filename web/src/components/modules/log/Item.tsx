@@ -167,6 +167,66 @@ function getHeadlineInputTokens(log: RelayLog) {
     return Math.max(0, dedupedInput + cacheWrite);
 }
 
+const PROTOCOL_LABEL_KEYS: Record<string, 'protocolChatCompletions' | 'protocolResponses' | 'protocolAnthropic' | 'protocolEmbeddings' | 'protocolImages' | 'protocolGemini' | 'protocolVolcengine'> = {
+    'openai/chat_completions': 'protocolChatCompletions',
+    openai_chat: 'protocolChatCompletions',
+    'openai/responses': 'protocolResponses',
+    openai_responses: 'protocolResponses',
+    'anthropic/messages': 'protocolAnthropic',
+    anthropic_messages: 'protocolAnthropic',
+    'openai/embeddings': 'protocolEmbeddings',
+    openai_embedding: 'protocolEmbeddings',
+    'openai/image_generation': 'protocolImages',
+    'gemini/contents': 'protocolGemini',
+    gemini: 'protocolGemini',
+    volcengine: 'protocolVolcengine',
+};
+
+function formatProtocolLabel(format: string | undefined, t: ReturnType<typeof useTranslations<'log.card'>>) {
+    const key = format?.trim();
+    if (!key) return '';
+    const labelKey = PROTOCOL_LABEL_KEYS[key];
+    return labelKey ? t(labelKey) : key;
+}
+
+function ProtocolBadge({ log }: { log: RelayLog }) {
+    const t = useTranslations('log.card');
+    const inbound = formatProtocolLabel(log.inbound_format, t);
+    const outbound = formatProtocolLabel(log.outbound_format, t);
+    if (!inbound && !outbound) return null;
+
+    const converted = Boolean(inbound && outbound && inbound !== outbound);
+    const label = converted ? `${inbound} → ${outbound}` : (inbound || outbound);
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-3xs font-medium">
+                    {label}
+                </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+                {converted
+                    ? t('protocolConvertedHint', { inbound, outbound })
+                    : t('protocolSameHint', { format: label })}
+            </TooltipContent>
+        </Tooltip>
+    );
+}
+
+function LogRouteBadges({ log }: { log: RelayLog }) {
+    const hasProtocol = Boolean(log.inbound_format?.trim() || log.outbound_format?.trim());
+    const hasWS = Boolean(log.used_ws || log.ws_mode || log.ws_exec_mode || log.ws_recovery);
+    if (!hasProtocol && !hasWS) return null;
+
+    return (
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            <ProtocolBadge log={log} />
+            <WSModeBadge log={log} />
+        </div>
+    );
+}
+
 function getWSBadgeMeta(mode: RelayLogWSMode | null | undefined, usedWS: boolean | undefined, t: ReturnType<typeof useTranslations<'log.card'>>) {
     if (!usedWS && !mode) return null;
 
@@ -944,8 +1004,8 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                             <Pin className="size-3.5 shrink-0 text-warning" />
                                         ) : null}
                                     </div>
-                                    <div className="mt-2">
-                                        <WSModeBadge log={log} />
+                                    <div className="mt-2 empty:hidden">
+                                        <LogRouteBadges log={log} />
                                     </div>
                                 </div>
                                 <div className="hidden min-w-0 flex-1 items-center gap-2 text-sm md:flex">
@@ -985,7 +1045,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                     ) : null}
                                 </div>
                                 <div className="hidden md:block">
-                                    <WSModeBadge log={log} />
+                                    <LogRouteBadges log={log} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs tabular-nums text-muted-foreground lg:flex lg:flex-wrap lg:items-center lg:gap-x-8 lg:[&>div]:shrink-0 lg:[&>div]:whitespace-nowrap">
@@ -1077,8 +1137,8 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                         <Pin className="size-3.5 shrink-0 text-warning" />
                                     ) : null}
                                 </div>
-                                <div className="mt-2">
-                                    <WSModeBadge log={log} />
+                                <div className="mt-2 empty:hidden">
+                                    <LogRouteBadges log={log} />
                                 </div>
                             </div>
                             <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
@@ -1106,7 +1166,7 @@ export function LogCard({ log, siteTargets }: { log: RelayLog; siteTargets: LogS
                                 ) : null}
                             </div>
                             <div className="hidden md:block">
-                                <WSModeBadge log={log} />
+                                <LogRouteBadges log={log} />
                             </div>
                         </MorphingDialogTitle>
 

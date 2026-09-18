@@ -742,6 +742,8 @@ func selectRelayLogListFields(query *gorm.DB, includeContent bool) *gorm.DB {
 		"ws_mode",
 		"ws_exec_mode",
 		"ws_recovery",
+		"inbound_format",
+		"outbound_format",
 	)
 }
 
