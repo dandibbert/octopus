@@ -416,8 +416,7 @@ type ResponsesItem struct {
 	Arguments string `json:"arguments,omitempty"`
 
 	// Function call output
-	Output        *ResponsesInput `json:"output,omitempty"`
-	ItemReference *string         `json:"item_reference,omitempty"`
+	Output *ResponsesInput `json:"output,omitempty"`
 
 	// Image generation fields
 	Result       *string `json:"result,omitempty"`
@@ -1069,8 +1068,6 @@ func convertInputFromMessages(msgs []model.Message, transformOptions model.Trans
 		return ResponsesInput{Text: nonSystemMsgs[0].Content.Content}
 	}
 
-	// Build call_id -> item_id mapping for function_call_output reference
-	callIDToItemID := make(map[string]string)
 	var items []ResponsesItem
 	for _, msg := range msgs {
 		switch msg.Role {
@@ -1079,15 +1076,9 @@ func convertInputFromMessages(msgs []model.Message, transformOptions model.Trans
 		case "user":
 			items = append(items, convertUserMessageToResponses(msg))
 		case "assistant":
-			assistantItems := convertAssistantMessageToResponses(msg)
-			for _, item := range assistantItems {
-				if item.Type == "function_call" && item.ID != "" && item.CallID != "" {
-					callIDToItemID[item.CallID] = item.ID
-				}
-			}
-			items = append(items, assistantItems...)
+			items = append(items, convertAssistantMessageToResponses(msg)...)
 		case "tool":
-			items = append(items, convertToolMessageToResponses(msg, callIDToItemID))
+			items = append(items, convertToolMessageToResponses(msg))
 		}
 	}
 
@@ -1225,7 +1216,7 @@ func convertAssistantMessageToResponses(msg model.Message) []ResponsesItem {
 	return sanitizeResponsesItems(items)
 }
 
-func convertToolMessageToResponses(msg model.Message, callIDToItemID map[string]string) ResponsesItem {
+func convertToolMessageToResponses(msg model.Message) ResponsesItem {
 	var output ResponsesInput
 
 	if msg.Content.Content != nil {
@@ -1245,20 +1236,11 @@ func convertToolMessageToResponses(msg model.Message, callIDToItemID map[string]
 		output.Text = lo.ToPtr("")
 	}
 
-	item := ResponsesItem{
+	return ResponsesItem{
 		Type:   "function_call_output",
 		CallID: lo.FromPtr(msg.ToolCallID),
 		Output: &output,
 	}
-
-	// Set item_reference to the corresponding function_call's ID
-	if msg.ToolCallID != nil {
-		if itemID, ok := callIDToItemID[*msg.ToolCallID]; ok {
-			item.ItemReference = lo.ToPtr(itemID)
-		}
-	}
-
-	return item
 }
 
 func convertToolsToResponses(tools []model.Tool) []ResponsesTool {
@@ -1714,49 +1696,16 @@ func sanitizeResponsesRawItems(raw json.RawMessage) json.RawMessage {
 
 	changed := false
 
-	// Build call_id -> item_id mapping from function_call items.
-	// Generate an id for any function_call that has call_id but no id,
-	// so the function_call_output backfill can always resolve item_reference.
-	callIDToItemID := make(map[string]string)
-	for _, item := range items {
-		if decodeRawString(item["type"]) == "function_call" {
-			callID := decodeRawString(item["call_id"])
-			if callID == "" {
-				continue
-			}
-			itemID := decodeRawString(item["id"])
-			if itemID == "" {
-				itemID = generateResponsesItemID()
-				if b, err := json.Marshal(itemID); err == nil {
-					item["id"] = b
-					changed = true
-				}
-			}
-			if itemID != "" {
-				callIDToItemID[callID] = itemID
-			}
-		}
-	}
-
 	for _, item := range items {
 		itemType := decodeRawString(item["type"])
 
-		// Sanitize function_call_output: add missing item_reference
+		// item_reference is a standalone Responses input item type, not a
+		// function_call_output field. Older Octopus builds injected it here,
+		// which strict OpenAI-compatible upstreams reject as an unknown parameter.
 		if itemType == "function_call_output" {
-			refRaw, hasRef := item["item_reference"]
-			refMissing := !hasRef || len(bytes.TrimSpace(refRaw)) == 0 ||
-				bytes.Equal(bytes.TrimSpace(refRaw), []byte("null")) ||
-				bytes.Equal(bytes.TrimSpace(refRaw), []byte(`""`))
-			if refMissing {
-				callID := decodeRawString(item["call_id"])
-				if callID != "" {
-					if itemID, ok := callIDToItemID[callID]; ok {
-						if b, err := json.Marshal(itemID); err == nil {
-							item["item_reference"] = b
-							changed = true
-						}
-					}
-				}
+			if _, exists := item["item_reference"]; exists {
+				delete(item, "item_reference")
+				changed = true
 			}
 		}
 
