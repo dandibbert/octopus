@@ -110,14 +110,18 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
             </TabsHighlight>
           </TabsList>
 
-          <ValidatedForm onSubmit={handleSubmit} className="space-y-6 pt-2">
+          <div className="space-y-6 pt-2">
             <TabsContents className="p-3 -mx-3 py-6">
-              <TabsContent value="user" className="space-y-6">
+              {/* Separate forms keep password managers from seeing two password fields. */}
+              <TabsContent value="user">
+                <ValidatedForm id="login-user-form" onSubmit={handleSubmit} className="space-y-6">
                 <Field>
                   <FieldLabel htmlFor="username">{t('username')}</FieldLabel>
                   <Input
                     id="username"
+                    name="username"
                     type="text"
+                    autoComplete="username"
                     placeholder={t('usernamePlaceholder')}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -129,7 +133,9 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
                   <FieldLabel htmlFor="password">{t('password')}</FieldLabel>
                   <Input
                     id="password"
+                    name="password"
                     type="password"
+                    autoComplete="current-password"
                     placeholder={t('passwordPlaceholder')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -141,6 +147,7 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
                   <FieldLabel htmlFor="totp-code">{t('totp')}</FieldLabel>
                   <Input
                     id="totp-code"
+                    name="totp"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -155,13 +162,19 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
                     {twoFactorRequired ? t('totpHintRequired') : t('totpHint')}
                   </FieldDescription>
                 </Field>
+                </ValidatedForm>
               </TabsContent>
               <TabsContent value="apikey">
+                <ValidatedForm id="login-apikey-form" onSubmit={handleSubmit}>
                 <Field>
                   <FieldLabel htmlFor="apikey">{t('apikey')}</FieldLabel>
                   <Input
                     id="apikey"
+                    name="apikey"
                     type="password"
+                    autoComplete="off"
+                    data-1p-ignore
+                    data-lpignore="true"
                     placeholder={t('apikeyPlaceholder')}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
@@ -169,15 +182,16 @@ export function LoginForm({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
                     disabled={isPending}
                   />
                 </Field>
+                </ValidatedForm>
               </TabsContent>
             </TabsContents>
 
             {error && <FieldDescription className="text-destructive">{error}</FieldDescription>}
 
-            <Button type="submit" disabled={isPending} className="w-full">
+            <Button type="submit" form={mode === 'user' ? 'login-user-form' : 'login-apikey-form'} disabled={isPending} className="w-full">
               {isPending ? t('button.loading') : t('button.submit')}
             </Button>
-          </ValidatedForm>
+          </div>
         </Tabs>
       </div>
     </motion.div>
