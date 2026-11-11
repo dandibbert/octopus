@@ -331,6 +331,63 @@ func TestResponsesInboundToChatOutboundPreservesParallelToolCallPairing(t *testi
 	}
 }
 
+// Strict OpenAI-compatible upstreams reject mismatched tool history with
+// errors like "tool calls and tool results do not match", so Chat outbound
+// repairs the pairing instead of forwarding a request that is bound to fail.
+func TestTransformRequestRepairsToolCallPairing(t *testing.T) {
+	req := &model.InternalLLMRequest{
+		Model: "gpt-4o",
+		Messages: []model.Message{
+			{Role: "user", Content: model.MessageContent{Content: stringPtr("hi")}},
+			{
+				Role: "assistant",
+				ToolCalls: []model.ToolCall{
+					{ID: "call_a", Type: "function", Function: model.FunctionCall{Name: "lookup", Arguments: "{}"}},
+					{ID: "call_b", Type: "function", Function: model.FunctionCall{Name: "search", Arguments: "{}"}},
+				},
+			},
+			{Role: "tool", ToolCallID: stringPtr("call_a"), Content: model.MessageContent{Content: stringPtr("a")}},
+			{Role: "tool", ToolCallID: stringPtr("call_gone"), Content: model.MessageContent{Content: stringPtr("stale")}},
+			{Role: "user", Content: model.MessageContent{Content: stringPtr("continue")}},
+		},
+	}
+
+	httpReq, err := (&ChatOutbound{}).TransformRequest(context.Background(), req, "https://api.openai.com/v1", "sk-test")
+	if err != nil {
+		t.Fatalf("TransformRequest: %v", err)
+	}
+	body, err := io.ReadAll(httpReq.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	var payload struct {
+		Messages []struct {
+			Role       string  `json:"role"`
+			ToolCallID *string `json:"tool_call_id"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	want := []struct{ role, toolCallID string }{
+		{"user", ""}, {"assistant", ""}, {"tool", "call_a"}, {"tool", "call_b"}, {"user", ""},
+	}
+	if len(payload.Messages) != len(want) {
+		t.Fatalf("message count = %d, want %d; body=%s", len(payload.Messages), len(want), body)
+	}
+	for i, w := range want {
+		got := payload.Messages[i]
+		gotID := ""
+		if got.ToolCallID != nil {
+			gotID = *got.ToolCallID
+		}
+		if got.Role != w.role || gotID != w.toolCallID {
+			t.Fatalf("messages[%d] = {%s %s}, want {%s %s}; body=%s", i, got.Role, gotID, w.role, w.toolCallID, body)
+		}
+	}
+}
+
 // Chat outbound forwards OpenAI-Organization / OpenAI-Project when they
 // are present in TransformerMetadata, and skips them cleanly when absent
 // or blank.

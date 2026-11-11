@@ -16,6 +16,86 @@ func PatchAnthropicRequest(req *model.InternalLLMRequest) {
 	req.Messages = FixOrphanedToolCalls(req.Messages)
 }
 
+// PatchOpenAIChatRequest repairs tool call / tool result pairing before Chat
+// Completions wire conversion. Strict OpenAI-compatible upstreams reject the
+// whole request when an assistant tool_call has no matching tool message, when
+// a tool message answers no preceding tool_call, or when another message sits
+// between a tool_call and its result.
+func PatchOpenAIChatRequest(req *model.InternalLLMRequest) {
+	if req == nil || len(req.Messages) == 0 {
+		return
+	}
+	req.Messages = RepairToolCallPairing(req.Messages)
+}
+
+// RepairToolCallPairing places each assistant turn's tool results directly
+// after it in tool_call order, synthesizes empty results for unanswered calls,
+// and drops tool messages that answer no tool_call of the preceding assistant
+// turn (orphans and duplicates). Non-tool messages found between an assistant
+// turn and its results are moved after the results.
+func RepairToolCallPairing(messages []model.Message) []model.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	out := make([]model.Message, 0, len(messages))
+	for i := 0; i < len(messages); {
+		msg := messages[i]
+		if msg.Role == "tool" {
+			i++
+			continue
+		}
+		out = append(out, msg)
+		i++
+		if msg.Role != "assistant" || len(msg.ToolCalls) == 0 {
+			continue
+		}
+
+		pending := make(map[string]struct{}, len(msg.ToolCalls))
+		for _, toolCall := range msg.ToolCalls {
+			if id := strings.TrimSpace(toolCall.ID); id != "" {
+				pending[id] = struct{}{}
+			}
+		}
+
+		results := make(map[string]model.Message, len(pending))
+		var others []model.Message
+		for ; i < len(messages) && messages[i].Role != "assistant"; i++ {
+			next := messages[i]
+			if next.Role != "tool" {
+				others = append(others, next)
+				continue
+			}
+			if next.ToolCallID == nil {
+				continue
+			}
+			id := strings.TrimSpace(*next.ToolCallID)
+			if _, ok := pending[id]; !ok {
+				continue
+			}
+			if _, seen := results[id]; seen {
+				continue
+			}
+			results[id] = next
+		}
+
+		for _, toolCall := range msg.ToolCalls {
+			id := strings.TrimSpace(toolCall.ID)
+			if _, ok := pending[id]; !ok {
+				continue
+			}
+			delete(pending, id)
+			if result, ok := results[id]; ok {
+				out = append(out, result)
+			} else {
+				out = append(out, emptyToolResult(toolCall))
+			}
+		}
+		out = append(out, others...)
+	}
+	return out
+}
+
 // FixOrphanedToolCalls inserts empty tool_result messages for assistant
 // tool_use blocks that are not answered before the next assistant turn.
 func FixOrphanedToolCalls(messages []model.Message) []model.Message {
