@@ -117,3 +117,98 @@ func TestMarshalResponsesInputItemsOmitsFunctionCallOutputItemReference(t *testi
 	}
 	t.Fatal("function_call_output item not found")
 }
+
+func TestChatToolCallsConvertedToResponsesOmitItemIDs(t *testing.T) {
+	messages := []model.Message{
+		{
+			Role: "assistant",
+			ToolCalls: []model.ToolCall{
+				{ID: "call_first", Type: "function", Function: model.FunctionCall{Name: "first", Arguments: "{}"}},
+				{ID: "call_second", Type: "function", Function: model.FunctionCall{Name: "second", Arguments: "{}"}},
+			},
+		},
+		{Role: "tool", ToolCallID: lo.ToPtr("call_first"), Content: model.MessageContent{Content: lo.ToPtr("first result")}},
+		{Role: "tool", ToolCallID: lo.ToPtr("call_second"), Content: model.MessageContent{Content: lo.ToPtr("second result")}},
+	}
+
+	input := convertInputFromMessages(messages, model.TransformOptions{ArrayInputs: lo.ToPtr(true)})
+	if len(input.Items) != 4 {
+		t.Fatalf("expected 2 calls followed by 2 tool outputs, got %d items", len(input.Items))
+	}
+	for i, expectedCallID := range []string{"call_first", "call_second"} {
+		call, result := input.Items[i], input.Items[i+2]
+		if call.Type != "function_call" || result.Type != "function_call_output" {
+			t.Fatalf("pair %d types: call=%q output=%q", i, call.Type, result.Type)
+		}
+		if call.ID != "" {
+			t.Fatalf("synthetic function_call.id must be omitted, got %q", call.ID)
+		}
+		if call.CallID != expectedCallID || result.CallID != expectedCallID {
+			t.Fatalf("pair %d lost call_id: call=%q output=%q want=%q", i, call.CallID, result.CallID, expectedCallID)
+		}
+	}
+
+	raw, err := MarshalResponsesInputItems(messages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, exists := wire[i]["id"]; exists {
+			t.Fatalf("wire function_call[%d] includes an id: %s", i, wire[i]["id"])
+		}
+	}
+}
+
+func TestSanitizeResponsesItemsOnlyDropsInvalidFunctionCallIDs(t *testing.T) {
+	original := []ResponsesItem{
+		{Type: "function_call", ID: "item_legacy", CallID: "call_a"},
+		{Type: "function_call", ID: "fc_valid", CallID: "call_b"},
+		{Type: "message", ID: "msg_valid", Role: "assistant"},
+	}
+	got := sanitizeResponsesItems(original)
+	if got[0].ID != "" || got[0].CallID != "call_a" {
+		t.Fatalf("invalid function_call id not stripped without preserving call_id: %+v", got[0])
+	}
+	if got[1].ID != "fc_valid" || got[1].CallID != "call_b" {
+		t.Fatalf("valid function_call id not preserved: %+v", got[1])
+	}
+	if got[2].ID != "msg_valid" {
+		t.Fatalf("unrelated item id changed: %+v", got[2])
+	}
+	if original[0].ID != "item_legacy" {
+		t.Fatal("sanitization mutated source items")
+	}
+}
+
+func TestSanitizeResponsesRawItemsOnlyDropsInvalidFunctionCallIDs(t *testing.T) {
+	raw := json.RawMessage(`[
+		{"type":"function_call","id":"item_legacy","call_id":"call_a","name":"first","arguments":"{}"},
+		{"type":"function_call","id":"fc_valid","call_id":"call_b","name":"second","arguments":"{}"},
+		{"type":"function_call_output","call_id":"call_a","output":"ok"},
+		{"type":"function_call_output","call_id":"call_b","output":"done"},
+		{"type":"message","id":"msg_valid","role":"assistant","content":[{"type":"output_text","text":"hello"}]}
+	]`)
+	sanitized := sanitizeResponsesRawItems(raw)
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(sanitized, &items); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := items[0]["id"]; exists {
+		t.Fatalf("invalid function_call.id was forwarded: %s", items[0]["id"])
+	}
+	if got := decodeRawString(items[1]["id"]); got != "fc_valid" {
+		t.Fatalf("valid function_call.id changed: %q", got)
+	}
+	if got := decodeRawString(items[4]["id"]); got != "msg_valid" {
+		t.Fatalf("unrelated item id changed: %q", got)
+	}
+	for i, want := range []string{"call_a", "call_b", "call_a", "call_b"} {
+		if got := decodeRawString(items[i]["call_id"]); got != want {
+			t.Fatalf("item %d call_id changed: got %q, want %q", i, got, want)
+		}
+	}
+}
