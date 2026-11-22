@@ -3,7 +3,6 @@ package openai
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,8 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync/atomic"
-	"time"
 
 	"github.com/samber/lo"
 
@@ -1175,10 +1172,11 @@ func convertAssistantMessageToResponses(msg model.Message) []ResponsesItem {
 		items = append(items, reasoningItem)
 	}
 
-	// Handle tool calls
+	// A Chat Completions tool call has a call_id, but no server-issued Responses
+	// function_call item id. Do not fabricate an item_* id: OpenAI requires
+	// function_call.id (when present) to start with fc_.
 	for _, tc := range msg.ToolCalls {
 		items = append(items, ResponsesItem{
-			ID:        generateResponsesItemID(),
 			Type:      "function_call",
 			CallID:    tc.ID,
 			Name:      tc.Function.Name,
@@ -1643,6 +1641,12 @@ func sanitizeResponsesItems(items []ResponsesItem) []ResponsesItem {
 	sanitized := make([]ResponsesItem, len(items))
 	for i, item := range items {
 		sanitized[i] = item
+		// Only fc_* is a valid OpenAI Responses function_call item id.
+		// Omit foreign/synthetic ids without changing the call_id that
+		// pairs a function_call with its function_call_output.
+		if item.Type == "function_call" && item.ID != "" && !strings.HasPrefix(item.ID, "fc_") {
+			sanitized[i].ID = ""
+		}
 		ensureResponsesReasoningSummary(&sanitized[i])
 		ensureResponsesRefusalShape(&sanitized[i])
 	}
@@ -1698,6 +1702,16 @@ func sanitizeResponsesRawItems(raw json.RawMessage) json.RawMessage {
 
 	for _, item := range items {
 		itemType := decodeRawString(item["type"])
+
+		// Preserve genuine fc_* ids during native Responses replay, but drop
+		// invalid function_call ids emitted by older Chat-to-Responses
+		// converters. Do not rewrite call_id or tool results.
+		if itemType == "function_call" {
+			if rawID, exists := item["id"]; exists && !strings.HasPrefix(decodeRawString(rawID), "fc_") {
+				delete(item, "id")
+				changed = true
+			}
+		}
 
 		// item_reference is a standalone Responses input item type, not a
 		// function_call_output field. Older Octopus builds injected it here,
@@ -1922,20 +1936,3 @@ func (o *ResponseOutbound) PassthroughConfig() model.PassthroughConfig {
 		CollectMetrics: false, // OpenAI Responses uses different metrics semantics
 	}
 }
-
-// generateResponsesItemID generates a unique ID for Responses API items (function_call, etc.).
-// Format matches OpenAI's pattern: item_<random_base62_string>
-func generateResponsesItemID() string {
-	b := make([]byte, 24)
-	if _, err := rand.Read(b); err != nil {
-		// fallback: use timestamp + counter
-		return fmt.Sprintf("item_%016x%08x", time.Now().UnixNano(), itemIDCounter.Add(1))
-	}
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	for i := range b {
-		b[i] = charset[b[i]%byte(len(charset))]
-	}
-	return "item_" + string(b)
-}
-
-var itemIDCounter atomic.Uint64
